@@ -107,7 +107,7 @@ public class MainLayoutAndNavigationTests : TestContext
             newRecipeBtn.TextContent.Should().Contain("Nytt recept");
 
             var importBtn = pageHeader.QuerySelector("a[href='/importera']");
-            importBtn.Should().NotBeNull("Receptöversikten ska också erbjuda 'Importera från länk'");
+            importBtn.Should().NotBeNull("Receptöversikten ska också erbjuda 'Importera från recept'");
             importBtn!.ClassList.Should().Contain("btn-secondary-custom");
         });
     }
@@ -139,7 +139,7 @@ public class MainLayoutAndNavigationTests : TestContext
 
             var emptyStateImportBtn = emptyState.QuerySelector("a[href='/importera']");
             emptyStateImportBtn.Should().NotBeNull();
-            emptyStateImportBtn!.TextContent.Should().Contain("Importera från länk");
+            emptyStateImportBtn!.TextContent.Should().Contain("Importera recept");
             emptyStateImportBtn.ClassList.Should().Contain("btn-secondary-custom");
         });
     }

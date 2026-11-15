@@ -596,7 +596,7 @@ graph LR
    - Drag-och-släpp eller ordningsjustering för ingrediensrader och instruktionssteg.
    - Möjlighet att lägga till grupprubriker (t.ex. "Pajdeg", "Fyllning").
    - Bildväljare med lokal filuppladdning och omedelbar förhandsvisning.
-4. **Importera från länk (`/importera`) & Förhandsgranskning (`/importera/forhandsgranska`)**:
+4. **Importera recept (`/importera`) & Förhandsgranskning (`/importera/forhandsgranska`)**:
    - Klistra in receptlänk, klicka på "Hämta recept".
    - Tydlig laddningsindikator (`FluentProgressRing`).
    - Redigerbar förhandsgranskning där användaren kontrollerar tolkningen och väljer kategorier innan receptet sparas.

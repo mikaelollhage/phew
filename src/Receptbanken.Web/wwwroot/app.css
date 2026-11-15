@@ -1384,7 +1384,7 @@ fluent-number-field::part(control) {
   flex-shrink: 0;
 }
 
-.ingredient-row-convert-btn {
+.btn-secondary-custom.ingredient-row-convert-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1393,7 +1393,15 @@ fluent-number-field::part(control) {
   min-width: 36px;
   min-height: 36px;
   padding: 0;
+  border-radius: var(--rb-radius-sm);
   flex-shrink: 0;
+}
+
+.btn-secondary-custom.ingredient-row-convert-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  fill: currentColor;
 }
 
 .ingredient-section-remove-btn {

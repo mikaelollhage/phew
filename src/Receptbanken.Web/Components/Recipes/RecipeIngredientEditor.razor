@@ -101,7 +101,7 @@
                                     title="Gör till ingrediens"
                                     aria-label="@($"Gör {sectionLabel} till ingrediens")"
                                     @onclick="@(() => ConvertSectionToIngredient(itemKey))">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Neutral" />
+                                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Custom" CustomColor="currentColor" />
                             </button>
 
                             <button type="button"
@@ -139,7 +139,7 @@
                                     title="Gör till sektion"
                                     aria-label="@($"Gör {ingLabel} till sektion")"
                                     @onclick="@(() => ConvertIngredientToSection(itemKey))">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Neutral" />
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Custom" CustomColor="currentColor" />
                             </button>
                         </RowActions>
                         <DragHandle>
