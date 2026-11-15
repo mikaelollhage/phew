@@ -157,13 +157,19 @@ else
                         {
                             var ing = recipe.Ingredients[i];
                             var index = i;
+                            var group = string.IsNullOrWhiteSpace(ing.GroupHeader) ? null : ing.GroupHeader.Trim();
 
-                            if (!string.IsNullOrWhiteSpace(ing.GroupHeader) && ing.GroupHeader != currentGroup)
+                            if (group != null && !string.Equals(group, currentGroup, StringComparison.Ordinal))
                             {
-                                currentGroup = ing.GroupHeader;
-                                <li style="font-weight: 700; font-size: 14px; color: var(--rb-accent-gold); margin-top: 12px; margin-bottom: 4px; list-style: none;">
+                                currentGroup = group;
+                                <li class="ingredient-group-header">
                                     @currentGroup
                                 </li>
+                            }
+                            else if (group == null && currentGroup != null)
+                            {
+                                currentGroup = null;
+                                <li class="ingredient-group-break" aria-hidden="true"></li>
                             }
 
                             var isChecked = checkedIngredients.Contains(index);

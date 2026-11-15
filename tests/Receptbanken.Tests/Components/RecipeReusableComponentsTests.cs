@@ -146,7 +146,7 @@ public class RecipeReusableComponentsTests : TestContext
         cut.Markup.Should().Contain("placeholder=\"Råvara *\"");
         cut.Markup.Should().Contain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
         cut.Markup.Should().Contain("placeholder=\"Beredning (t.ex. hackad)\"");
-        cut.Markup.Should().Contain("placeholder=\"Grupp (valfritt)\"");
+        cut.Markup.Should().NotContain("placeholder=\"Grupp (valfritt)\"");
 
         // Remove button
         var removeBtn = cut.Find(".ingredient-remove-btn");

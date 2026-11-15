@@ -972,7 +972,7 @@ window.receptbanken = {
         if (!target || typeof target.closest !== 'function') {
             return false;
         }
-        return !!target.closest('.weekly-drag-handle.is-reorder-active, .shopping-drag-handle.is-reorder-active');
+        return !!target.closest('.weekly-drag-handle.is-reorder-active, .shopping-drag-handle.is-reorder-active, .ingredient-drag-handle.is-reorder-active');
     },
 
     _scrollElementIntoViewIfNeeded: function (el) {
@@ -1053,6 +1053,389 @@ window.receptbanken = {
             this._scrollElementIntoViewIfNeeded(row);
         } catch (err) {
             console.debug('focusAndScrollShoppingItemHandle misslyckades:', err);
+        }
+    },
+
+    registerIngredientEditorTouchDrag: function (dotNetRef) {
+        try {
+            this.unregisterIngredientEditorTouchDrag();
+            this._initIngredientEditorTouchDrag(dotNetRef);
+        } catch (err) {
+            console.debug('registerIngredientEditorTouchDrag misslyckades:', err);
+        }
+    },
+
+    unregisterIngredientEditorTouchDrag: function () {
+        try {
+            if (this._ingredientTouchStart) {
+                document.removeEventListener('touchstart', this._ingredientTouchStart);
+                this._ingredientTouchStart = null;
+            }
+            if (this._ingredientTouchMove) {
+                document.removeEventListener('touchmove', this._ingredientTouchMove);
+                this._ingredientTouchMove = null;
+            }
+            if (this._ingredientTouchEnd) {
+                document.removeEventListener('touchend', this._ingredientTouchEnd);
+                this._ingredientTouchEnd = null;
+            }
+            if (this._ingredientTouchCancel) {
+                document.removeEventListener('touchcancel', this._ingredientTouchCancel);
+                this._ingredientTouchCancel = null;
+            }
+            if (this._ingredientClickCapture) {
+                document.removeEventListener('click', this._ingredientClickCapture, true);
+                this._ingredientClickCapture = null;
+            }
+            if (this._ingredientDragStartCapture) {
+                document.removeEventListener('dragstart', this._ingredientDragStartCapture, true);
+                this._ingredientDragStartCapture = null;
+            }
+            if (this._ingredientContextMenuCapture) {
+                document.removeEventListener('contextmenu', this._ingredientContextMenuCapture, true);
+                this._ingredientContextMenuCapture = null;
+            }
+            if (this._ingredientMouseDownCapture) {
+                window.removeEventListener('mousedown', this._ingredientMouseDownCapture, true);
+                this._ingredientMouseDownCapture = null;
+            }
+            if (this._ingredientKeyDownCapture) {
+                document.removeEventListener('keydown', this._ingredientKeyDownCapture, false);
+                this._ingredientKeyDownCapture = null;
+            }
+        } catch (err) {
+            console.debug('unregisterIngredientEditorTouchDrag misslyckades:', err);
+        }
+    },
+
+    _initIngredientEditorTouchDrag: function (dotNetRef) {
+        const LONG_PRESS_MS = 350;
+        const MOVE_THRESHOLD_PX = 9;
+
+        let touchState = {
+            mode: 'idle',
+            timer: null,
+            touchId: null,
+            startX: 0,
+            startY: 0,
+            sourceRow: null,
+            sourceItemId: 0,
+            targetItemId: null,
+            handleElement: null
+        };
+
+        let isTouchActive = false;
+        let suppressClickTarget = null;
+        let suppressClickTimer = null;
+
+        const clearPreviewClasses = () => {
+            document.querySelectorAll('.ingredient-editor-list .ingredient-editor-item').forEach(row => {
+                row.classList.remove('is-dragging', 'drag-over', 'drag-over-above', 'drag-over-below');
+            });
+            document.body.classList.remove('ingredient-touch-reordering');
+        };
+
+        const suppressNextClick = (element) => {
+            if (suppressClickTimer) {
+                clearTimeout(suppressClickTimer);
+            }
+            suppressClickTarget = element;
+            suppressClickTimer = setTimeout(() => {
+                suppressClickTarget = null;
+                suppressClickTimer = null;
+            }, 400);
+        };
+
+        const cleanupTouchGesture = (notifyBlazorCancel) => {
+            const wasDragging = touchState.mode === 'dragging';
+            if (touchState.timer) {
+                clearTimeout(touchState.timer);
+            }
+            if (touchState.handleElement) {
+                touchState.handleElement.draggable = true;
+            }
+            clearPreviewClasses();
+            touchState = { mode: 'idle', timer: null, touchId: null, startX: 0, startY: 0, sourceRow: null, sourceItemId: 0, targetItemId: null, handleElement: null };
+
+            if (wasDragging && notifyBlazorCancel) {
+                try {
+                    dotNetRef.invokeMethodAsync('OnTouchDragCancelAsync');
+                } catch (_) {}
+            }
+        };
+
+        const onTouchStart = (e) => {
+            if (e.touches.length !== 1) {
+                if (touchState.mode !== 'idle') {
+                    cleanupTouchGesture(true);
+                }
+                return;
+            }
+
+            const touch = e.touches[0];
+            const target = touch.target;
+            const handle = target && target.closest ? target.closest('.ingredient-drag-handle') : null;
+            if (!handle) {
+                return;
+            }
+
+            const row = handle.closest('.ingredient-editor-list .ingredient-editor-item[data-editor-item-id]');
+            if (!row) {
+                return;
+            }
+
+            const itemId = parseInt(row.getAttribute('data-editor-item-id'), 10);
+            if (!itemId) {
+                return;
+            }
+
+            handle.draggable = false;
+            isTouchActive = true;
+            if (touchState.timer) {
+                clearTimeout(touchState.timer);
+            }
+            clearPreviewClasses();
+
+            touchState = {
+                mode: 'pendingLongPress',
+                timer: null,
+                touchId: touch.identifier,
+                startX: touch.clientX,
+                startY: touch.clientY,
+                sourceRow: row,
+                sourceItemId: itemId,
+                targetItemId: null,
+                handleElement: handle
+            };
+
+            touchState.timer = setTimeout(() => {
+                if (touchState.mode !== 'pendingLongPress') {
+                    return;
+                }
+
+                touchState.mode = 'dragging';
+                touchState.timer = null;
+                if (touchState.handleElement && touchState.handleElement === document.activeElement && typeof touchState.handleElement.blur === 'function') {
+                    touchState.handleElement.blur();
+                }
+                touchState.sourceRow.classList.add('is-dragging');
+                document.body.classList.add('ingredient-touch-reordering');
+
+                try {
+                    if (navigator.vibrate) {
+                        navigator.vibrate(25);
+                    }
+                } catch (_) {}
+
+                try {
+                    dotNetRef.invokeMethodAsync('OnTouchDragStartAsync', touchState.sourceItemId);
+                } catch (_) {}
+            }, LONG_PRESS_MS);
+        };
+
+        const onTouchMove = (e) => {
+            if (touchState.mode === 'idle') {
+                return;
+            }
+
+            const touch = Array.from(e.touches).find(t => t.identifier === touchState.touchId);
+            if (!touch) {
+                return;
+            }
+
+            if (touchState.mode === 'pendingLongPress') {
+                const deltaX = Math.abs(touch.clientX - touchState.startX);
+                const deltaY = Math.abs(touch.clientY - touchState.startY);
+                if (Math.hypot(deltaX, deltaY) > MOVE_THRESHOLD_PX) {
+                    if (touchState.timer) {
+                        clearTimeout(touchState.timer);
+                        touchState.timer = null;
+                    }
+                    touchState.mode = 'cancelled';
+                    suppressNextClick(touchState.handleElement);
+                }
+                return;
+            }
+
+            if (touchState.mode === 'dragging') {
+                if (e.cancelable) {
+                    e.preventDefault();
+                }
+
+                const edgeThreshold = 65;
+                if (touch.clientY < edgeThreshold) {
+                    window.scrollBy(0, -10);
+                } else if (touch.clientY > window.innerHeight - edgeThreshold) {
+                    window.scrollBy(0, 10);
+                }
+
+                const elUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+                const overRow = elUnderTouch && elUnderTouch.closest
+                    ? elUnderTouch.closest('.ingredient-editor-list .ingredient-editor-item[data-editor-item-id]')
+                    : null;
+
+                document.querySelectorAll('.ingredient-editor-list .ingredient-editor-item').forEach(r => {
+                    r.classList.remove('drag-over', 'drag-over-above', 'drag-over-below');
+                });
+
+                if (overRow && overRow !== touchState.sourceRow) {
+                    const overId = parseInt(overRow.getAttribute('data-editor-item-id'), 10);
+                    if (overId) {
+                        touchState.targetItemId = overId;
+                        const rows = Array.from(document.querySelectorAll('.ingredient-editor-list .ingredient-editor-item[data-editor-item-id]'));
+                        const sourceIdx = rows.indexOf(touchState.sourceRow);
+                        const targetIdx = rows.indexOf(overRow);
+                        overRow.classList.add('drag-over', sourceIdx > targetIdx ? 'drag-over-above' : 'drag-over-below');
+                    }
+                } else if (overRow === touchState.sourceRow) {
+                    touchState.targetItemId = touchState.sourceItemId;
+                }
+            }
+        };
+
+        const onTouchEnd = () => {
+            isTouchActive = false;
+            if (touchState.mode === 'idle') {
+                return;
+            }
+
+            const state = touchState;
+            if (state.timer) {
+                clearTimeout(state.timer);
+                state.timer = null;
+            }
+            if (state.handleElement) {
+                state.handleElement.draggable = true;
+            }
+            clearPreviewClasses();
+
+            if (state.mode === 'pendingLongPress') {
+                touchState = { mode: 'idle', timer: null, touchId: null, startX: 0, startY: 0, sourceRow: null, sourceItemId: 0, targetItemId: null, handleElement: null };
+                return;
+            }
+
+            if (state.mode === 'cancelled') {
+                suppressNextClick(state.handleElement);
+                touchState = { mode: 'idle', timer: null, touchId: null, startX: 0, startY: 0, sourceRow: null, sourceItemId: 0, targetItemId: null, handleElement: null };
+                return;
+            }
+
+            if (state.mode === 'dragging') {
+                suppressNextClick(state.handleElement);
+                touchState = { mode: 'idle', timer: null, touchId: null, startX: 0, startY: 0, sourceRow: null, sourceItemId: 0, targetItemId: null, handleElement: null };
+
+                try {
+                    if (state.targetItemId && state.targetItemId !== state.sourceItemId) {
+                        dotNetRef.invokeMethodAsync('OnTouchDropAsync', state.sourceItemId, state.targetItemId);
+                    } else {
+                        dotNetRef.invokeMethodAsync('OnTouchDragCancelAsync');
+                    }
+                } catch (_) {}
+            }
+        };
+
+        const onTouchCancel = () => {
+            isTouchActive = false;
+            cleanupTouchGesture(true);
+        };
+
+        const onClickCapture = (e) => {
+            if (suppressClickTarget) {
+                const target = e.target;
+                if (suppressClickTarget === target ||
+                    (suppressClickTarget.contains && suppressClickTarget.contains(target)) ||
+                    (target && target.closest && target.closest('.ingredient-drag-handle') === suppressClickTarget)) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    suppressClickTarget = null;
+                    if (suppressClickTimer) {
+                        clearTimeout(suppressClickTimer);
+                        suppressClickTimer = null;
+                    }
+                }
+            }
+        };
+
+        const onDragStartCapture = (e) => {
+            if (isTouchActive || touchState.mode !== 'idle') {
+                e.preventDefault();
+                return false;
+            }
+
+            const handle = e.target && e.target.closest ? e.target.closest('.ingredient-drag-handle') : null;
+            if (handle) {
+                if (handle === document.activeElement && typeof handle.blur === 'function') {
+                    handle.blur();
+                }
+                const row = handle.closest('.ingredient-editor-item');
+                if (row && e.dataTransfer) {
+                    e.dataTransfer.effectAllowed = 'move';
+                    try {
+                        e.dataTransfer.setData('text/plain', row.getAttribute('data-editor-item-id') || '');
+                    } catch (_) {}
+
+                    if (e.dataTransfer.setDragImage) {
+                        const rect = row.getBoundingClientRect();
+                        const handleRect = handle.getBoundingClientRect();
+                        const offsetX = (handleRect.left + handleRect.width / 2) - rect.left;
+                        const offsetY = (handleRect.top + handleRect.height / 2) - rect.top;
+                        e.dataTransfer.setDragImage(row, offsetX, offsetY);
+                    }
+                }
+            }
+        };
+
+        const onContextMenuCapture = (e) => {
+            if (touchState.mode === 'dragging' || touchState.mode === 'pendingLongPress') {
+                e.preventDefault();
+                return false;
+            }
+        };
+
+        const onMouseDownCapture = () => {
+            isTouchActive = false;
+        };
+
+        const onKeyDownCapture = (e) => {
+            if (this._isActiveReorderHandleKeyDown(e)) {
+                e.preventDefault();
+            }
+        };
+
+        this._ingredientTouchStart = onTouchStart;
+        this._ingredientTouchMove = onTouchMove;
+        this._ingredientTouchEnd = onTouchEnd;
+        this._ingredientTouchCancel = onTouchCancel;
+        this._ingredientClickCapture = onClickCapture;
+        this._ingredientDragStartCapture = onDragStartCapture;
+        this._ingredientContextMenuCapture = onContextMenuCapture;
+        this._ingredientMouseDownCapture = onMouseDownCapture;
+        this._ingredientKeyDownCapture = onKeyDownCapture;
+
+        document.addEventListener('touchstart', this._ingredientTouchStart, { passive: true });
+        document.addEventListener('touchmove', this._ingredientTouchMove, { passive: false });
+        document.addEventListener('touchend', this._ingredientTouchEnd, { passive: false });
+        document.addEventListener('touchcancel', this._ingredientTouchCancel, { passive: true });
+        document.addEventListener('click', this._ingredientClickCapture, true);
+        document.addEventListener('dragstart', this._ingredientDragStartCapture, true);
+        document.addEventListener('contextmenu', this._ingredientContextMenuCapture, true);
+        window.addEventListener('mousedown', this._ingredientMouseDownCapture, true);
+        document.addEventListener('keydown', this._ingredientKeyDownCapture, false);
+    },
+
+    focusAndScrollIngredientEditorHandle: function (itemKey) {
+        try {
+            const row = document.querySelector(`.ingredient-editor-list .ingredient-editor-item[data-editor-item-id="${itemKey}"]`);
+            if (!row) return;
+
+            const handle = row.querySelector('.ingredient-drag-handle');
+            if (handle) {
+                handle.focus({ preventScroll: true });
+            }
+
+            this._scrollElementIntoViewIfNeeded(row);
+        } catch (err) {
+            console.debug('focusAndScrollIngredientEditorHandle misslyckades:', err);
         }
     }
 };

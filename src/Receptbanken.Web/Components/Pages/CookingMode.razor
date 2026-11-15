@@ -74,10 +74,28 @@ else
                                          OnServingsChanged="@(s => currentServings = s)" />
                     </div>
                     <ul class="ingredient-list">
+                        @{
+                            string? currentGroup = null;
+                        }
                         @for (int i = 0; i < recipe.Ingredients.Count; i++)
                         {
                             var ing = recipe.Ingredients[i];
                             var idx = i;
+                            var group = string.IsNullOrWhiteSpace(ing.GroupHeader) ? null : ing.GroupHeader.Trim();
+
+                            if (group != null && !string.Equals(group, currentGroup, StringComparison.Ordinal))
+                            {
+                                currentGroup = group;
+                                <li class="ingredient-group-header">
+                                    @currentGroup
+                                </li>
+                            }
+                            else if (group == null && currentGroup != null)
+                            {
+                                currentGroup = null;
+                                <li class="ingredient-group-break" aria-hidden="true"></li>
+                            }
+
                             var isChecked = checkedIngredients.Contains(idx);
                             var checkboxId = $"cooking-ing-{idx}";
                             <li class="ingredient-item @(isChecked ? "checked" : "")">
