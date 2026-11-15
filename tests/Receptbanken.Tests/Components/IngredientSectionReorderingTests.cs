@@ -243,4 +243,83 @@ public class IngredientSectionReorderingTests : TestContext
             headers[1].TextContent.Trim().Should().Be("Deg");
         });
     }
+
+    [Fact]
+    public void IngredientSectionList_ConvertBetweenIngredientAndSection_PreservesPositionOrderAndRecalculatesGrouping()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "tomater", GroupHeader = "Tomatsallad", RawText = "4 tomater" },
+            new() { OrderIndex = 2, Name = "Dressing", GroupHeader = "Tomatsallad", RawText = "Dressing" },
+            new() { OrderIndex = 3, Name = "olivolja", GroupHeader = "Tomatsallad", RawText = "2 msk olivolja" },
+            new() { OrderIndex = 4, Name = "vinäger", GroupHeader = "Tomatsallad", RawText = "1 msk vinäger" }
+        };
+
+        var list = new IngredientSectionList();
+        list.LoadFromIngredients(ingredients);
+
+        var dressingKey = list.Items.Single(i => i.IsIngredient && i.Ingredient!.Name == "Dressing").Key;
+        var convertedSection = list.ConvertIngredientToSection(dressingKey, ingredients);
+
+        convertedSection.Should().NotBeNull();
+        convertedSection!.IsSection.Should().BeTrue();
+        convertedSection.SectionTitle.Should().Be("Dressing");
+
+        list.Items.Select(i => i.IsSection ? $"[{i.SectionTitle}]" : i.Ingredient!.Name)
+            .Should().Equal("[Tomatsallad]", "tomater", "[Dressing]", "olivolja", "vinäger");
+
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("tomater", "Tomatsallad", 1),
+                ("olivolja", "Dressing", 2),
+                ("vinäger", "Dressing", 3));
+
+        // Convert the section back to an editable ingredient at the exact same position
+        var convertedIngredient = list.ConvertSectionToIngredient(convertedSection.Key, ingredients);
+        convertedIngredient.Should().NotBeNull();
+        convertedIngredient!.IsIngredient.Should().BeTrue();
+        convertedIngredient.Ingredient!.Name.Should().Be("Dressing");
+
+        list.Items.Select(i => i.IsSection ? $"[{i.SectionTitle}]" : i.Ingredient!.Name)
+            .Should().Equal("[Tomatsallad]", "tomater", "Dressing", "olivolja", "vinäger");
+
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("tomater", "Tomatsallad", 1),
+                ("Dressing", "Tomatsallad", 2),
+                ("olivolja", "Tomatsallad", 3),
+                ("vinäger", "Tomatsallad", 4));
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_ConvertButtons_ShouldConvertBothDirectionsInPlace()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "Dressing", RawText = "Dressing" },
+            new() { OrderIndex = 2, Name = "olivolja", Quantity = 2, Unit = "msk", RawText = "2 msk olivolja" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // Open action bar on first ingredient ("Dressing") and convert to section
+        cut.FindAll(".ingredient-drag-handle").First().Click();
+        cut.Find(".ingredient-to-section-btn").Click();
+
+        cut.FindAll(".ingredient-section-header-row").Should().ContainSingle();
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(("olivolja", "Dressing", 1));
+
+        // Open action bar on the new section and convert back to ingredient
+        cut.FindAll(".ingredient-drag-handle").First().Click();
+        cut.Find(".section-to-ingredient-btn").Click();
+
+        cut.FindAll(".ingredient-section-header-row").Should().BeEmpty();
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("Dressing", (string?)null, 1),
+                ("olivolja", (string?)null, 2));
+    }
 }

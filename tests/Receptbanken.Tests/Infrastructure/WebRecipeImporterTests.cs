@@ -408,6 +408,57 @@ public class WebRecipeImporterTests
         result.ErrorMessage.Should().Contain("404");
     }
 
+    [Fact]
+    public void ParseFromHtml_JsonLdWithExplicitIngredientSections_ShouldApplyGroupHeadersWithoutExtraRows()
+    {
+        const string html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script type="application/ld+json">
+                {
+                  "@context": "https://schema.org",
+                  "@type": "Recipe",
+                  "name": "Caprese med dressing",
+                  "recipeYield": "4 portioner",
+                  "recipeIngredient": [
+                    "### Tomatsallad",
+                    "4 tomater",
+                    "Salt och peppar",
+                    "Olja till stekning",
+                    "Smör att steka i",
+                    "Vatten",
+                    "Dressing",
+                    "Dressing:",
+                    "2 msk olivolja",
+                    "1 msk balsamvinäger"
+                  ],
+                  "recipeInstructions": [
+                    { "@type": "HowToStep", "text": "Blanda allt." }
+                  ]
+                }
+                </script>
+            </head>
+            <body></body>
+            </html>
+            """;
+
+        var importer = CreateImporter();
+        var result = importer.ParseFromHtml(html, "https://example.com/recept");
+
+        result.Success.Should().BeTrue();
+        var recipe = result.DraftRecipe!;
+        recipe.Ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex)).Should().Equal(
+            ("tomater", "Tomatsallad", 1),
+            ("Salt och peppar", "Tomatsallad", 2),
+            ("Olja till stekning", "Tomatsallad", 3),
+            ("Smör att steka i", "Tomatsallad", 4),
+            ("Vatten", "Tomatsallad", 5),
+            ("Dressing", "Tomatsallad", 6),
+            ("olivolja", "Dressing", 7),
+            ("balsamvinäger", "Dressing", 8));
+    }
+
     private sealed class FakeHttpMessageHandler(Func<HttpRequestMessage, HttpResponseMessage> responder) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

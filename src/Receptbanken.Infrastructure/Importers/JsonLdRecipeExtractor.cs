@@ -201,6 +201,7 @@ public class JsonLdRecipeExtractor
             return result;
 
         int index = 1;
+        string? currentGroup = null;
         if (ingProp.ValueKind == JsonValueKind.Array)
         {
             foreach (var item in ingProp.EnumerateArray())
@@ -208,17 +209,24 @@ public class JsonLdRecipeExtractor
                 if (item.ValueKind == JsonValueKind.String)
                 {
                     var line = CleanText(item.GetString());
-                    if (!string.IsNullOrWhiteSpace(line))
+                    if (string.IsNullOrWhiteSpace(line))
+                        continue;
+
+                    if (RecipeTextParser.TryParseIngredientSectionHeading(line, out var sectionTitle))
                     {
-                        result.Add(_ingredientParser.Parse(line, index++));
+                        currentGroup = sectionTitle;
+                        continue;
                     }
+
+                    result.Add(_ingredientParser.Parse(line, index++, currentGroup));
                 }
             }
         }
         else if (ingProp.ValueKind == JsonValueKind.String)
         {
             var line = CleanText(ingProp.GetString());
-            if (!string.IsNullOrWhiteSpace(line))
+            if (!string.IsNullOrWhiteSpace(line) &&
+                !RecipeTextParser.TryParseIngredientSectionHeading(line, out _))
             {
                 result.Add(_ingredientParser.Parse(line, index));
             }

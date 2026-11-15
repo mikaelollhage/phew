@@ -1443,6 +1443,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 
 .ingredient-reorder-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
@@ -1454,7 +1455,8 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .ingredient-move-up-btn,
-.ingredient-move-down-btn {
+.ingredient-move-down-btn,
+.ingredient-convert-btn {
   min-height: 36px;
   padding: 6px 12px;
   font-size: 13px;

@@ -17,13 +17,18 @@ public class RecipeTextParser
 
     // Headings indicating instruction sections
     private static readonly Regex InstructionHeaderRegex = new(
-        @"^(?:##\s*|#\s*)?(?:gör så här|gör såhär|tillagning|instruktioner|så här gör du|beredning|arbetsgång|så gör du)(?:\s*:)?$",
+        @"^(?:#{1,6}\s*)?(?:gör så här|gör såhär|tillagning|instruktioner|så här gör du|beredning|arbetsgång|så gör du)(?:\s*:)?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Headings indicating ingredient sections
     private static readonly Regex IngredientHeaderRegex = new(
-        @"^(?:##\s*|#\s*)?(?:ingredienser|det här behöver du|vad du behöver|du behöver|detta behöver du|det behöver du)(?:\s+(?:för|till)\s+.*?)?(?:\s*\(.*?\))?(?:\s*:)?$",
+        @"^(?:#{1,6}\s*)?(?:ingredienser|det här behöver du|vad du behöver|du behöver|detta behöver du|det behöver du)(?:\s+(?:för|till)\s+.*?)?(?:\s*\(.*?\))?(?:\s*:)?$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    // Markdown headings (# through ######)
+    private static readonly Regex MarkdownHeadingRegex = new(
+        @"^#{1,6}\s+(.+)$",
+        RegexOptions.Compiled);
 
     // Common culinary action verbs in Swedish to distinguish real instructions from general advice
     private static readonly Regex CulinaryActionVerbsRegex = new(
@@ -295,6 +300,14 @@ public class RecipeTextParser
 
                 if (TipRegex.IsMatch(candidate) || TimeRegex.IsMatch(candidate))
                 {
+                    scanIdx--;
+                    continue;
+                }
+
+                if (scanIdx > 0 && IsSubGroupHeader(candidate))
+                {
+                    if (lastIngIdx < 0) lastIngIdx = scanIdx;
+                    firstIngIdx = scanIdx;
                     scanIdx--;
                     continue;
                 }
@@ -1042,16 +1055,64 @@ public class RecipeTextParser
         return words.Length >= 1 && words.Length <= 5;
     }
 
-    private static bool IsSubGroupHeader(string line)
+    private static bool IsSubGroupHeader(string line) =>
+        TryParseIngredientSectionHeading(line, out _);
+
+    internal static bool TryParseIngredientSectionHeading(string line, out string sectionTitle)
     {
-        var clean = line.TrimStart('#').Trim();
-        if (!clean.EndsWith(':') || clean.Length > 40 || clean.Contains('.') || Regex.IsMatch(clean, @"\d"))
+        sectionTitle = string.Empty;
+        if (string.IsNullOrWhiteSpace(line))
             return false;
 
-        if (InstructionHeaderRegex.IsMatch(line) || IngredientHeaderRegex.IsMatch(line))
+        var trimmed = line.Trim();
+
+        if (InstructionHeaderRegex.IsMatch(trimmed) || IngredientHeaderRegex.IsMatch(trimmed))
             return false;
 
-        if (StandaloneNoiseRegex.IsMatch(clean) || NarrativeOutroRegex.IsMatch(clean))
+        var mdMatch = MarkdownHeadingRegex.Match(trimmed);
+        if (mdMatch.Success)
+        {
+            var inner = mdMatch.Groups[1].Value.Trim();
+            if (TipRegex.IsMatch(inner) || TimeRegex.IsMatch(inner))
+                return false;
+
+            var title = inner.TrimEnd(':').Trim();
+            if (!IsValidSectionTitle(title, maxLength: 50))
+                return false;
+
+            sectionTitle = title;
+            return true;
+        }
+
+        if (!trimmed.EndsWith(':'))
+            return false;
+
+        if (TipRegex.IsMatch(trimmed) || TimeRegex.IsMatch(trimmed))
+            return false;
+
+        var colonTitle = trimmed.TrimEnd(':').Trim();
+        if (!IsValidSectionTitle(colonTitle, maxLength: 40))
+            return false;
+
+        sectionTitle = colonTitle;
+        return true;
+    }
+
+    private static bool IsValidSectionTitle(string title, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(title) || title.Length > maxLength)
+            return false;
+
+        if (title.Contains('.') || Regex.IsMatch(title, @"\d"))
+            return false;
+
+        if (HeadingServingsRegex.IsMatch(title))
+            return false;
+
+        if (InstructionHeaderRegex.IsMatch(title) || IngredientHeaderRegex.IsMatch(title))
+            return false;
+
+        if (StandaloneNoiseRegex.IsMatch(title) || NarrativeOutroRegex.IsMatch(title))
             return false;
 
         return true;
@@ -1059,7 +1120,9 @@ public class RecipeTextParser
 
     private static string CleanGroupHeader(string line)
     {
-        return line.TrimStart('#').Trim().TrimEnd(':').Trim();
+        return TryParseIngredientSectionHeading(line, out var title)
+            ? title
+            : line.TrimStart('#').Trim().TrimEnd(':').Trim();
     }
 
     private static string NormalizeServingsUnit(string unit)

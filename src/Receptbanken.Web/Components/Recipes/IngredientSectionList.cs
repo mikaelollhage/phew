@@ -181,6 +181,87 @@ public sealed class IngredientSectionList
         return true;
     }
 
+    /// <summary>
+    /// Converts an ingredient row into a section header at the exact same position and recalculates grouping.
+    /// </summary>
+    public IngredientEditorItem? ConvertIngredientToSection(int ingredientKey, IList<Ingredient>? targetIngredients = null)
+    {
+        var index = _items.FindIndex(i => i.Key == ingredientKey && i.IsIngredient);
+        if (index < 0 || _items[index].Ingredient == null)
+        {
+            return null;
+        }
+
+        var title = ExtractSectionTitleFromIngredient(_items[index].Ingredient!);
+        var sectionItem = IngredientEditorItem.CreateSection(_nextKey++, title);
+        _items[index] = sectionItem;
+
+        if (targetIngredients != null)
+        {
+            SyncToIngredients(targetIngredients);
+        }
+
+        return sectionItem;
+    }
+
+    /// <summary>
+    /// Converts a section header into an editable ingredient row at the exact same position and recalculates grouping.
+    /// </summary>
+    public IngredientEditorItem? ConvertSectionToIngredient(int sectionKey, IList<Ingredient>? targetIngredients = null)
+    {
+        var index = _items.FindIndex(i => i.Key == sectionKey && i.IsSection);
+        if (index < 0)
+        {
+            return null;
+        }
+
+        var title = _items[index].SectionTitle?.Trim() ?? string.Empty;
+        var ingredient = new Ingredient
+        {
+            Name = title,
+            RawText = title
+        };
+
+        var ingredientItem = IngredientEditorItem.CreateIngredient(_nextKey++, ingredient);
+        _items[index] = ingredientItem;
+
+        if (targetIngredients != null)
+        {
+            SyncToIngredients(targetIngredients);
+        }
+
+        return ingredientItem;
+    }
+
+    private static string ExtractSectionTitleFromIngredient(Ingredient ingredient)
+    {
+        var name = ingredient.Name?.Trim() ?? string.Empty;
+        var raw = ingredient.RawText?.Trim() ?? string.Empty;
+
+        var hasStructuredParts = ingredient.Quantity.HasValue
+            || ingredient.QuantityMax.HasValue
+            || !string.IsNullOrWhiteSpace(ingredient.Unit)
+            || !string.IsNullOrWhiteSpace(ingredient.Comment)
+            || !string.IsNullOrWhiteSpace(ingredient.Preparation);
+
+        string candidate;
+        if (hasStructuredParts && !string.IsNullOrWhiteSpace(raw) &&
+            (string.IsNullOrWhiteSpace(name) || raw.Contains(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            candidate = raw;
+        }
+        else if (!string.IsNullOrWhiteSpace(name))
+        {
+            candidate = name;
+        }
+        else
+        {
+            candidate = raw;
+        }
+
+        return candidate.Trim().TrimStart('#').Trim().TrimEnd(':').Trim();
+    }
+
     public int GetSectionIngredientCount(int sectionKey)
     {
         var index = _items.FindIndex(i => i.Key == sectionKey && i.IsSection);

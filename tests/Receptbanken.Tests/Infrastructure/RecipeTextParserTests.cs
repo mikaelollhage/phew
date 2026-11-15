@@ -328,5 +328,107 @@ public class RecipeTextParserTests
         result.FailureReason.Should().Be(RecipeImportFailureReason.InputTooLarge);
         result.ErrorMessage.Should().Contain("för stor");
     }
+
+    [Fact]
+    public void Parse_MarkdownIngredientSubsections_ShouldPreserveOrderAndGroupHeaders()
+    {
+        const string markdown = """
+            # Sommarsallad med ost och dressing
+
+            ### Ingredienser
+            ### Tomatsallad
+            4 tomater
+            1 rödlök
+
+            ### Ostblandning
+            200 g fetaost
+            ###### Till garnering:
+            1 kruka basilika
+
+            ### Dressing
+            3 msk olivolja
+            1 msk citronjuice
+
+            ### Gör så här
+            1. Skiva tomater och rödlök.
+            2. Smula osten och ringla över dressingen.
+            """;
+
+        var result = _parser.Parse(markdown);
+
+        result.Success.Should().BeTrue();
+        var recipe = result.DraftRecipe!;
+        recipe.Title.Should().Be("Sommarsallad med ost och dressing");
+        recipe.Ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex)).Should().Equal(
+            ("tomater", "Tomatsallad", 1),
+            ("rödlök", "Tomatsallad", 2),
+            ("fetaost", "Ostblandning", 3),
+            ("basilika", "Till garnering", 4),
+            ("olivolja", "Dressing", 5),
+            ("citronjuice", "Dressing", 6));
+        recipe.Instructions.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void Parse_MarkdownSubsectionsWithoutIngredientHeader_ShouldNotPrematurelyTerminateBounds()
+    {
+        const string markdown = """
+            # Tomatsallad med dressing
+
+            ### Tomatsallad
+            4 tomater
+
+            ### Ostblandning
+            150 g mozzarella
+
+            ### Dressing
+            2 msk olivolja
+
+            Gör så här:
+            1. Blanda allt på ett fat.
+            """;
+
+        var result = _parser.Parse(markdown);
+
+        result.Success.Should().BeTrue();
+        var recipe = result.DraftRecipe!;
+        recipe.Title.Should().Be("Tomatsallad med dressing");
+        recipe.Ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex)).Should().Equal(
+            ("tomater", "Tomatsallad", 1),
+            ("mozzarella", "Ostblandning", 2),
+            ("olivolja", "Dressing", 3));
+    }
+
+    [Fact]
+    public void Parse_QuantityFreeIngredientsAndPlainDressing_ShouldRemainOrdinaryIngredients()
+    {
+        const string text = """
+            Stekt fisk med sallad
+
+            Ingredienser:
+            400 g torsk
+            Salt och peppar
+            Olja till stekning
+            Smör att steka i
+            Vatten
+            Dressing
+
+            Gör så här:
+            1. Stek fisken i olja och smör.
+            2. Krydda med salt och peppar och servera med dressing.
+            """;
+
+        var result = _parser.Parse(text);
+
+        result.Success.Should().BeTrue();
+        var recipe = result.DraftRecipe!;
+        recipe.Ingredients.Select(i => (i.Name, i.GroupHeader)).Should().Equal(
+            ("torsk", (string?)null),
+            ("Salt och peppar", (string?)null),
+            ("Olja till stekning", (string?)null),
+            ("Smör att steka i", (string?)null),
+            ("Vatten", (string?)null),
+            ("Dressing", (string?)null));
+    }
 }
 
