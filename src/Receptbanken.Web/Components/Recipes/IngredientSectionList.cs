@@ -1,4 +1,5 @@
 using Receptbanken.Core.Models;
+using Receptbanken.Core.Services;
 
 namespace Receptbanken.Web.Components.Recipes;
 
@@ -13,24 +14,38 @@ public enum IngredientEditorItemKind
 /// </summary>
 public sealed class IngredientEditorItem
 {
-    private IngredientEditorItem(int key, IngredientEditorItemKind kind, string sectionTitle, Ingredient? ingredient)
+    private IngredientEditorItem(
+        int key,
+        IngredientEditorItemKind kind,
+        string sectionTitle,
+        Ingredient? ingredient,
+        Ingredient? originalIngredient = null,
+        string? originalSectionTitle = null)
     {
         Key = key;
         Kind = kind;
         SectionTitle = sectionTitle;
         Ingredient = ingredient;
+        OriginalIngredient = originalIngredient;
+        OriginalSectionTitle = originalSectionTitle;
     }
 
     public int Key { get; }
     public IngredientEditorItemKind Kind { get; }
     public string SectionTitle { get; set; }
     public Ingredient? Ingredient { get; }
+    internal Ingredient? OriginalIngredient { get; }
+    internal string? OriginalSectionTitle { get; }
 
     public bool IsSection => Kind == IngredientEditorItemKind.Section;
     public bool IsIngredient => Kind == IngredientEditorItemKind.Ingredient;
 
-    public static IngredientEditorItem CreateSection(int key, string title) =>
-        new(key, IngredientEditorItemKind.Section, title, null);
+    public static IngredientEditorItem CreateSection(
+        int key,
+        string title,
+        Ingredient? originalIngredient = null,
+        string? originalSectionTitle = null) =>
+        new(key, IngredientEditorItemKind.Section, title, null, originalIngredient, originalSectionTitle);
 
     public static IngredientEditorItem CreateIngredient(int key, Ingredient ingredient) =>
         new(key, IngredientEditorItemKind.Ingredient, string.Empty, ingredient);
@@ -42,7 +57,13 @@ public sealed class IngredientEditorItem
 public sealed class IngredientSectionList
 {
     private readonly List<IngredientEditorItem> _items = new();
+    private readonly SwedishIngredientParser _ingredientParser;
     private int _nextKey = 1;
+
+    public IngredientSectionList(SwedishIngredientParser? ingredientParser = null)
+    {
+        _ingredientParser = ingredientParser ?? new SwedishIngredientParser();
+    }
 
     public IReadOnlyList<IngredientEditorItem> Items => _items;
 
@@ -183,6 +204,7 @@ public sealed class IngredientSectionList
 
     /// <summary>
     /// Converts an ingredient row into a section header at the exact same position and recalculates grouping.
+    /// Temporarily retains the original ingredient in memory for lossless round-trip conversion.
     /// </summary>
     public IngredientEditorItem? ConvertIngredientToSection(int ingredientKey, IList<Ingredient>? targetIngredients = null)
     {
@@ -192,8 +214,9 @@ public sealed class IngredientSectionList
             return null;
         }
 
-        var title = ExtractSectionTitleFromIngredient(_items[index].Ingredient!);
-        var sectionItem = IngredientEditorItem.CreateSection(_nextKey++, title);
+        var original = CloneIngredient(_items[index].Ingredient!);
+        var title = ExtractSectionTitleFromIngredient(original);
+        var sectionItem = IngredientEditorItem.CreateSection(_nextKey++, title, original, title);
         _items[index] = sectionItem;
 
         if (targetIngredients != null)
@@ -206,6 +229,7 @@ public sealed class IngredientSectionList
 
     /// <summary>
     /// Converts a section header into an editable ingredient row at the exact same position and recalculates grouping.
+    /// Restores the original ingredient if the section title was not changed; otherwise parses the title.
     /// </summary>
     public IngredientEditorItem? ConvertSectionToIngredient(int sectionKey, IList<Ingredient>? targetIngredients = null)
     {
@@ -215,12 +239,19 @@ public sealed class IngredientSectionList
             return null;
         }
 
-        var title = _items[index].SectionTitle?.Trim() ?? string.Empty;
-        var ingredient = new Ingredient
+        var sectionItem = _items[index];
+        var title = sectionItem.SectionTitle?.Trim() ?? string.Empty;
+
+        Ingredient ingredient;
+        if (sectionItem.OriginalIngredient != null &&
+            string.Equals(title, sectionItem.OriginalSectionTitle, StringComparison.Ordinal))
         {
-            Name = title,
-            RawText = title
-        };
+            ingredient = CloneIngredient(sectionItem.OriginalIngredient);
+        }
+        else
+        {
+            ingredient = _ingredientParser.Parse(title);
+        }
 
         var ingredientItem = IngredientEditorItem.CreateIngredient(_nextKey++, ingredient);
         _items[index] = ingredientItem;
@@ -232,6 +263,22 @@ public sealed class IngredientSectionList
 
         return ingredientItem;
     }
+
+    private static Ingredient CloneIngredient(Ingredient source) => new()
+    {
+        Id = source.Id,
+        RecipeId = source.RecipeId,
+        Recipe = source.Recipe,
+        OrderIndex = source.OrderIndex,
+        RawText = source.RawText,
+        Quantity = source.Quantity,
+        QuantityMax = source.QuantityMax,
+        Unit = source.Unit,
+        Name = source.Name,
+        Comment = source.Comment,
+        Preparation = source.Preparation,
+        GroupHeader = source.GroupHeader
+    };
 
     private static string ExtractSectionTitleFromIngredient(Ingredient ingredient)
     {

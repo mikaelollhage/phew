@@ -95,27 +95,37 @@
                             </span>
                         }
 
-                        <button type="button"
-                                class="btn-danger-custom ingredient-section-remove-btn"
-                                title="Ta bort sektion (ingredienser behålls)"
-                                aria-label="@($"Ta bort {sectionLabel} utan att radera ingredienser")"
-                                @onclick="@(() => RemoveSection(itemKey))">
-                            ✕
-                        </button>
+                        <div class="ingredient-row-actions">
+                            <button type="button"
+                                    class="btn-secondary-custom ingredient-row-convert-btn section-to-ingredient-btn"
+                                    title="Gör till ingrediens"
+                                    aria-label="@($"Gör {sectionLabel} till ingrediens")"
+                                    @onclick="@(() => ConvertSectionToIngredient(itemKey))">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Neutral" />
+                            </button>
 
-                        <button type="button"
-                                class="ingredient-drag-handle @(isReorderOpen ? "is-reorder-active" : "")"
-                                draggable="true"
-                                title="@($"Dra för att flytta {sectionLabel}, eller tryck för flytt- och sektionsval")"
-                                aria-label="@($"Ändra ordning för {sectionLabel}")"
-                                aria-expanded="@(isReorderOpen ? "true" : "false")"
-                                @ondragstart="@(() => HandleDragStart(itemKey))"
-                                @ondragend="HandleDragEnd"
-                                @onclick="@(() => ToggleReorderMenu(itemKey))"
-                                @onclick:stopPropagation="true"
-                                @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, itemKey))">
-                            ⠿
-                        </button>
+                            <button type="button"
+                                    class="btn-danger-custom ingredient-section-remove-btn"
+                                    title="Ta bort sektion (ingredienser behålls)"
+                                    aria-label="@($"Ta bort {sectionLabel} utan att radera ingredienser")"
+                                    @onclick="@(() => RemoveSection(itemKey))">
+                                ✕
+                            </button>
+
+                            <button type="button"
+                                    class="ingredient-drag-handle @(isReorderOpen ? "is-reorder-active" : "")"
+                                    draggable="true"
+                                    title="@($"Dra för att flytta {sectionLabel}, eller tryck för flyttval")"
+                                    aria-label="@($"Ändra ordning för {sectionLabel}")"
+                                    aria-expanded="@(isReorderOpen ? "true" : "false")"
+                                    @ondragstart="@(() => HandleDragStart(itemKey))"
+                                    @ondragend="HandleDragEnd"
+                                    @onclick="@(() => ToggleReorderMenu(itemKey))"
+                                    @onclick:stopPropagation="true"
+                                    @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, itemKey))">
+                                ⠿
+                            </button>
+                        </div>
                     </div>
                 }
                 else if (item.Ingredient != null)
@@ -123,11 +133,20 @@
                     var ingLabel = string.IsNullOrWhiteSpace(item.Ingredient.Name) ? "ingrediens" : item.Ingredient.Name;
 
                     <RecipeIngredientRow Ingredient="item.Ingredient" OnRemove="@(() => RemoveIngredient(itemKey))">
+                        <RowActions>
+                            <button type="button"
+                                    class="btn-secondary-custom ingredient-row-convert-btn ingredient-to-section-btn"
+                                    title="Gör till sektion"
+                                    aria-label="@($"Gör {ingLabel} till sektion")"
+                                    @onclick="@(() => ConvertIngredientToSection(itemKey))">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Neutral" />
+                            </button>
+                        </RowActions>
                         <DragHandle>
                             <button type="button"
                                     class="ingredient-drag-handle @(isReorderOpen ? "is-reorder-active" : "")"
                                     draggable="true"
-                                    title="@($"Dra för att flytta {ingLabel}, eller tryck för flytt- och sektionsval")"
+                                    title="@($"Dra för att flytta {ingLabel}, eller tryck för flyttval")"
                                     aria-label="@($"Ändra ordning för {ingLabel}")"
                                     aria-expanded="@(isReorderOpen ? "true" : "false")"
                                     @ondragstart="@(() => HandleDragStart(itemKey))"
@@ -162,24 +181,6 @@
                                 @onclick="@(() => MoveItemByOffset(itemKey, 1))">
                             ↓ Flytta ned
                         </button>
-                        @if (item.IsIngredient)
-                        {
-                            <button type="button"
-                                    class="btn-secondary-custom ingredient-convert-btn ingredient-to-section-btn"
-                                    aria-label="@($"Gör {targetDesc} till sektion")"
-                                    @onclick="@(() => ConvertIngredientToSection(itemKey))">
-                                Gör till sektion
-                            </button>
-                        }
-                        else
-                        {
-                            <button type="button"
-                                    class="btn-secondary-custom ingredient-convert-btn section-to-ingredient-btn"
-                                    aria-label="@($"Gör {targetDesc} till ingrediens")"
-                                    @onclick="@(() => ConvertSectionToIngredient(itemKey))">
-                                Gör till ingrediens
-                            </button>
-                        }
                     </div>
                 }
             </div>

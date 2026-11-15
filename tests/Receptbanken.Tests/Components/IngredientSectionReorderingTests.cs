@@ -292,11 +292,127 @@ public class IngredientSectionReorderingTests : TestContext
     }
 
     [Fact]
-    public void RecipeIngredientEditor_ConvertButtons_ShouldConvertBothDirectionsInPlace()
+    public void IngredientSectionList_RoundTripUnchangedTitle_RestoresAllIngredientFieldsAndGrouping()
     {
         var ingredients = new List<Ingredient>
         {
-            new() { OrderIndex = 1, Name = "Dressing", RawText = "Dressing" },
+            new() { Id = 1, RecipeId = 9, OrderIndex = 1, Name = "mjöl", Quantity = 2, Unit = "dl", GroupHeader = "Deg", RawText = "2 dl mjöl" },
+            new()
+            {
+                Id = 2,
+                RecipeId = 9,
+                OrderIndex = 2,
+                Quantity = 1m,
+                QuantityMax = 2m,
+                Unit = "msk",
+                Name = "salt",
+                Comment = "flingsalt",
+                Preparation = "mortlat",
+                GroupHeader = "Deg",
+                RawText = "1–2 msk salt (flingsalt), mortlat"
+            },
+            new() { Id = 3, RecipeId = 9, OrderIndex = 3, Name = "smör", Quantity = 100, Unit = "g", GroupHeader = "Deg", RawText = "100 g smör" }
+        };
+
+        var list = new IngredientSectionList();
+        list.LoadFromIngredients(ingredients);
+
+        var saltKey = list.Items.Single(i => i.IsIngredient && i.Ingredient!.Name == "salt").Key;
+        var section = list.ConvertIngredientToSection(saltKey, ingredients);
+
+        section.Should().NotBeNull();
+        section!.IsSection.Should().BeTrue();
+        section.SectionTitle.Should().Be("1–2 msk salt (flingsalt), mortlat");
+
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("mjöl", "Deg", 1),
+                ("smör", "1–2 msk salt (flingsalt), mortlat", 2));
+
+        // Convert back without editing title -> exact original fields restored
+        var restored = list.ConvertSectionToIngredient(section.Key, ingredients);
+        restored.Should().NotBeNull();
+        restored!.IsIngredient.Should().BeTrue();
+
+        var ing = restored.Ingredient!;
+        ing.Id.Should().Be(2);
+        ing.RecipeId.Should().Be(9);
+        ing.Quantity.Should().Be(1m);
+        ing.QuantityMax.Should().Be(2m);
+        ing.Unit.Should().Be("msk");
+        ing.Name.Should().Be("salt");
+        ing.Comment.Should().Be("flingsalt");
+        ing.Preparation.Should().Be("mortlat");
+        ing.RawText.Should().Be("1–2 msk salt (flingsalt), mortlat");
+        ing.GroupHeader.Should().Be("Deg");
+        ing.OrderIndex.Should().Be(2);
+
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("mjöl", "Deg", 1),
+                ("salt", "Deg", 2),
+                ("smör", "Deg", 3));
+    }
+
+    [Fact]
+    public void IngredientSectionList_ConvertEditedSectionTitleAndOriginalSection_ParsesOrPreservesNameAndGrouping()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Quantity = 1, Unit = "msk", Name = "salt", RawText = "1 msk salt", GroupHeader = "Bas" },
+            new() { OrderIndex = 2, Quantity = 2, Unit = "dl", Name = "vatten", RawText = "2 dl vatten", GroupHeader = "Bas" }
+        };
+
+        var list = new IngredientSectionList();
+        list.LoadFromIngredients(ingredients);
+
+        // 1. Ingredient -> Section, edit title to structured ingredient -> parses new title
+        var saltKey = list.Items.Single(i => i.IsIngredient && i.Ingredient!.Name == "salt").Key;
+        var section = list.ConvertIngredientToSection(saltKey, ingredients)!;
+        list.RenameSection(section.Key, "2 tsk oregano", ingredients);
+
+        var parsedItem = list.ConvertSectionToIngredient(section.Key, ingredients)!;
+        parsedItem.Ingredient!.Quantity.Should().Be(2m);
+        parsedItem.Ingredient.Unit.Should().Be("tsk");
+        parsedItem.Ingredient.Name.Should().Be("oregano");
+        parsedItem.Ingredient.RawText.Should().Be("2 tsk oregano");
+        parsedItem.Ingredient.GroupHeader.Should().Be("Bas");
+        parsedItem.Ingredient.OrderIndex.Should().Be(1);
+
+        // 2. Ingredient -> Section, edit title to plain text -> preserves as editable name
+        var section2 = list.ConvertIngredientToSection(parsedItem.Key, ingredients)!;
+        list.RenameSection(section2.Key, "Kryddblandning", ingredients);
+
+        var plainItem = list.ConvertSectionToIngredient(section2.Key, ingredients)!;
+        plainItem.Ingredient!.Quantity.Should().BeNull();
+        plainItem.Ingredient.Unit.Should().BeNull();
+        plainItem.Ingredient.Name.Should().Be("Kryddblandning");
+        plainItem.Ingredient.RawText.Should().Be("Kryddblandning");
+        plainItem.Ingredient.GroupHeader.Should().Be("Bas");
+
+        // 3. Original section with structured text -> parsed when converted to ingredient
+        var originalSection = list.Items.First(i => i.IsSection);
+        list.RenameSection(originalSection.Key, "3 dl grädde", ingredients);
+        var fromOriginalSection = list.ConvertSectionToIngredient(originalSection.Key, ingredients)!;
+        fromOriginalSection.Ingredient!.Quantity.Should().Be(3m);
+        fromOriginalSection.Ingredient.Unit.Should().Be("dl");
+        fromOriginalSection.Ingredient.Name.Should().Be("grädde");
+        fromOriginalSection.Ingredient.GroupHeader.Should().BeNull();
+        fromOriginalSection.Ingredient.OrderIndex.Should().Be(1);
+
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("grädde", (string?)null, 1),
+                ("Kryddblandning", (string?)null, 2),
+                ("vatten", (string?)null, 3));
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_ConvertButtons_ShouldConvertBothDirectionsInPlaceWithoutMenuDuplication()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "salt", Quantity = 1, Unit = "msk", RawText = "1 msk salt" },
             new() { OrderIndex = 2, Name = "olivolja", Quantity = 2, Unit = "msk", RawText = "2 msk olivolja" }
         };
 
@@ -304,22 +420,29 @@ public class IngredientSectionReorderingTests : TestContext
             .Add(p => p.Ingredients, ingredients)
             .Add(p => p.Title, "Ingredienser"));
 
-        // Open action bar on first ingredient ("Dressing") and convert to section
+        // Drag menu should stay focused on moving rows (no duplicate convert buttons)
         cut.FindAll(".ingredient-drag-handle").First().Click();
-        cut.Find(".ingredient-to-section-btn").Click();
+        var reorderBar = cut.Find(".ingredient-reorder-bar");
+        reorderBar.QuerySelectorAll(".ingredient-to-section-btn, .section-to-ingredient-btn").Should().BeEmpty();
+
+        // Click row's visible convert-to-section button directly
+        var toSectionBtn = cut.Find(".ingredient-to-section-btn");
+        toSectionBtn.GetAttribute("title").Should().Be("Gör till sektion");
+        toSectionBtn.Click();
 
         cut.FindAll(".ingredient-section-header-row").Should().ContainSingle();
         ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
-            .Should().Equal(("olivolja", "Dressing", 1));
+            .Should().Equal(("olivolja", "1 msk salt", 1));
 
-        // Open action bar on the new section and convert back to ingredient
-        cut.FindAll(".ingredient-drag-handle").First().Click();
-        cut.Find(".section-to-ingredient-btn").Click();
+        // Click section's visible convert-to-ingredient button directly -> lossless round-trip
+        var toIngredientBtn = cut.Find(".section-to-ingredient-btn");
+        toIngredientBtn.GetAttribute("title").Should().Be("Gör till ingrediens");
+        toIngredientBtn.Click();
 
         cut.FindAll(".ingredient-section-header-row").Should().BeEmpty();
-        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+        ingredients.Select(i => (i.Name, i.Quantity, i.Unit, i.GroupHeader, i.OrderIndex))
             .Should().Equal(
-                ("Dressing", (string?)null, 1),
-                ("olivolja", (string?)null, 2));
+                ("salt", 1m, "msk", (string?)null, 1),
+                ("olivolja", 2m, "msk", (string?)null, 2));
     }
 }
