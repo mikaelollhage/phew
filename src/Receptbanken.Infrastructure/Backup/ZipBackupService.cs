@@ -253,6 +253,7 @@ public class ZipBackupService : IBackupService
             RecipeCount = payload.Recipes.Count,
             ShoppingListItemCount = payload.ShoppingListItems.Count,
             ImageCount = imageFiles.Length,
+            WeeklyMenuCount = payload.WeeklyMenus.Count,
             CalendarEventCount = payload.CalendarEvents.Count
         };
 
@@ -554,6 +555,7 @@ public class ZipBackupService : IBackupService
                 await db.SaveChangesAsync(cancellationToken);
 
                 // Restore Weekly Menus and their Shopping Contributions when present in backup
+                var restoredWeeklyMenusCount = 0;
                 if (payload.WeeklyMenus is { Count: > 0 })
                 {
                     var restoredRecipesByTitle = await db.Recipes
@@ -634,6 +636,7 @@ public class ZipBackupService : IBackupService
                         }
 
                         db.WeeklyMenus.Add(restoredMenu);
+                        restoredWeeklyMenusCount++;
                     }
 
                     await db.SaveChangesAsync(cancellationToken);
@@ -745,6 +748,7 @@ public class ZipBackupService : IBackupService
                     RestoredCategories = payload.Categories.Count,
                     RestoredRecipes = payload.Recipes.Count,
                     RestoredImages = extractedImageCount,
+                    RestoredWeeklyMenus = restoredWeeklyMenusCount,
                     RestoredCalendarEvents = calendarEventsToRestore.Count
                 };
             }

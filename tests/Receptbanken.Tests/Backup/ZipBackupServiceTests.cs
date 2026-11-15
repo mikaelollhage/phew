@@ -485,6 +485,7 @@ public class ZipBackupServiceTests : IDisposable
 
         result.Success.Should().BeTrue();
         result.RestoredCategories.Should().Be(1);
+        result.RestoredWeeklyMenus.Should().Be(0);
         result.RestoredCalendarEvents.Should().Be(0);
 
         var remaining = await targetCalService.GetOccurrencesAsync(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30));

@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">💾 Säkerhetskopiering & Återställning</h1>
-        <p class="page-subtitle">Exportera hela din receptsamling, kategorier, inköpslista och lokala matbilder till en portabel ZIP-fil.</p>
+        <p class="page-subtitle">Exportera och återställ recept, inköpslista, veckomenyer, familjekalender och matbilder i en portabel ZIP-fil.</p>
     </div>
 </div>
 
@@ -18,9 +18,15 @@
             <span>📦 Exportera säkerhetskopia</span>
         </div>
 
-        <p style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 20px; line-height: 1.6;">
-            Skapar ett komplett ZIP-arkiv med <code>manifest.json</code>, <code>data.json</code> (alla recept, ingredienser, instruktioner, kategorier och inköpslista) samt alla uppladdade och importerade bilder i <code>images/recipes/</code>.
+        <p style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 10px; line-height: 1.6;">
+            Skapar ett komplett ZIP-arkiv med <code>manifest.json</code>, <code>data.json</code> och lokala bilder i <code>images/recipes/</code>. Säkerhetskopian innehåller:
         </p>
+        <ul style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 20px; padding-left: 20px; line-height: 1.6;">
+            <li>Recept, ingredienser, kategorier och bilder.</li>
+            <li>Inköpslistan.</li>
+            <li>Veckomenyer.</li>
+            <li>Familjekalendern, inklusive återkommande händelser.</li>
+        </ul>
 
         <div style="display: flex; gap: 12px; flex-wrap: wrap;">
             <button type="button"
@@ -47,22 +53,8 @@
         </div>
 
         <p style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 16px; line-height: 1.6;">
-            Välj en tidigare exporterad <code>.zip</code>-fil från Receptbanken. Återställningen utförs transaktionellt med automatisk rollback och skuggkopiering av bildmappen om något fel skulle inträffa.
+            Välj en tidigare exporterad <code>.zip</code>-fil från Receptbanken. Återställningen ersätter all befintlig data — recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser — med innehållet i backupfilen. Återställningen utförs transaktionellt med automatisk rollback och skuggkopiering av bildmappen om något fel skulle inträffa.
         </p>
-
-        <div class="form-group">
-            <label class="form-label">Återställningsläge</label>
-            <div style="display: flex; gap: 16px; margin-top: 6px;">
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
-                    <input type="radio" name="restoreMode" checked="@replaceExisting" @onchange="@(() => replaceExisting = true)" />
-                    <span>Ersätt befintlig samling helt</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer;">
-                    <input type="radio" name="restoreMode" checked="@(!replaceExisting)" @onchange="@(() => replaceExisting = false)" />
-                    <span>Slå samman (behåll befintliga recept)</span>
-                </label>
-            </div>
-        </div>
 
         <div class="form-group">
             <label class="form-label">Välj säkerhetskopia (.zip, max 100 MB)</label>
@@ -94,9 +86,7 @@
 
 <ConfirmDialog IsVisible="showRestoreConfirm"
                Title="Bekräfta återställning av säkerhetskopia"
-               Message="@(replaceExisting
-                   ? "Är du säker? Alla nuvarande recept, kategorier och bilder kommer att ersättas med innehållet i säkerhetskopian."
-                   : "Vill du importera recept och bilder från säkerhetskopian till din befintliga samling?")"
+               Message="Är du säker? Alla nuvarande data — recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser — kommer att ersättas helt med innehållet i backupfilen."
                ConfirmText="Ja, återställ nu"
                CancelText="Avbryt"
                OnConfirm="ExecuteRestoreAsync"
@@ -105,7 +95,6 @@
 @code {
     private const long MaxUploadSize = 100L * 1024 * 1024; // 100 MB
     private IBrowserFile? selectedFile;
-    private bool replaceExisting = true;
     private bool isExporting = false;
     private bool isRestoring = false;
     private bool showRestoreConfirm = false;
@@ -155,11 +144,11 @@
         try
         {
             await using var stream = selectedFile.OpenReadStream(MaxUploadSize);
-            var result = await BackupService.RestoreFromArchiveAsync(stream, replaceExisting);
+            var result = await BackupService.RestoreFromArchiveAsync(stream, replaceExisting: true);
 
             if (result.Success)
             {
-                restoreFeedback.ShowSuccess($"Återställningen lyckades! {result.RestoredRecipes} recept, {result.RestoredCategories} kategorier och {result.RestoredImages} bilder återställdes.");
+                restoreFeedback.ShowSuccess($"Återställningen lyckades! {result.RestoredRecipes} recept, {result.RestoredCategories} kategorier, {result.RestoredImages} bilder, {result.RestoredWeeklyMenus} veckomenyer och {result.RestoredCalendarEvents} kalenderhändelser återställdes.");
                 selectedFile = null;
             }
             else

@@ -141,19 +141,25 @@ public class ContextualFeedbackComponentTests : TestContext
     private sealed class FakeBackupService : IBackupService
     {
         public byte[] ArchiveToReturn { get; set; } = [0x50, 0x4B, 0x03, 0x04];
+        public bool? LastReplaceExisting { get; private set; }
         public BackupRestoreResult RestoreResultToReturn { get; set; } = new()
         {
             Success = true,
             RestoredRecipes = 5,
             RestoredCategories = 3,
-            RestoredImages = 2
+            RestoredImages = 2,
+            RestoredWeeklyMenus = 1,
+            RestoredCalendarEvents = 4
         };
 
         public Task<byte[]> CreateBackupArchiveAsync(CancellationToken cancellationToken = default)
             => Task.FromResult(ArchiveToReturn);
 
         public Task<BackupRestoreResult> RestoreFromArchiveAsync(Stream zipStream, bool replaceExisting = true, CancellationToken cancellationToken = default)
-            => Task.FromResult(RestoreResultToReturn);
+        {
+            LastReplaceExisting = replaceExisting;
+            return Task.FromResult(RestoreResultToReturn);
+        }
     }
 
     // =========================================================================
@@ -673,8 +679,9 @@ public class ContextualFeedbackComponentTests : TestContext
 
         cut.WaitForAssertion(() =>
         {
+            fakeBackup.LastReplaceExisting.Should().BeTrue();
             cut.FindAll(".backup-restore-feedback.rb-feedback-success").Should().ContainSingle();
-            cut.Find(".backup-restore-feedback").TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier och 2 bilder återställdes.");
+            cut.Find(".backup-restore-feedback").TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier, 2 bilder, 1 veckomenyer och 4 kalenderhändelser återställdes.");
         });
     }
 
@@ -908,6 +915,39 @@ public class ContextualFeedbackComponentTests : TestContext
         cut.FindAll("button").Where(b => b.TextContent.Contains("Ladda ner säkerhetskopia (.zip)")).Should().ContainSingle();
         cut.FindAll("a[href='/api/backup/export']").Should().BeEmpty();
         cut.Markup.Should().NotContain("Direktlänk (.zip)");
+    }
+
+    [Fact]
+    public void BackupPlaceholder_ShouldNotOfferMergeMode_AndShouldShowFullReplaceWarningAndContents()
+    {
+        var fakeBackup = new FakeBackupService();
+        Services.AddFluentUIComponents();
+        Services.AddSingleton<IBackupService>(fakeBackup);
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var cut = RenderComponent<BackupPlaceholder>();
+
+        cut.FindAll("input[name='restoreMode']").Should().BeEmpty();
+        cut.Markup.Should().NotContain("Slå samman");
+        cut.Markup.Should().Contain("Recept, ingredienser, kategorier och bilder");
+        cut.Markup.Should().Contain("Inköpslistan");
+        cut.Markup.Should().Contain("Veckomenyer");
+        cut.Markup.Should().Contain("Familjekalendern, inklusive återkommande händelser");
+
+        var inputFile = cut.FindComponent<InputFile>();
+        var fakeZip = new FakeBrowserFile("backup.zip", "application/zip", [0x50, 0x4B, 0x03, 0x04]);
+        cut.InvokeAsync(() => inputFile.Instance.OnChange.InvokeAsync(new InputFileChangeEventArgs([fakeZip])));
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll("button").Should().Contain(b => b.TextContent.Contains("Starta återställning"));
+        });
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Starta återställning")).Click();
+
+        var dialogText = cut.Find(".modal-dialog-custom").TextContent;
+        dialogText.Should().Contain("ersättas helt");
+        dialogText.Should().Contain("recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser");
     }
 }
 
