@@ -11,6 +11,8 @@ public class BackupManifest
     public int ImageCount { get; set; }
     public int WeeklyMenuCount { get; set; }
     public int CalendarEventCount { get; set; }
+    public int TodoListCount { get; set; }
+    public int TodoItemCount { get; set; }
 }
 
 public class BackupRestoreResult
@@ -22,6 +24,8 @@ public class BackupRestoreResult
     public int RestoredImages { get; set; }
     public int RestoredWeeklyMenus { get; set; }
     public int RestoredCalendarEvents { get; set; }
+    public int RestoredTodoLists { get; set; }
+    public int RestoredTodoItems { get; set; }
 }
 
 public interface IBackupService

@@ -33,6 +33,7 @@ public class ZipBackupService : IBackupService
     private readonly ILogger<ZipBackupService> _logger;
     private readonly ShoppingListNotifier? _shoppingListNotifier;
     private readonly CalendarNotifier? _calendarNotifier;
+    private readonly TodoNotifier? _todoNotifier;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -47,7 +48,8 @@ public class ZipBackupService : IBackupService
         BackupLimitsOptions? limits = null,
         ShoppingListNotifier? shoppingListNotifier = null,
         CalendarNotifier? calendarNotifier = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        TodoNotifier? todoNotifier = null)
     {
         _dbFactory = dbFactory;
         _storageOptions = storageOptions.Value;
@@ -55,6 +57,7 @@ public class ZipBackupService : IBackupService
         _limits = limits ?? new BackupLimitsOptions();
         _shoppingListNotifier = shoppingListNotifier;
         _calendarNotifier = calendarNotifier;
+        _todoNotifier = todoNotifier;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -97,6 +100,14 @@ public class ZipBackupService : IBackupService
             .AsNoTracking()
             .Include(e => e.Exceptions.OrderBy(ex => ex.OriginalDate))
             .OrderBy(e => e.Id)
+            .ToListAsync(cancellationToken);
+
+        var todoLists = await db.TodoLists
+            .AsNoTracking()
+            .Include(l => l.Items.OrderBy(i => i.SortOrder).ThenBy(i => i.Id))
+            .OrderBy(l => l.IsArchived)
+            .ThenBy(l => l.SortOrder)
+            .ThenBy(l => l.Id)
             .ToListAsync(cancellationToken);
 
         var recipeTitleById = recipes.ToDictionary(r => r.Id, r => r.Title);
@@ -233,6 +244,28 @@ public class ZipBackupService : IBackupService
                         CreatedAt = ex.CreatedAt,
                         UpdatedAt = ex.UpdatedAt
                     }).ToList()
+            }).ToList(),
+            TodoLists = todoLists.Select(l => new BackupTodoListDto
+            {
+                Name = l.Name,
+                SortOrder = l.SortOrder,
+                IsArchived = l.IsArchived,
+                ArchivedAt = l.ArchivedAt,
+                CreatedAt = l.CreatedAt,
+                UpdatedAt = l.UpdatedAt,
+                Items = l.Items
+                    .OrderBy(i => i.SortOrder)
+                    .ThenBy(i => i.Id)
+                    .Select(i => new BackupTodoItemDto
+                    {
+                        Title = i.Title,
+                        Notes = i.Notes,
+                        IsCompleted = i.IsCompleted,
+                        CompletedAt = i.CompletedAt,
+                        SortOrder = i.SortOrder,
+                        CreatedAt = i.CreatedAt,
+                        UpdatedAt = i.UpdatedAt
+                    }).ToList()
             }).ToList()
         };
 
@@ -254,7 +287,9 @@ public class ZipBackupService : IBackupService
             ShoppingListItemCount = payload.ShoppingListItems.Count,
             ImageCount = imageFiles.Length,
             WeeklyMenuCount = payload.WeeklyMenus.Count,
-            CalendarEventCount = payload.CalendarEvents.Count
+            CalendarEventCount = payload.CalendarEvents.Count,
+            TodoListCount = payload.TodoLists.Count,
+            TodoItemCount = payload.TodoLists.Sum(l => l.Items.Count)
         };
 
         using var memoryStream = new MemoryStream();
@@ -450,6 +485,8 @@ public class ZipBackupService : IBackupService
 
                 if (replaceExisting)
                 {
+                    db.TodoItems.RemoveRange(await db.TodoItems.ToListAsync(cancellationToken));
+                    db.TodoLists.RemoveRange(await db.TodoLists.ToListAsync(cancellationToken));
                     db.CalendarEventExceptions.RemoveRange(await db.CalendarEventExceptions.ToListAsync(cancellationToken));
                     db.CalendarEvents.RemoveRange(await db.CalendarEvents.ToListAsync(cancellationToken));
                     db.WeeklyMenuShoppingContributions.RemoveRange(await db.WeeklyMenuShoppingContributions.ToListAsync(cancellationToken));
@@ -693,6 +730,40 @@ public class ZipBackupService : IBackupService
                     await db.SaveChangesAsync(cancellationToken);
                 }
 
+                // Restore TodoLists and TodoItems when present in backup (empty in legacy backups)
+                var todoListsToRestore = payload.TodoLists ?? [];
+                var restoredTodoItemsCount = 0;
+                if (todoListsToRestore.Count > 0)
+                {
+                    foreach (var listDto in todoListsToRestore)
+                    {
+                        var restoredList = new TodoList
+                        {
+                            Name = string.IsNullOrWhiteSpace(listDto.Name) ? "Lista" : listDto.Name.Trim(),
+                            SortOrder = listDto.SortOrder,
+                            IsArchived = listDto.IsArchived,
+                            ArchivedAt = listDto.IsArchived ? listDto.ArchivedAt : null,
+                            CreatedAt = listDto.CreatedAt,
+                            UpdatedAt = listDto.UpdatedAt,
+                            Items = (listDto.Items ?? []).Select(itemDto => new TodoItem
+                            {
+                                Title = itemDto.Title,
+                                Notes = string.IsNullOrWhiteSpace(itemDto.Notes) ? null : itemDto.Notes.Trim(),
+                                IsCompleted = itemDto.IsCompleted,
+                                CompletedAt = itemDto.IsCompleted ? itemDto.CompletedAt : null,
+                                SortOrder = itemDto.SortOrder,
+                                CreatedAt = itemDto.CreatedAt,
+                                UpdatedAt = itemDto.UpdatedAt
+                            }).ToList()
+                        };
+
+                        restoredTodoItemsCount += restoredList.Items.Count;
+                        db.TodoLists.Add(restoredList);
+                    }
+
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
                 // Persist the restore barrier atomically within the restore transaction so
                 // reminders scheduled prior to this restore cannot fire retroactively even after restart.
                 var restoredAtUtc = _timeProvider.GetUtcNow();
@@ -741,6 +812,7 @@ public class ZipBackupService : IBackupService
                 _shoppingListNotifier?.ClearDeletedItems();
                 _shoppingListNotifier?.NotifyOrderingChanged();
                 _calendarNotifier?.NotifyChanged();
+                _todoNotifier?.NotifyChanged();
 
                 return new BackupRestoreResult
                 {
@@ -749,7 +821,9 @@ public class ZipBackupService : IBackupService
                     RestoredRecipes = payload.Recipes.Count,
                     RestoredImages = extractedImageCount,
                     RestoredWeeklyMenus = restoredWeeklyMenusCount,
-                    RestoredCalendarEvents = calendarEventsToRestore.Count
+                    RestoredCalendarEvents = calendarEventsToRestore.Count,
+                    RestoredTodoLists = todoListsToRestore.Count,
+                    RestoredTodoItems = restoredTodoItemsCount
                 };
             }
             catch (Exception innerEx)
@@ -818,6 +892,7 @@ public class ZipBackupService : IBackupService
         public List<BackupShoppingItemDto> ShoppingListItems { get; set; } = new();
         public List<BackupWeeklyMenuDto> WeeklyMenus { get; set; } = new();
         public List<BackupCalendarEventDto> CalendarEvents { get; set; } = new();
+        public List<BackupTodoListDto> TodoLists { get; set; } = new();
     }
 
     private sealed class BackupCategoryDto
@@ -948,6 +1023,28 @@ public class ZipBackupService : IBackupService
         public string? OverrideFamilyMembersCsv { get; set; }
         public int? OverrideReminderMinutesBefore { get; set; }
         public bool OverrideReminderCleared { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class BackupTodoListDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public int SortOrder { get; set; }
+        public bool IsArchived { get; set; }
+        public DateTimeOffset? ArchivedAt { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+        public List<BackupTodoItemDto> Items { get; set; } = new();
+    }
+
+    private sealed class BackupTodoItemDto
+    {
+        public string Title { get; set; } = string.Empty;
+        public string? Notes { get; set; }
+        public bool IsCompleted { get; set; }
+        public DateTimeOffset? CompletedAt { get; set; }
+        public int SortOrder { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }

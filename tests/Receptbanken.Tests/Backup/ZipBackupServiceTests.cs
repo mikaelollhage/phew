@@ -33,14 +33,15 @@ public class ZipBackupServiceTests : IDisposable
         string subFolder,
         BackupLimitsOptions? limits = null,
         ShoppingListNotifier? shoppingListNotifier = null,
-        CalendarNotifier? calendarNotifier = null)
+        CalendarNotifier? calendarNotifier = null,
+        TodoNotifier? todoNotifier = null)
     {
         var opts = Options.Create(new ImageStorageOptions
         {
             BaseDataPath = Path.Combine(_tempDataDir, subFolder),
             ImageFolderName = "images/recipes"
         });
-        return new ZipBackupService(dbFactory, opts, NullLogger<ZipBackupService>.Instance, limits, shoppingListNotifier, calendarNotifier);
+        return new ZipBackupService(dbFactory, opts, NullLogger<ZipBackupService>.Instance, limits, shoppingListNotifier, calendarNotifier, todoNotifier: todoNotifier);
     }
 
     [Fact]
@@ -527,6 +528,87 @@ public class ZipBackupServiceTests : IDisposable
 
         var targetEvents = await targetCalService.GetOccurrencesAsync(new DateOnly(2026, 11, 1), new DateOnly(2026, 11, 30));
         targetEvents.Should().ContainSingle(o => o.Title == "Befintlig händelse");
+    }
+
+    [Fact]
+    public async Task ExportAndRestore_RoundTrip_ShouldRestoreTodoListsAndTasksIncludingArchivedAndNotify()
+    {
+        var sourceTodoService = new TodoService(_sourceDbFactory);
+        var activeList = await sourceTodoService.CreateListAsync("Helgfix");
+        var t1 = await sourceTodoService.AddItemAsync(activeList.Id, "Klippa gräset", "Framsidan också");
+        await sourceTodoService.AddItemAsync(activeList.Id, "Panta burkar");
+        await sourceTodoService.SetItemCompletedAsync(t1.Id, true);
+
+        var archivedList = await sourceTodoService.CreateListAsync("Sommarstugan");
+        await sourceTodoService.AddItemAsync(archivedList.Id, "Stäng av vattnet");
+        await sourceTodoService.ArchiveListAsync(archivedList.Id);
+
+        var exporter = CreateBackupService(_sourceDbFactory, "source");
+        var zipBytes = await exporter.CreateBackupArchiveAsync();
+
+        var targetTodoNotifier = new TodoNotifier();
+        var versionBefore = targetTodoNotifier.Version;
+        var restorer = CreateBackupService(_targetDbFactory, "target", todoNotifier: targetTodoNotifier);
+
+        using var zipStream = new MemoryStream(zipBytes);
+        var result = await restorer.RestoreFromArchiveAsync(zipStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredTodoLists.Should().Be(2);
+        result.RestoredTodoItems.Should().Be(3);
+        targetTodoNotifier.Version.Should().BeGreaterThan(versionBefore);
+
+        var targetTodoService = new TodoService(_targetDbFactory, targetTodoNotifier);
+        var restoredLists = await targetTodoService.GetAllListsAsync(includeArchived: true);
+        restoredLists.Should().HaveCount(2);
+
+        var restoredActive = restoredLists.Single(l => !l.IsArchived);
+        restoredActive.Name.Should().Be("Helgfix");
+        restoredActive.Items.Should().HaveCount(2);
+        restoredActive.Items.Should().ContainSingle(i => i.Title == "Klippa gräset" && i.IsCompleted && i.Notes == "Framsidan också");
+        restoredActive.Items.Should().ContainSingle(i => i.Title == "Panta burkar" && !i.IsCompleted);
+
+        var restoredArchived = restoredLists.Single(l => l.IsArchived);
+        restoredArchived.Name.Should().Be("Sommarstugan");
+        restoredArchived.ArchivedAt.Should().NotBeNull();
+        restoredArchived.Items.Should().ContainSingle(i => i.Title == "Stäng av vattnet");
+    }
+
+    [Fact]
+    public async Task RestoreFromLegacyBackupWithoutTodoLists_ShouldClearExistingTodoData()
+    {
+        // Create a legacy-style ZIP without todoLists in data.json
+        using var legacyStream = new MemoryStream();
+        using (var archive = new ZipArchive(legacyStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var mw = new StreamWriter(manifestEntry.Open(), Encoding.UTF8))
+            {
+                await mw.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","categoryCount":0,"recipeCount":0}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var dw = new StreamWriter(dataEntry.Open(), Encoding.UTF8))
+            {
+                await dw.WriteAsync("""{"categories":[],"recipes":[],"shoppingListItems":[],"weeklyMenus":[]}""");
+            }
+        }
+        legacyStream.Position = 0;
+
+        var targetTodoNotifier = new TodoNotifier();
+        var targetTodoService = new TodoService(_targetDbFactory, targetTodoNotifier);
+        var existingList = await targetTodoService.CreateListAsync("Befintlig lista");
+        await targetTodoService.AddItemAsync(existingList.Id, "Befintlig uppgift");
+
+        var restorer = CreateBackupService(_targetDbFactory, "target", todoNotifier: targetTodoNotifier);
+        var result = await restorer.RestoreFromArchiveAsync(legacyStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredTodoLists.Should().Be(0);
+        result.RestoredTodoItems.Should().Be(0);
+
+        var remainingLists = await targetTodoService.GetAllListsAsync(includeArchived: true);
+        remainingLists.Should().BeEmpty();
     }
 
     public void Dispose()

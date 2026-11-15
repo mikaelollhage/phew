@@ -131,5 +131,28 @@ public class MigrationTests : IDisposable
         var count = await context.CalendarEvents.CountAsync();
         count.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Migrate_AddFamilyTodoLists_WhenExistingDatabasePresent_ShouldApplyCleanly()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={_dbPath}")
+            .Options;
+
+        await using var context = new AppDbContext(options);
+
+        var migrator = context.Database.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+        await migrator.MigrateAsync("20261114161518_AddCalendarWebPush");
+
+        await context.Database.MigrateAsync();
+
+        var appliedAfter = (await context.Database.GetAppliedMigrationsAsync()).ToList();
+        appliedAfter.Should().Contain(m => m.Contains("AddFamilyTodoLists"));
+
+        var listCount = await context.TodoLists.CountAsync();
+        var itemCount = await context.TodoItems.CountAsync();
+        listCount.Should().Be(0);
+        itemCount.Should().Be(0);
+    }
 }
 

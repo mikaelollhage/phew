@@ -550,6 +550,89 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.ToTable("ShoppingListItems");
                 });
 
+            modelBuilder.Entity("Receptbanken.Core.Models.TodoItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CompletedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsCompleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("TodoListId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TodoListId", "SortOrder")
+                        .HasDatabaseName("IX_TodoItems_TodoListId_SortOrder");
+
+                    b.ToTable("TodoItems");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.TodoList", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ArchivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsArchived")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsArchived", "SortOrder")
+                        .HasDatabaseName("IX_TodoLists_IsArchived_SortOrder");
+
+                    b.ToTable("TodoLists");
+                });
+
             modelBuilder.Entity("Receptbanken.Core.Models.WeeklyMenu", b =>
                 {
                     b.Property<int>("Id")
@@ -795,6 +878,17 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.Navigation("Recipe");
                 });
 
+            modelBuilder.Entity("Receptbanken.Core.Models.TodoItem", b =>
+                {
+                    b.HasOne("Receptbanken.Core.Models.TodoList", "TodoList")
+                        .WithMany("Items")
+                        .HasForeignKey("TodoListId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("TodoList");
+                });
+
             modelBuilder.Entity("Receptbanken.Core.Models.WeeklyMenuDay", b =>
                 {
                     b.HasOne("Receptbanken.Core.Models.Recipe", "Recipe")
@@ -871,6 +965,11 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.Navigation("Instructions");
 
                     b.Navigation("RecipeCategories");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.TodoList", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Receptbanken.Core.Models.WeeklyMenu", b =>

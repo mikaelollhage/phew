@@ -33,6 +33,8 @@ public class AppDbContext : DbContext
     public DbSet<PushSubscriptionEntity> PushSubscriptions => Set<PushSubscriptionEntity>();
     public DbSet<CalendarReminderDelivery> CalendarReminderDeliveries => Set<CalendarReminderDelivery>();
     public DbSet<CalendarReminderSystemState> CalendarReminderSystemStates => Set<CalendarReminderSystemState>();
+    public DbSet<TodoList> TodoLists => Set<TodoList>();
+    public DbSet<TodoItem> TodoItems => Set<TodoItem>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -330,6 +332,36 @@ public class AppDbContext : DbContext
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Id).ValueGeneratedNever();
+        });
+
+        // TodoList
+        modelBuilder.Entity<TodoList>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(TodoList.MaxNameLength);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+            entity.Property(e => e.IsArchived).HasDefaultValue(false);
+
+            entity.HasIndex(e => new { e.IsArchived, e.SortOrder })
+                .HasDatabaseName("IX_TodoLists_IsArchived_SortOrder");
+
+            entity.HasMany(e => e.Items)
+                .WithOne(i => i.TodoList)
+                .HasForeignKey(i => i.TodoListId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // TodoItem
+        modelBuilder.Entity<TodoItem>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(TodoItem.MaxTitleLength);
+            entity.Property(e => e.Notes).HasMaxLength(TodoItem.MaxNotesLength);
+            entity.Property(e => e.IsCompleted).HasDefaultValue(false);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+
+            entity.HasIndex(e => new { e.TodoListId, e.SortOrder })
+                .HasDatabaseName("IX_TodoItems_TodoListId_SortOrder");
         });
     }
 }

@@ -8,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1 class="page-title">💾 Säkerhetskopiering & Återställning</h1>
-        <p class="page-subtitle">Exportera och återställ recept, inköpslista, veckomenyer, familjekalender och matbilder i en portabel ZIP-fil.</p>
+        <p class="page-subtitle">Exportera och återställ recept, inköpslista, att göra-listor, veckomenyer, familjekalender och matbilder i en portabel ZIP-fil.</p>
     </div>
 </div>
 
@@ -24,6 +24,7 @@
         <ul style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 20px; padding-left: 20px; line-height: 1.6;">
             <li>Recept, ingredienser, kategorier och bilder.</li>
             <li>Inköpslistan.</li>
+            <li>Att göra-listor, inklusive uppgifter och arkiverade listor.</li>
             <li>Veckomenyer.</li>
             <li>Familjekalendern, inklusive återkommande händelser.</li>
         </ul>
@@ -53,7 +54,7 @@
         </div>
 
         <p style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 16px; line-height: 1.6;">
-            Välj en tidigare exporterad <code>.zip</code>-fil från Receptbanken. Återställningen ersätter all befintlig data — recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser — med innehållet i backupfilen. Återställningen utförs transaktionellt med automatisk rollback och skuggkopiering av bildmappen om något fel skulle inträffa.
+            Välj en tidigare exporterad <code>.zip</code>-fil från Receptbanken. Återställningen ersätter all befintlig data — recept, ingredienser, kategorier, bilder, inköpslistan, att göra-listor, veckomenyer samt familjekalendern inklusive återkommande händelser — med innehållet i backupfilen. Återställningen utförs transaktionellt med automatisk rollback och skuggkopiering av bildmappen om något fel skulle inträffa.
         </p>
 
         <div class="form-group">
@@ -86,7 +87,7 @@
 
 <ConfirmDialog IsVisible="showRestoreConfirm"
                Title="Bekräfta återställning av säkerhetskopia"
-               Message="Är du säker? Alla nuvarande data — recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser — kommer att ersättas helt med innehållet i backupfilen."
+               Message="Är du säker? Alla nuvarande data — recept, ingredienser, kategorier, bilder, inköpslistan, att göra-listor, veckomenyer samt familjekalendern inklusive återkommande händelser — kommer att ersättas helt med innehållet i backupfilen."
                ConfirmText="Ja, återställ nu"
                CancelText="Avbryt"
                OnConfirm="ExecuteRestoreAsync"
@@ -148,7 +149,7 @@
 
             if (result.Success)
             {
-                restoreFeedback.ShowSuccess($"Återställningen lyckades! {result.RestoredRecipes} recept, {result.RestoredCategories} kategorier, {result.RestoredImages} bilder, {result.RestoredWeeklyMenus} veckomenyer och {result.RestoredCalendarEvents} kalenderhändelser återställdes.");
+                restoreFeedback.ShowSuccess($"Återställningen lyckades! {result.RestoredRecipes} recept, {result.RestoredCategories} kategorier, {result.RestoredImages} bilder, {result.RestoredWeeklyMenus} veckomenyer, {result.RestoredCalendarEvents} kalenderhändelser och {result.RestoredTodoLists} att göra-listor ({result.RestoredTodoItems} uppgifter) återställdes.");
                 selectedFile = null;
             }
             else

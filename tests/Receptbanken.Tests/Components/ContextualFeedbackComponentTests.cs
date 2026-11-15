@@ -681,7 +681,7 @@ public class ContextualFeedbackComponentTests : TestContext
         {
             fakeBackup.LastReplaceExisting.Should().BeTrue();
             cut.FindAll(".backup-restore-feedback.rb-feedback-success").Should().ContainSingle();
-            cut.Find(".backup-restore-feedback").TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier, 2 bilder, 1 veckomenyer och 4 kalenderhändelser återställdes.");
+            cut.Find(".backup-restore-feedback").TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier, 2 bilder, 1 veckomenyer, 4 kalenderhändelser och 0 att göra-listor (0 uppgifter) återställdes.");
         });
     }
 
@@ -931,6 +931,7 @@ public class ContextualFeedbackComponentTests : TestContext
         cut.Markup.Should().NotContain("Slå samman");
         cut.Markup.Should().Contain("Recept, ingredienser, kategorier och bilder");
         cut.Markup.Should().Contain("Inköpslistan");
+        cut.Markup.Should().Contain("Att göra-listor, inklusive uppgifter och arkiverade listor");
         cut.Markup.Should().Contain("Veckomenyer");
         cut.Markup.Should().Contain("Familjekalendern, inklusive återkommande händelser");
 
@@ -947,7 +948,7 @@ public class ContextualFeedbackComponentTests : TestContext
 
         var dialogText = cut.Find(".modal-dialog-custom").TextContent;
         dialogText.Should().Contain("ersättas helt");
-        dialogText.Should().Contain("recept, ingredienser, kategorier, bilder, inköpslistan, veckomenyer samt familjekalendern inklusive återkommande händelser");
+        dialogText.Should().Contain("recept, ingredienser, kategorier, bilder, inköpslistan, att göra-listor, veckomenyer samt familjekalendern inklusive återkommande händelser");
     }
 }
 
