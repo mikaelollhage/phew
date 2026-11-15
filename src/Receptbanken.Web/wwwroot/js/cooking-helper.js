@@ -1397,6 +1397,12 @@ window.receptbanken = {
         };
 
         const onKeyDownCapture = (e) => {
+            if (e && e.key === 'Escape' && document.querySelector('.ingredient-row-menu-popover')) {
+                try {
+                    dotNetRef.invokeMethodAsync('CloseRowMenuAsync');
+                } catch (_) {}
+                return;
+            }
             if (this._isActiveReorderHandleKeyDown(e)) {
                 e.preventDefault();
             }

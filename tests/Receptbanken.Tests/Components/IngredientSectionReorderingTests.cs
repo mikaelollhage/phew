@@ -179,11 +179,14 @@ public class IngredientSectionReorderingTests : TestContext
 
         cut.FindAll(".ingredient-section-header-row").Should().HaveCount(3);
 
-        // Open reorder menu on first section ("Deg") and press ArrowDown: moves header 1 row down (below "mjöl")
-        var firstHandle = cut.FindAll(".ingredient-drag-handle").First();
-        firstHandle.Click();
-        cut.FindAll(".ingredient-reorder-bar").Should().ContainSingle();
-        cut.FindAll(".ingredient-drag-handle").First().KeyDown(new KeyboardEventArgs { Key = "ArrowDown" });
+        // Open floating row menu on first section ("Deg") and click "Flytta ned": moves header 1 row down (below "mjöl")
+        var firstMenuBtn = cut.FindAll(".ingredient-row-menu-btn").First();
+        firstMenuBtn.Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-move-down-btn").Click();
+
+        // Menu remains open on the moved row
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
 
         // "mjöl" is now before "Deg" (ungrouped), "äpple" remains under "Fyllning"
         ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
@@ -408,7 +411,7 @@ public class IngredientSectionReorderingTests : TestContext
     }
 
     [Fact]
-    public void RecipeIngredientEditor_ConvertButtons_ShouldConvertBothDirectionsInPlaceWithoutMenuDuplication()
+    public void RecipeIngredientEditor_FloatingMenu_ShouldConvertBothDirectionsInPlaceAndCloseMenu()
     {
         var ingredients = new List<Ingredient>
         {
@@ -420,29 +423,112 @@ public class IngredientSectionReorderingTests : TestContext
             .Add(p => p.Ingredients, ingredients)
             .Add(p => p.Title, "Ingredienser"));
 
-        // Drag menu should stay focused on moving rows (no duplicate convert buttons)
-        cut.FindAll(".ingredient-drag-handle").First().Click();
-        var reorderBar = cut.Find(".ingredient-reorder-bar");
-        reorderBar.QuerySelectorAll(".ingredient-to-section-btn, .section-to-ingredient-btn").Should().BeEmpty();
+        // Conversion buttons and old reorder bar should not be permanently visible
+        cut.FindAll(".ingredient-to-section-btn, .section-to-ingredient-btn, .ingredient-reorder-bar").Should().BeEmpty();
 
-        // Click row's visible convert-to-section button directly
+        // Row controls on the right should be in order: ⋯, ✕, drag handle
+        var firstRowActionClasses = cut.FindAll(".ingredient-editor-item").First()
+            .QuerySelectorAll(".ingredient-row-actions > *")
+            .Select(el => el.ClassName ?? string.Empty)
+            .ToList();
+        firstRowActionClasses.Should().HaveCount(3);
+        firstRowActionClasses[0].Should().Contain("ingredient-row-menu-anchor");
+        firstRowActionClasses[1].Should().Contain("ingredient-remove-btn");
+        firstRowActionClasses[2].Should().Contain("ingredient-drag-handle");
+
+        // Open menu on first ingredient and convert to section -> closes menu
+        cut.FindAll(".ingredient-row-menu-btn").First().Click();
         var toSectionBtn = cut.Find(".ingredient-to-section-btn");
-        toSectionBtn.GetAttribute("title").Should().Be("Gör till sektion");
+        toSectionBtn.TextContent.Trim().Should().Be("Gör till sektion");
         toSectionBtn.Click();
 
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
         cut.FindAll(".ingredient-section-header-row").Should().ContainSingle();
         ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
             .Should().Equal(("olivolja", "1 msk salt", 1));
 
-        // Click section's visible convert-to-ingredient button directly -> lossless round-trip
+        // Section row controls should also be in order: ⋯, ✕, drag handle
+        var sectionActionClasses = cut.Find(".ingredient-section-header-row")
+            .QuerySelectorAll(".ingredient-row-actions > *")
+            .Select(el => el.ClassName ?? string.Empty)
+            .ToList();
+        sectionActionClasses.Should().HaveCount(3);
+        sectionActionClasses[0].Should().Contain("ingredient-row-menu-anchor");
+        sectionActionClasses[1].Should().Contain("ingredient-section-remove-btn");
+        sectionActionClasses[2].Should().Contain("ingredient-drag-handle");
+
+        // Open menu on section and convert back to ingredient -> lossless round-trip and closes menu
+        cut.FindAll(".ingredient-row-menu-btn").First().Click();
         var toIngredientBtn = cut.Find(".section-to-ingredient-btn");
-        toIngredientBtn.GetAttribute("title").Should().Be("Gör till ingrediens");
+        toIngredientBtn.TextContent.Trim().Should().Be("Gör till ingrediens");
         toIngredientBtn.Click();
 
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
         cut.FindAll(".ingredient-section-header-row").Should().BeEmpty();
         ingredients.Select(i => (i.Name, i.Quantity, i.Unit, i.GroupHeader, i.OrderIndex))
             .Should().Equal(
                 ("salt", 1m, "msk", (string?)null, 1),
                 ("olivolja", 2m, "msk", (string?)null, 2));
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_FloatingMenu_ShouldFollowSameRowOnRepeatedMovesAndCloseOnOutsideClickOrEscape()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "mjöl", GroupHeader = "Deg" },
+            new() { OrderIndex = 2, Name = "smör", GroupHeader = "Deg" },
+            new() { OrderIndex = 3, Name = "äpple", GroupHeader = "Fyllning" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // Items order: [Deg](0), mjöl(1), smör(2), [Fyllning](3), äpple(4)
+        var mjolRowId = cut.FindAll(".ingredient-editor-item").ElementAt(1).GetAttribute("data-editor-item-id");
+        mjolRowId.Should().NotBeNullOrWhiteSpace();
+
+        // Open menu on "mjöl" (index 1)
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-move-up-btn").HasAttribute("disabled").Should().BeFalse();
+        cut.Find(".ingredient-move-down-btn").HasAttribute("disabled").Should().BeFalse();
+
+        // Move "mjöl" up to first row (index 0, above [Deg]) -> menu stays open on "mjöl" and "Flytta upp" becomes disabled
+        cut.Find(".ingredient-move-up-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+            .GetAttribute("data-editor-item-id").Should().Be(mjolRowId);
+        cut.Find(".ingredient-move-up-btn").HasAttribute("disabled").Should().BeTrue();
+        cut.Find(".ingredient-move-down-btn").HasAttribute("disabled").Should().BeFalse();
+
+        // Repeatedly move "mjöl" down 4 times across [Deg] and [Fyllning] to the last row
+        for (var step = 0; step < 4; step++)
+        {
+            cut.Find(".ingredient-move-down-btn").Click();
+            cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+            cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+                .GetAttribute("data-editor-item-id").Should().Be(mjolRowId);
+        }
+
+        // Now at last row: "Flytta ned" must be disabled and "mjöl" is under "Fyllning"
+        cut.Find(".ingredient-move-down-btn").HasAttribute("disabled").Should().BeTrue();
+        cut.Find(".ingredient-move-up-btn").HasAttribute("disabled").Should().BeFalse();
+        ingredients.Select(i => (i.Name, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("smör", "Deg", 1),
+                ("äpple", "Fyllning", 2),
+                ("mjöl", "Fyllning", 3));
+
+        // Outside click (backdrop) closes the menu
+        cut.Find(".ingredient-row-menu-backdrop").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+
+        // Re-open menu and press Escape -> closes the menu
+        cut.FindAll(".ingredient-row-menu-btn").Last().Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-row-menu-anchor.is-open").KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
     }
 }

@@ -40,6 +40,12 @@
     }
 
     <div class="ingredient-editor-list">
+        @if (openMenuKey.HasValue)
+        {
+            <div class="ingredient-row-menu-backdrop"
+                 @onclick="CloseRowMenu"
+                 @onclick:stopPropagation="true"></div>
+        }
         @{
             var dropIndicator = draggedItemKey.HasValue && dragOverItemKey.HasValue
                 ? _sectionList.GetDropIndicatorTarget(draggedItemKey.Value, dragOverItemKey.Value)
@@ -53,10 +59,9 @@
             var dropDirectionClass = isDropTarget
                 ? (dropIndicator!.Value.IsAbove ? "drag-over drag-over-above" : "drag-over drag-over-below")
                 : string.Empty;
-            var isReorderOpen = reorderMenuOpenKey == itemKey;
 
             <div @key="itemKey"
-                 class="ingredient-editor-item @(item.IsSection ? "is-section-item" : "is-ingredient-item") @(isDragging ? "is-dragging" : "") @dropDirectionClass @(isReorderOpen ? "reorder-open" : "")"
+                 class="ingredient-editor-item @(item.IsSection ? "is-section-item" : "is-ingredient-item") @(isDragging ? "is-dragging" : "") @dropDirectionClass"
                  data-editor-item-id="@itemKey"
                  data-item-kind="@(item.IsSection ? "section" : "ingredient")"
                  @ondragover="(() => HandleDragOver(itemKey))"
@@ -96,13 +101,7 @@
                         }
 
                         <div class="ingredient-row-actions">
-                            <button type="button"
-                                    class="btn-secondary-custom ingredient-row-convert-btn section-to-ingredient-btn"
-                                    title="Gör till ingrediens"
-                                    aria-label="@($"Gör {sectionLabel} till ingrediens")"
-                                    @onclick="@(() => ConvertSectionToIngredient(itemKey))">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Custom" CustomColor="currentColor" />
-                            </button>
+                            @RenderRowMenu(itemKey, isSection: true, sectionLabel)
 
                             <button type="button"
                                     class="btn-danger-custom ingredient-section-remove-btn"
@@ -112,19 +111,7 @@
                                 ✕
                             </button>
 
-                            <button type="button"
-                                    class="ingredient-drag-handle @(isReorderOpen ? "is-reorder-active" : "")"
-                                    draggable="true"
-                                    title="@($"Dra för att flytta {sectionLabel}, eller tryck för flyttval")"
-                                    aria-label="@($"Ändra ordning för {sectionLabel}")"
-                                    aria-expanded="@(isReorderOpen ? "true" : "false")"
-                                    @ondragstart="@(() => HandleDragStart(itemKey))"
-                                    @ondragend="HandleDragEnd"
-                                    @onclick="@(() => ToggleReorderMenu(itemKey))"
-                                    @onclick:stopPropagation="true"
-                                    @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, itemKey))">
-                                ⠿
-                            </button>
+                            @RenderDragHandle(itemKey, sectionLabel)
                         </div>
                     </div>
                 }
@@ -134,54 +121,12 @@
 
                     <RecipeIngredientRow Ingredient="item.Ingredient" OnRemove="@(() => RemoveIngredient(itemKey))">
                         <RowActions>
-                            <button type="button"
-                                    class="btn-secondary-custom ingredient-row-convert-btn ingredient-to-section-btn"
-                                    title="Gör till sektion"
-                                    aria-label="@($"Gör {ingLabel} till sektion")"
-                                    @onclick="@(() => ConvertIngredientToSection(itemKey))">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Custom" CustomColor="currentColor" />
-                            </button>
+                            @RenderRowMenu(itemKey, isSection: false, ingLabel)
                         </RowActions>
                         <DragHandle>
-                            <button type="button"
-                                    class="ingredient-drag-handle @(isReorderOpen ? "is-reorder-active" : "")"
-                                    draggable="true"
-                                    title="@($"Dra för att flytta {ingLabel}, eller tryck för flyttval")"
-                                    aria-label="@($"Ändra ordning för {ingLabel}")"
-                                    aria-expanded="@(isReorderOpen ? "true" : "false")"
-                                    @ondragstart="@(() => HandleDragStart(itemKey))"
-                                    @ondragend="HandleDragEnd"
-                                    @onclick="@(() => ToggleReorderMenu(itemKey))"
-                                    @onclick:stopPropagation="true"
-                                    @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, itemKey))">
-                                ⠿
-                            </button>
+                            @RenderDragHandle(itemKey, ingLabel)
                         </DragHandle>
                     </RecipeIngredientRow>
-                }
-
-                @if (isReorderOpen)
-                {
-                    var targetDesc = item.IsSection
-                        ? (string.IsNullOrWhiteSpace(item.SectionTitle) ? "sektion" : item.SectionTitle)
-                        : (string.IsNullOrWhiteSpace(item.Ingredient?.Name) ? "ingrediens" : item.Ingredient!.Name);
-
-                    <div class="ingredient-reorder-bar" role="group" aria-label="@($"Flytta {targetDesc}")">
-                        <button type="button"
-                                class="btn-secondary-custom ingredient-move-up-btn"
-                                disabled="@(!_sectionList.CanMoveUp(itemKey))"
-                                aria-label="@($"Flytta {targetDesc} uppåt")"
-                                @onclick="@(() => MoveItemByOffset(itemKey, -1))">
-                            ↑ Flytta upp
-                        </button>
-                        <button type="button"
-                                class="btn-secondary-custom ingredient-move-down-btn"
-                                disabled="@(!_sectionList.CanMoveDown(itemKey))"
-                                aria-label="@($"Flytta {targetDesc} nedåt")"
-                                @onclick="@(() => MoveItemByOffset(itemKey, 1))">
-                            ↓ Flytta ned
-                        </button>
-                    </div>
                 }
             </div>
         }
@@ -223,8 +168,7 @@
 
     private int? draggedItemKey;
     private int? dragOverItemKey;
-    private int? reorderMenuOpenKey;
-    private int? _pendingFocusHandleKey;
+    private int? openMenuKey;
     private int? _pendingFocusSectionInputKey;
 
     private string HeadingText => TitleFormatter != null
@@ -241,7 +185,7 @@
             _sectionList.LoadFromIngredients(Ingredients);
             draggedItemKey = null;
             dragOverItemKey = null;
-            reorderMenuOpenKey = null;
+            openMenuKey = null;
         }
     }
 
@@ -273,19 +217,6 @@
                 // Ignore when JS runtime is unavailable
             }
         }
-        else if (_pendingFocusHandleKey.HasValue)
-        {
-            var keyToFocus = _pendingFocusHandleKey.Value;
-            _pendingFocusHandleKey = null;
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("receptbanken.focusAndScrollIngredientEditorHandle", keyToFocus);
-            }
-            catch
-            {
-                // Ignore when JS runtime is unavailable
-            }
-        }
     }
 
     private async Task AddIngredient()
@@ -309,11 +240,93 @@
         _sectionList.RenameSection(sectionKey, newTitle, Ingredients);
     }
 
+    private RenderFragment RenderRowMenu(int itemKey, bool isSection, string targetDesc) => __builder =>
+    {
+        var isMenuOpen = openMenuKey == itemKey;
+
+        <div class="ingredient-row-menu-anchor @(isMenuOpen ? "is-open" : "")"
+             @onkeydown="@(e => HandleMenuKeyDown(e, itemKey))">
+            <button type="button"
+                    class="btn-secondary-custom ingredient-row-menu-btn @(isMenuOpen ? "is-active" : "")"
+                    title="Radåtgärder"
+                    aria-label="@($"Åtgärder för {targetDesc}")"
+                    aria-haspopup="menu"
+                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                    @onclick="@(() => ToggleRowMenu(itemKey))"
+                    @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+
+            @if (isMenuOpen)
+            {
+                <div class="ingredient-row-menu-popover"
+                     role="menu"
+                     aria-label="@($"Åtgärder för {targetDesc}")"
+                     @onclick:stopPropagation="true">
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item ingredient-move-up-btn"
+                            disabled="@(!_sectionList.CanMoveUp(itemKey))"
+                            @onclick="@(() => MoveItemByOffset(itemKey, -1))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↑</span>
+                        <span>Flytta upp</span>
+                    </button>
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item ingredient-move-down-btn"
+                            disabled="@(!_sectionList.CanMoveDown(itemKey))"
+                            @onclick="@(() => MoveItemByOffset(itemKey, 1))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↓</span>
+                        <span>Flytta ned</span>
+                    </button>
+                    <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                    @if (isSection)
+                    {
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item section-to-ingredient-btn"
+                                @onclick="@(() => ConvertSectionToIngredient(itemKey))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Gör till ingrediens</span>
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item ingredient-to-section-btn"
+                                @onclick="@(() => ConvertIngredientToSection(itemKey))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Gör till sektion</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderDragHandle(int itemKey, string label) => __builder =>
+    {
+        <button type="button"
+                class="ingredient-drag-handle"
+                draggable="true"
+                title="@($"Dra för att flytta {label}")"
+                aria-label="@($"Dra för att flytta {label}")"
+                @ondragstart="@(() => HandleDragStart(itemKey))"
+                @ondragend="HandleDragEnd">
+            ⠿
+        </button>
+    };
+
     private void RemoveSection(int sectionKey)
     {
-        if (reorderMenuOpenKey == sectionKey)
+        if (openMenuKey == sectionKey)
         {
-            reorderMenuOpenKey = null;
+            openMenuKey = null;
         }
         _sectionList.RemoveSection(sectionKey, Ingredients);
     }
@@ -323,9 +336,9 @@
         var item = _sectionList.Items.FirstOrDefault(i => i.Key == ingredientKey && i.IsIngredient);
         int ingredientIndex = item?.Ingredient != null ? Ingredients.IndexOf(item.Ingredient) : -1;
 
-        if (reorderMenuOpenKey == ingredientKey)
+        if (openMenuKey == ingredientKey)
         {
-            reorderMenuOpenKey = null;
+            openMenuKey = null;
         }
 
         if (_sectionList.RemoveIngredient(ingredientKey, Ingredients) &&
@@ -338,9 +351,9 @@
 
     private void ConvertIngredientToSection(int ingredientKey)
     {
-        if (reorderMenuOpenKey == ingredientKey)
+        if (openMenuKey == ingredientKey)
         {
-            reorderMenuOpenKey = null;
+            openMenuKey = null;
         }
 
         _sectionList.ConvertIngredientToSection(ingredientKey, Ingredients);
@@ -348,9 +361,9 @@
 
     private void ConvertSectionToIngredient(int sectionKey)
     {
-        if (reorderMenuOpenKey == sectionKey)
+        if (openMenuKey == sectionKey)
         {
-            reorderMenuOpenKey = null;
+            openMenuKey = null;
         }
 
         _sectionList.ConvertSectionToIngredient(sectionKey, Ingredients);
@@ -358,6 +371,7 @@
 
     private void HandleDragStart(int itemKey)
     {
+        openMenuKey = null;
         draggedItemKey = itemKey;
         dragOverItemKey = null;
     }
@@ -406,48 +420,69 @@
         dragOverItemKey = null;
     }
 
-    private void ToggleReorderMenu(int itemKey)
+    private void ToggleRowMenu(int itemKey)
     {
-        reorderMenuOpenKey = reorderMenuOpenKey == itemKey ? null : itemKey;
+        openMenuKey = openMenuKey == itemKey ? null : itemKey;
     }
 
-    private Task HandleDragHandleKeyDownAsync(KeyboardEventArgs e, int itemKey)
+    private void CloseRowMenu()
     {
-        if (e.Key == "ArrowUp" && reorderMenuOpenKey == itemKey)
-        {
-            MoveItemByOffset(itemKey, -1, fromKeyboard: true);
-        }
-        else if (e.Key == "ArrowDown" && reorderMenuOpenKey == itemKey)
-        {
-            MoveItemByOffset(itemKey, 1, fromKeyboard: true);
-        }
-        else if (e.Key == "Escape" && reorderMenuOpenKey == itemKey)
-        {
-            reorderMenuOpenKey = null;
-        }
-
-        return Task.CompletedTask;
+        openMenuKey = null;
     }
 
-    private void MoveItemByOffset(int itemKey, int direction, bool fromKeyboard = false)
+    private void HandleMenuKeyDown(KeyboardEventArgs e, int itemKey)
     {
-        if (_sectionList.MoveByOffset(itemKey, direction, Ingredients) && fromKeyboard)
+        if (e.Key == "Escape" && openMenuKey == itemKey)
         {
-            _pendingFocusHandleKey = itemKey;
+            openMenuKey = null;
         }
     }
 
     [JSInvokable]
-    public Task OnTouchDragStartAsync(int itemKey)
+    public Task CloseRowMenuAsync()
     {
-        if (_isDisposed)
+        if (_isDisposed || !openMenuKey.HasValue)
         {
             return Task.CompletedTask;
         }
 
-        draggedItemKey = itemKey;
-        dragOverItemKey = null;
-        return Task.CompletedTask;
+        return InvokeAsync(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            openMenuKey = null;
+            StateHasChanged();
+        });
+    }
+
+    private void MoveItemByOffset(int itemKey, int direction)
+    {
+        _sectionList.MoveByOffset(itemKey, direction, Ingredients);
+    }
+
+    [JSInvokable]
+    public async Task OnTouchDragStartAsync(int itemKey)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        await InvokeAsync(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            openMenuKey = null;
+            draggedItemKey = itemKey;
+            dragOverItemKey = null;
+            StateHasChanged();
+        });
     }
 
     [JSInvokable]
