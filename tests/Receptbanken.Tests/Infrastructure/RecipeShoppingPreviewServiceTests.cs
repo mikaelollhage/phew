@@ -126,6 +126,37 @@ public class RecipeShoppingPreviewServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task BuildRecipeShoppingPreview_WithBothExistingListAndIntraRecipeUnitConflicts_ShouldPreserveBothWarningsAndKeepSeparateRows()
+    {
+        await AddShoppingItemAsync("1 st tomater");
+
+        var recipe = await CreateRecipeAsync("Tomatsallad", 4,
+            (2m, null, "tomater"),
+            (500m, "g", "tomater"));
+
+        var preview = await _shopping.BuildRecipeShoppingPreviewAsync(recipe.Id, 4);
+
+        preview.Should().NotBeNull();
+        preview!.Items.Should().HaveCount(2);
+        foreach (var item in preview.Items)
+        {
+            item.ExistingInUncheckedText.Should().Be("1 st tomater");
+            item.ConflictWarning.Should().Contain("Konflikt med Att handla: annan enhet/förpackning");
+            item.ConflictWarning.Should().Contain("Förekommer med olika enheter eller förpackningsstorlekar i receptet");
+        }
+
+        var confirmResult = await _shopping.ConfirmRecipeShoppingAdditionsAsync(
+            recipe.Id,
+            4,
+            preview.PreviewStamp,
+            preview.Items.Select(i => i.PreviewItemKey).ToList());
+
+        confirmResult.Status.Should().Be(RecipeShoppingConfirmStatus.Success);
+        var dbItems = await _shopping.GetItemsAsync();
+        dbItems.Should().HaveCount(3);
+    }
+
+    [Fact]
     public async Task ConfirmRecipeShoppingAdditions_WithDeselectedItem_ShouldOnlyAddSelectedItems()
     {
         var recipe = await CreateRecipeAsync("Krämig Pasta", 4,

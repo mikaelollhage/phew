@@ -11,7 +11,7 @@
     </div>
 </div>
 
-<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 32px; align-items: start;">
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 32px; align-items: start;">
     <div class="form-section">
         <h2 class="form-section-title">
             @(editingCategoryId.HasValue ? "Redigera kategori" : "Skapa ny kategori")
@@ -84,16 +84,18 @@
         }
         else
         {
-            <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="category-list">
                 @foreach (var cat in categories)
                 {
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background-color: var(--rb-bg-surface); border: 1px solid var(--rb-border); border-radius: var(--rb-radius-md);">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <span class="category-dot" style="background-color: @cat.ColorHex; width: 12px; height: 12px;"></span>
-                            <span style="font-weight: 600; font-size: 15px;">@cat.Name</span>
-                            <span style="font-size: 13px; color: var(--rb-text-muted);">(@cat.RecipeCount recept)</span>
+                    <div class="category-row">
+                        <div class="category-row-info">
+                            <div class="category-row-header">
+                                <span class="category-dot category-row-dot" style="background-color: @cat.ColorHex;"></span>
+                                <span class="category-row-name">@cat.Name</span>
+                            </div>
+                            <span class="category-row-count">(@cat.RecipeCount recept)</span>
                         </div>
-                        <div style="display: flex; gap: 8px;">
+                        <div class="category-row-actions">
                             <button type="button" class="btn-secondary-custom btn-sm" @onclick="@(() => StartEdit(cat))">
                                 Redigera
                             </button>

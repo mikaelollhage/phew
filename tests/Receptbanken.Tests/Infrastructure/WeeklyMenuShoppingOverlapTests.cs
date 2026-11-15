@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Receptbanken.Core.Models;
 using Receptbanken.Core.Services;
@@ -169,6 +169,51 @@ public class WeeklyMenuShoppingOverlapTests : IDisposable
         again.Items.Single().IsAlreadyAdded.Should().BeTrue();
         again.Items.Single().ExistingOverlapSummary.Should().BeNull();
         again.Items.Single().IsSelectedByDefault.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BothExistingListAndIntraWeekUnitConflicts_PreserveBothWarningsAndKeepSeparateRows()
+    {
+        await AddAsync("1 st tomater");
+
+        var catId = (await _categories.GetCategoriesAsync()).First(c => c.Name == "Vardagsmat").Id;
+        var recipe1 = await _recipes.CreateRecipeAsync(new Recipe
+        {
+            Title = "Tomatsallad",
+            Servings = 4,
+            Ingredients = [new Ingredient { OrderIndex = 1, Quantity = 2m, Unit = null, Name = "tomater", RawText = "2 tomater" }]
+        }, [catId]);
+        var recipe2 = await _recipes.CreateRecipeAsync(new Recipe
+        {
+            Title = "Tomatsås",
+            Servings = 4,
+            Ingredients = [new Ingredient { OrderIndex = 1, Quantity = 500m, Unit = "g", Name = "tomater", RawText = "500 g tomater" }]
+        }, [catId]);
+
+        var menu = await _menus.GetOrCreateWeekMenuAsync(Week);
+        menu.Days[0].RecipeId = recipe1.Id;
+        menu.Days[0].Servings = 4;
+        menu.Days[1].RecipeId = recipe2.Id;
+        menu.Days[1].Servings = 4;
+        await _menus.ConfirmMenuAsync(menu);
+
+        var preview = await _shopping.BuildWeeklyMenuPreviewAsync(Week);
+
+        preview.Items.Should().HaveCount(2);
+        foreach (var row in preview.Items)
+        {
+            row.ExistingInUncheckedText.Should().Be("1 st tomater");
+            row.ConflictWarning.Should().Contain("Konflikt med Att handla: annan enhet/förpackning");
+            row.ConflictWarning.Should().Contain("Förekommer med olika enheter eller förpackningsstorlekar i veckomenyn");
+        }
+
+        var confirmResult = await _shopping.ConfirmWeeklyMenuAdditionsAsync(
+            Week,
+            preview.PreviewStamp,
+            preview.Items.Select(i => i.PreviewItemKey).ToList());
+
+        confirmResult.Status.Should().Be(WeeklyMenuConfirmStatus.Success);
+        (await _shopping.GetItemsAsync()).Should().HaveCount(3);
     }
 }
 

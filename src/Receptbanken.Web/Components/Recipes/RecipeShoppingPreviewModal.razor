@@ -115,6 +115,7 @@
 
     private RecipeShoppingPreview? preview;
     private readonly HashSet<string> selectedKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> expandedDetailKeys = new(StringComparer.Ordinal);
     private readonly FeedbackState previewFeedback = new();
     private bool isLoadingPreview;
     private bool isSubmitting;
@@ -131,11 +132,13 @@
             wasVisible = true;
             lastLoadedRecipeId = RecipeId;
             lastLoadedServings = Servings;
+            expandedDetailKeys.Clear();
             await LoadPreviewAsync();
         }
         else if (!IsVisible && wasVisible)
         {
             wasVisible = false;
+            expandedDetailKeys.Clear();
             previewFeedback.Clear();
         }
     }
@@ -278,13 +281,31 @@
         }
     }
 
+    private void ToggleItemDetails(string previewKey)
+    {
+        if (!expandedDetailKeys.Add(previewKey))
+        {
+            expandedDetailKeys.Remove(previewKey);
+        }
+    }
+
+    private static bool HasItemDetails(RecipePreviewItemDto row)
+    {
+        return !string.IsNullOrWhiteSpace(row.ExistingInUncheckedText)
+            || !string.IsNullOrWhiteSpace(row.ExistingInCheckedText)
+            || !string.IsNullOrWhiteSpace(row.ConflictWarning);
+    }
+
     private RenderFragment RenderPreviewItemRow(RecipePreviewItemDto row) => __builder =>
     {
         bool isChecked = selectedKeys.Contains(row.PreviewItemKey);
+        bool isDetailsOpen = expandedDetailKeys.Contains(row.PreviewItemKey);
         bool hasConflictWarning = !string.IsNullOrWhiteSpace(row.ConflictWarning);
         bool hasCheckedOverlap = !string.IsNullOrWhiteSpace(row.ExistingInCheckedText);
         bool checkedShownInOverlapLine = hasCheckedOverlap
             && row.ExistingOverlapSummary?.Contains("under Klart", StringComparison.Ordinal) == true;
+        bool hasDetails = HasItemDetails(row);
+        string detailsId = $"recipe-preview-details-{row.PreviewItemKey.GetHashCode():X}";
 
         <li @key="row.PreviewItemKey"
             class="weekly-preview-item-row @(isChecked ? "is-selected" : "is-unselected")"
@@ -339,7 +360,44 @@
                         }
                     </div>
                 </label>
+
+                @if (hasDetails)
+                {
+                    <button type="button"
+                            class="weekly-preview-info-btn @(isDetailsOpen ? "is-open" : "") @(hasConflictWarning ? "has-warning" : "")"
+                            aria-expanded="@isDetailsOpen.ToString().ToLowerInvariant()"
+                            aria-controls="@detailsId"
+                            aria-label="@($"Visa detaljer för {row.Item.Name}")"
+                            title="Visa detaljer"
+                            @onclick="@(() => ToggleItemDetails(row.PreviewItemKey))">
+                        <FluentIcon Value="@(new Icons.Regular.Size20.Info())" Color="Color.Custom" CustomColor="currentColor" />
+                    </button>
+                }
             </div>
+
+            @if (isDetailsOpen && hasDetails)
+            {
+                <div id="@detailsId" class="weekly-preview-item-details" role="region" aria-label="@($"Detaljer för {row.Item.Name}")">
+                    @if (!string.IsNullOrWhiteSpace(row.ExistingInUncheckedText))
+                    {
+                        <div class="weekly-preview-detail-line">
+                            Finns i Att handla: @row.ExistingInUncheckedText
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(row.ExistingInCheckedText))
+                    {
+                        <div class="weekly-preview-detail-line">
+                            Finns under Klart: @row.ExistingInCheckedText (ändras ej)
+                        </div>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(row.ConflictWarning))
+                    {
+                        <div class="weekly-preview-detail-line detail-warning">
+                            ⚠️ @row.ConflictWarning
+                        </div>
+                    }
+                </div>
+            }
         </li>
     };
 

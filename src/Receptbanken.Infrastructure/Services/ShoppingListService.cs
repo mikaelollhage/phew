@@ -1610,10 +1610,9 @@ public class ShoppingListService
             var prefix = acc.IsAlreadyAdded ? "ADDED" : "NEW";
             var previewKey = $"{prefix}:{contribKey}:{i}";
 
-            bool hasIntraWeekConflict = allAccumulators.Any(other =>
-                !ReferenceEquals(other, acc) &&
-                _aggregator.AreSameIngredient(other.AggregatedItem.Name, item.Name) &&
-                !_aggregator.CanMergeItems(other.AggregatedItem, item));
+            bool hasIntraWeekConflict = HasIntraImportConflict(
+                item,
+                allAccumulators.Select(x => x.AggregatedItem));
 
             string? intraWeekWarning = hasIntraWeekConflict
                 ? "Förekommer med olika enheter eller förpackningsstorlekar i veckomenyn – visas som separata poster"
@@ -1726,7 +1725,12 @@ public class ShoppingListService
             var contribKey = _aggregator.GetContributionKey(item);
             var previewKey = $"RECIPE:{recipe.Id}:{contribKey}:{i}";
 
-            var overlap = AnalyzeOverlap(item, uncheckedList, checkedList);
+            bool hasIntraRecipeConflict = HasIntraImportConflict(item, groupedRecipeItems);
+            string? intraRecipeWarning = hasIntraRecipeConflict
+                ? "Förekommer med olika enheter eller förpackningsstorlekar i receptet – visas som separata poster"
+                : null;
+
+            var overlap = AnalyzeOverlap(item, uncheckedList, checkedList, intraRecipeWarning);
 
             previewItems.Add(new RecipePreviewItemDto
             {
@@ -1768,6 +1772,16 @@ public class ShoppingListService
         return string.Join(";", parts);
     }
 
+    private bool HasIntraImportConflict(
+        ShoppingListItem item,
+        IEnumerable<ShoppingListItem> allItems)
+    {
+        return allItems.Any(other =>
+            !ReferenceEquals(other, item) &&
+            _aggregator.AreSameIngredient(other.Name, item.Name) &&
+            !_aggregator.CanMergeItems(other, item));
+    }
+
     /// <summary>
     /// Analyzes an incoming item against the current unchecked and checked shopping list items.
     /// Determines compatible matches, unit conflicts, matches in Klart, and computes the overlap summary.
@@ -1777,39 +1791,40 @@ public class ShoppingListService
             ShoppingListItem item,
             IReadOnlyList<ShoppingListItem> uncheckedList,
             IReadOnlyList<ShoppingListItem> checkedList,
-            string? fallbackConflictWarning = null)
+            string? intraImportConflictWarning = null)
     {
-        var compatibleUnchecked = uncheckedList
-            .Where(u => _aggregator.CanMergeItems(u, item))
+        var allUncheckedMatches = uncheckedList
+            .Where(u => _aggregator.AreSameIngredient(u.Name, item.Name))
             .Select(u => u.RawText)
             .ToList();
 
-        var conflictingUnchecked = uncheckedList
-            .Where(u => _aggregator.AreSameIngredient(u.Name, item.Name) && !_aggregator.CanMergeItems(u, item))
-            .Select(u => u.RawText)
-            .ToList();
+        var hasConflictingUnchecked = uncheckedList
+            .Any(u => _aggregator.AreSameIngredient(u.Name, item.Name) && !_aggregator.CanMergeItems(u, item));
 
         var matchingChecked = checkedList
             .Where(c => _aggregator.AreSameIngredient(c.Name, item.Name))
             .Select(c => c.RawText)
             .ToList();
 
-        string? conflictWarning = null;
-        if (conflictingUnchecked.Count > 0)
+        var conflictWarnings = new List<string>(2);
+        if (hasConflictingUnchecked)
         {
-            conflictWarning = $"Finns i Att handla som {string.Join(", ", conflictingUnchecked)} (annan enhet/förpackning – läggs som separat rad)";
+            conflictWarnings.Add("Konflikt med Att handla: annan enhet/förpackning – läggs som separat rad");
         }
-        else if (!string.IsNullOrWhiteSpace(fallbackConflictWarning))
+        if (!string.IsNullOrWhiteSpace(intraImportConflictWarning))
         {
-            conflictWarning = fallbackConflictWarning;
+            conflictWarnings.Add(intraImportConflictWarning);
         }
 
-        bool hasAnyExistingMatch = compatibleUnchecked.Count > 0
-            || conflictingUnchecked.Count > 0
+        string? conflictWarning = conflictWarnings.Count > 0
+            ? string.Join(" · ", conflictWarnings)
+            : null;
+
+        bool hasAnyExistingMatch = allUncheckedMatches.Count > 0
             || matchingChecked.Count > 0;
 
         return (
-            compatibleUnchecked.Count > 0 ? string.Join(", ", compatibleUnchecked) : null,
+            allUncheckedMatches.Count > 0 ? string.Join(", ", allUncheckedMatches) : null,
             matchingChecked.Count > 0 ? string.Join(", ", matchingChecked) : null,
             BuildExistingOverlapSummary(item, uncheckedList, checkedList),
             conflictWarning,

@@ -213,6 +213,37 @@ public class RecipeShoppingPreviewModalTests : TestContext
         items.Should().ContainSingle(i => i.Name == "torsk");
     }
 
+    [Fact]
+    public async Task InfoButton_ShouldToggleDetailsPanelWithFullConflictWarnings()
+    {
+        await _shoppingService.AddManualItemAsync("1 st tomater");
+        var recipe = await CreateRecipeAsync(
+            "Tomatsallad",
+            2,
+            ("tomater", "2 tomater"),
+            ("tomater", "500 g tomater"));
+
+        var cut = RenderComponent<RecipeShoppingPreviewModal>(parameters => parameters
+            .Add(p => p.IsVisible, true)
+            .Add(p => p.RecipeId, recipe.Id)
+            .Add(p => p.Servings, 2));
+
+        cut.WaitForAssertion(() => cut.FindAll("button.weekly-preview-info-btn").Should().HaveCount(2));
+        cut.FindAll(".weekly-preview-item-details").Should().BeEmpty();
+
+        cut.Find("button.weekly-preview-info-btn").Click();
+
+        var neutralLine = cut.Find(".weekly-preview-item-details .weekly-preview-detail-line:not(.detail-warning)");
+        neutralLine.TextContent.Should().Contain("Finns i Att handla: 1 st tomater");
+
+        var warningLine = cut.Find(".weekly-preview-item-details .weekly-preview-detail-line.detail-warning");
+        warningLine.TextContent.Should().Contain("Konflikt med Att handla: annan enhet/förpackning");
+        warningLine.TextContent.Should().Contain("Förekommer med olika enheter eller förpackningsstorlekar i receptet");
+
+        cut.Find("button.weekly-preview-info-btn").Click();
+        cut.FindAll(".weekly-preview-item-details").Should().BeEmpty();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)
