@@ -253,7 +253,9 @@ public class WebAppIntegrationTests : IDisposable
             icons.Should().Contain(i => i.GetProperty("sizes").GetString() == "512x512" && i.GetProperty("purpose").GetString() == "any");
             icons.Should().Contain(i => i.GetProperty("sizes").GetString() == "512x512" && i.GetProperty("purpose").GetString() == "maskable");
 
-            var iconUrls = icons.Select(i => i.GetProperty("src").GetString()!).Append("/icons/apple-touch-icon.png");
+            var iconUrls = icons.Select(i => i.GetProperty("src").GetString()!)
+                .Append("/apple-touch-icon.png")
+                .Append("/icons/apple-touch-icon.png");
             foreach (var iconUrl in iconUrls)
             {
                 using var iconResponse = await client.GetAsync(iconUrl);
@@ -310,9 +312,9 @@ public class WebAppIntegrationTests : IDisposable
             using var homeResponse = await client.GetAsync("/");
             homeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
             var homeHtml = await homeResponse.Content.ReadAsStringAsync();
-            homeHtml.Should().Contain("manifest.webmanifest");
+            homeHtml.Should().Contain("href=\"/manifest.webmanifest\"");
             homeHtml.Should().Contain("name=\"theme-color\" content=\"#18181b\"");
-            homeHtml.Should().Contain("apple-touch-icon.png");
+            homeHtml.Should().Contain("href=\"/apple-touch-icon.png\"");
             homeHtml.Should().Contain("apple-mobile-web-app-capable");
             homeHtml.Should().Contain("js/pwa.js");
         }
