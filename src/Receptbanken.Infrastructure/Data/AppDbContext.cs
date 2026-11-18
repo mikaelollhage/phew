@@ -35,6 +35,7 @@ public class AppDbContext : DbContext
     public DbSet<CalendarReminderSystemState> CalendarReminderSystemStates => Set<CalendarReminderSystemState>();
     public DbSet<TodoList> TodoLists => Set<TodoList>();
     public DbSet<TodoItem> TodoItems => Set<TodoItem>();
+    public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -362,6 +363,25 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.TodoListId, e.SortOrder })
                 .HasDatabaseName("IX_TodoItems_TodoListId_SortOrder");
+        });
+
+        // FamilyMember
+        modelBuilder.Entity<FamilyMember>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(FamilyMember.MaxNameLength)
+                .UseCollation("NOCASE");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.SortOrder).HasDefaultValue(0);
+
+            entity.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasDatabaseName("IX_FamilyMembers_Name");
+
+            entity.HasIndex(e => new { e.IsActive, e.SortOrder })
+                .HasDatabaseName("IX_FamilyMembers_IsActive_SortOrder");
         });
     }
 }

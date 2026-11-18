@@ -1,0 +1,438 @@
+@page "/installningar"
+@implements IDisposable
+@inject FamilyMemberService FamilyMemberService
+@inject ILogger<SettingsPage> Logger
+
+<PageTitle>Inställningar — Receptbanken</PageTitle>
+
+@{
+    var activeMembers = allMembers.Where(m => m.IsActive).ToList();
+    var inactiveMembers = allMembers.Where(m => !m.IsActive).ToList();
+}
+
+<div class="settings-page-container">
+    <div class="page-header">
+        <div>
+            <h1 class="page-title">⚙️ Inställningar</h1>
+            <p class="page-subtitle">Hantera familjemedlemmar och notisinställningar för den här enheten.</p>
+        </div>
+    </div>
+
+    <div class="settings-sections-grid">
+        <section class="detail-card settings-card settings-family-card" aria-label="Familjemedlemmar">
+            <div class="settings-card-header">
+                <h2 class="detail-card-title">👥 Familjemedlemmar (@activeMembers.Count)</h2>
+                <p class="settings-section-desc">Lägg till, byt namn på eller inaktivera familjemedlemmar.</p>
+            </div>
+
+            <form class="settings-add-member-form" @onsubmit="AddMemberAsync">
+                <input id="settings-new-member-input"
+                       type="text"
+                       class="form-input-custom"
+                       maxlength="@FamilyMember.MaxNameLength"
+                       placeholder="Namn, t.ex. Anna eller Erik..."
+                       aria-label="Namn på ny familjemedlem"
+                       @bind="NewMemberName"
+                       @bind:event="oninput"
+                       disabled="@isBusy" />
+                <button type="submit"
+                        id="settings-add-member-btn"
+                        class="btn-primary-custom"
+                        disabled="@(isBusy || string.IsNullOrWhiteSpace(newMemberName))">
+                    + Lägg till
+                </button>
+            </form>
+
+            <ContextualFeedback State="familyFeedback" CssClass="settings-family-feedback" />
+
+            @if (isLoading)
+            {
+                <div class="settings-loading-state">
+                    <FluentProgressRing />
+                </div>
+            }
+            else if (activeMembers.Count == 0)
+            {
+                <p class="settings-empty-state">Inga aktiva familjemedlemmar ännu. Lägg till den första ovan.</p>
+            }
+            else
+            {
+                <div class="settings-member-list" role="list" aria-label="Aktiva familjemedlemmar">
+                    @for (var i = 0; i < activeMembers.Count; i++)
+                    {
+                        var member = activeMembers[i];
+                        var canMoveUp = i > 0;
+                        var canMoveDown = i < activeMembers.Count - 1;
+                        var isEditing = editingMemberId == member.Id;
+
+                        <div @key="member.Id"
+                             class="settings-member-row @(isEditing ? "is-editing" : "")"
+                             role="listitem"
+                             data-member-id="@member.Id">
+                            @if (isEditing)
+                            {
+                                <form class="settings-member-edit-form" @onsubmit="SaveRenameAsync">
+                                    <input type="text"
+                                           class="form-input-custom settings-member-edit-input"
+                                           maxlength="@FamilyMember.MaxNameLength"
+                                           aria-label="@($"Nytt namn för {member.Name}")"
+                                           @bind="editingName"
+                                           @bind:event="oninput"
+                                           @onkeydown="HandleEditKeyDown"
+                                           disabled="@isBusy" />
+                                    <div class="settings-member-edit-actions">
+                                        <button type="submit"
+                                                class="btn-primary-custom btn-sm settings-member-save-btn"
+                                                disabled="@(isBusy || string.IsNullOrWhiteSpace(editingName))">
+                                            Spara
+                                        </button>
+                                        <button type="button"
+                                                class="btn-secondary-custom btn-sm settings-member-cancel-btn"
+                                                disabled="@isBusy"
+                                                @onclick="CancelEdit">
+                                            Avbryt
+                                        </button>
+                                    </div>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="settings-member-name">@member.Name</span>
+                                <div class="settings-member-actions">
+                                    @if (activeMembers.Count > 1)
+                                    {
+                                        <button type="button"
+                                                class="btn-secondary-custom btn-sm settings-member-move-btn"
+                                                title="Flytta upp"
+                                                aria-label="@($"Flytta upp {member.Name}")"
+                                                disabled="@(!canMoveUp || isBusy)"
+                                                @onclick="@(() => MoveMemberAsync(member.Id, -1))">
+                                            ↑
+                                        </button>
+                                        <button type="button"
+                                                class="btn-secondary-custom btn-sm settings-member-move-btn"
+                                                title="Flytta ner"
+                                                aria-label="@($"Flytta ner {member.Name}")"
+                                                disabled="@(!canMoveDown || isBusy)"
+                                                @onclick="@(() => MoveMemberAsync(member.Id, 1))">
+                                            ↓
+                                        </button>
+                                    }
+                                    <button type="button"
+                                            class="btn-secondary-custom btn-sm settings-member-edit-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => StartEdit(member))">
+                                        Byt namn
+                                    </button>
+                                    <button type="button"
+                                            class="btn-danger-custom btn-sm settings-member-deactivate-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => PromptDeactivate(member))">
+                                        Inaktivera
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (inactiveMembers.Count > 0)
+            {
+                <div class="settings-inactive-section" aria-label="Inaktiva familjemedlemmar">
+                    <h3 class="settings-inactive-heading">Inaktiva familjemedlemmar (@inactiveMembers.Count)</h3>
+                    <p class="settings-inactive-desc">
+                        Inaktiva medlemmar döljs i aktiva val men sparas i historik och säkerhetskopior.
+                    </p>
+                    <div class="settings-member-list settings-member-list-inactive" role="list">
+                        @foreach (var member in inactiveMembers)
+                        {
+                            <div @key="member.Id"
+                                 class="settings-member-row is-inactive"
+                                 role="listitem"
+                                 data-member-id="@member.Id">
+                                <span class="settings-member-name">@member.Name</span>
+                                <div class="settings-member-actions">
+                                    <button type="button"
+                                            class="btn-secondary-custom btn-sm settings-member-reactivate-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => ReactivateMemberAsync(member))">
+                                        Återaktivera
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+
+        <section class="detail-card settings-card settings-notifications-card" aria-label="Notiser">
+            <div class="settings-card-header">
+                <h2 class="detail-card-title">🔔 Notiser</h2>
+                <p class="settings-section-desc">
+                    Notisinställningarna gäller bara den här enheten och webbläsaren, inte globalt för alla familjemedlemmar.
+                </p>
+            </div>
+
+            <CalendarPushSettingsCard />
+        </section>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@(memberToDeactivate != null)"
+               Title="Inaktivera familjemedlem"
+               Message="@(memberToDeactivate != null ? $"Vill du inaktivera '{memberToDeactivate.Name}'? Medlemmen tas inte bort utan sparas som inaktiv och kan återaktiveras när som helst." : string.Empty)"
+               ConfirmText="Ja, inaktivera"
+               CancelText="Avbryt"
+               Variant="ConfirmDialogVariant.Danger"
+               OnConfirm="ConfirmDeactivateAsync"
+               OnCancel="@(() => memberToDeactivate = null)" />
+
+@code {
+    private List<FamilyMember> allMembers = new();
+    private bool isLoading = true;
+    private bool isBusy;
+    private bool _isDisposed;
+
+    private string newMemberName = string.Empty;
+    private string NewMemberName
+    {
+        get => newMemberName;
+        set
+        {
+            newMemberName = value;
+            if (familyFeedback.HasMessage && familyFeedback.Severity == FeedbackSeverity.Error)
+            {
+                familyFeedback.Clear();
+            }
+        }
+    }
+
+    private int? editingMemberId;
+    private string editingName = string.Empty;
+    private FamilyMember? memberToDeactivate;
+    private readonly FeedbackState familyFeedback = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        FamilyMemberService.OnChanged += HandleFamilyMembersChanged;
+        await LoadMembersAsync();
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        try
+        {
+            allMembers = await FamilyMemberService.GetAllAsync(includeInactive: true);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid hämtning av familjemedlemmar.");
+            familyFeedback.ShowError("Kunde inte ladda familjemedlemmar.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (isBusy || string.IsNullOrWhiteSpace(newMemberName))
+            return;
+
+        isBusy = true;
+        familyFeedback.Clear();
+
+        try
+        {
+            var created = await FamilyMemberService.CreateAsync(newMemberName);
+            newMemberName = string.Empty;
+            await LoadMembersAsync();
+            familyFeedback.ShowSuccess($"Familjemedlemmen \"{created.Name}\" lades till.");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            familyFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid skapande av familjemedlem.");
+            familyFeedback.ShowError("Kunde inte lägga till familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void StartEdit(FamilyMember member)
+    {
+        editingMemberId = member.Id;
+        editingName = member.Name;
+        familyFeedback.Clear();
+    }
+
+    private void CancelEdit()
+    {
+        editingMemberId = null;
+        editingName = string.Empty;
+    }
+
+    private void HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CancelEdit();
+        }
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        if (isBusy || !editingMemberId.HasValue)
+            return;
+
+        isBusy = true;
+        familyFeedback.Clear();
+
+        try
+        {
+            var updated = await FamilyMemberService.RenameAsync(editingMemberId.Value, editingName);
+            editingMemberId = null;
+            editingName = string.Empty;
+            await LoadMembersAsync();
+            familyFeedback.ShowSuccess($"Namnet uppdaterades till \"{updated.Name}\".");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        {
+            familyFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid namnbyte av familjemedlem.");
+            familyFeedback.ShowError("Kunde inte byta namn på familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void PromptDeactivate(FamilyMember member)
+    {
+        memberToDeactivate = member;
+    }
+
+    private async Task ConfirmDeactivateAsync()
+    {
+        if (memberToDeactivate == null || isBusy)
+            return;
+
+        var target = memberToDeactivate;
+        memberToDeactivate = null;
+        isBusy = true;
+        familyFeedback.Clear();
+
+        try
+        {
+            await FamilyMemberService.DeactivateAsync(target.Id);
+            if (editingMemberId == target.Id)
+            {
+                CancelEdit();
+            }
+            await LoadMembersAsync();
+            familyFeedback.ShowSuccess($"\"{target.Name}\" inaktiverades.");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            familyFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid inaktivering av familjemedlem.");
+            familyFeedback.ShowError("Kunde inte inaktivera familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task ReactivateMemberAsync(FamilyMember member)
+    {
+        if (isBusy)
+            return;
+
+        isBusy = true;
+        familyFeedback.Clear();
+
+        try
+        {
+            await FamilyMemberService.ReactivateAsync(member.Id);
+            await LoadMembersAsync();
+            familyFeedback.ShowSuccess($"\"{member.Name}\" återaktiverades.");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            familyFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid återaktivering av familjemedlem.");
+            familyFeedback.ShowError("Kunde inte återaktivera familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private async Task MoveMemberAsync(int id, int direction)
+    {
+        if (isBusy)
+            return;
+
+        isBusy = true;
+        familyFeedback.Clear();
+
+        try
+        {
+            await FamilyMemberService.MoveAsync(id, direction);
+            await LoadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid ändring av ordning för familjemedlem.");
+            familyFeedback.ShowError("Kunde inte ändra ordningen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void HandleFamilyMembersChanged(long _version)
+    {
+        if (_isDisposed)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            await LoadMembersAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _isDisposed = true;
+        FamilyMemberService.OnChanged -= HandleFamilyMembersChanged;
+    }
+}

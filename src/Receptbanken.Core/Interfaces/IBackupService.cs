@@ -13,6 +13,7 @@ public class BackupManifest
     public int CalendarEventCount { get; set; }
     public int TodoListCount { get; set; }
     public int TodoItemCount { get; set; }
+    public int FamilyMemberCount { get; set; }
 }
 
 public class BackupRestoreResult
@@ -26,6 +27,7 @@ public class BackupRestoreResult
     public int RestoredCalendarEvents { get; set; }
     public int RestoredTodoLists { get; set; }
     public int RestoredTodoItems { get; set; }
+    public int RestoredFamilyMembers { get; set; }
 }
 
 public interface IBackupService

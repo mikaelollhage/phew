@@ -154,5 +154,26 @@ public class MigrationTests : IDisposable
         listCount.Should().Be(0);
         itemCount.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Migrate_AddFamilyMembers_WhenExistingDatabasePresent_ShouldApplyCleanly()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={_dbPath}")
+            .Options;
+
+        await using var context = new AppDbContext(options);
+
+        var migrator = context.Database.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+        await migrator.MigrateAsync("20261115183354_AddFamilyTodoLists");
+
+        await context.Database.MigrateAsync();
+
+        var appliedAfter = (await context.Database.GetAppliedMigrationsAsync()).ToList();
+        appliedAfter.Should().Contain(m => m.Contains("AddFamilyMembers"));
+
+        var memberCount = await context.FamilyMembers.CountAsync();
+        memberCount.Should().Be(0);
+    }
 }
 

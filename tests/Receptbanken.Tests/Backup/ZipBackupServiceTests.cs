@@ -34,14 +34,23 @@ public class ZipBackupServiceTests : IDisposable
         BackupLimitsOptions? limits = null,
         ShoppingListNotifier? shoppingListNotifier = null,
         CalendarNotifier? calendarNotifier = null,
-        TodoNotifier? todoNotifier = null)
+        TodoNotifier? todoNotifier = null,
+        FamilyMemberNotifier? familyMemberNotifier = null)
     {
         var opts = Options.Create(new ImageStorageOptions
         {
             BaseDataPath = Path.Combine(_tempDataDir, subFolder),
             ImageFolderName = "images/recipes"
         });
-        return new ZipBackupService(dbFactory, opts, NullLogger<ZipBackupService>.Instance, limits, shoppingListNotifier, calendarNotifier, todoNotifier: todoNotifier);
+        return new ZipBackupService(
+            dbFactory,
+            opts,
+            NullLogger<ZipBackupService>.Instance,
+            limits,
+            shoppingListNotifier,
+            calendarNotifier,
+            todoNotifier: todoNotifier,
+            familyMemberNotifier: familyMemberNotifier);
     }
 
     [Fact]
@@ -609,6 +618,125 @@ public class ZipBackupServiceTests : IDisposable
 
         var remainingLists = await targetTodoService.GetAllListsAsync(includeArchived: true);
         remainingLists.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ExportAndRestore_FamilyMembers_ShouldPreserveActiveInactiveStateOrderingAndNotifyAfterCommit()
+    {
+        var sourceService = new FamilyMemberService(_sourceDbFactory);
+        var anna = await sourceService.CreateAsync("Anna");
+        var erik = await sourceService.CreateAsync("Erik");
+        var ebba = await sourceService.CreateAsync("Ebba");
+        await sourceService.MoveAsync(ebba.Id, -1); // Active order: Anna, Ebba, Erik
+        await sourceService.DeactivateAsync(erik.Id);
+
+        var exporter = CreateBackupService(_sourceDbFactory, "source");
+        var zipBytes = await exporter.CreateBackupArchiveAsync();
+
+        var targetNotifier = new FamilyMemberNotifier();
+        var notifyCount = 0;
+        targetNotifier.OnChanged += _ => notifyCount++;
+
+        var restorer = CreateBackupService(_targetDbFactory, "target", familyMemberNotifier: targetNotifier);
+        using var zipStream = new MemoryStream(zipBytes);
+        var result = await restorer.RestoreFromArchiveAsync(zipStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredFamilyMembers.Should().Be(3);
+        notifyCount.Should().Be(1);
+
+        var targetService = new FamilyMemberService(_targetDbFactory, targetNotifier);
+        var restored = await targetService.GetAllAsync(includeInactive: true);
+        restored.Should().HaveCount(3);
+        restored.Where(m => m.IsActive).Select(m => m.Name).Should().Equal("Anna", "Ebba");
+        restored.Where(m => !m.IsActive).Select(m => m.Name).Should().Equal("Erik");
+    }
+
+    [Fact]
+    public async Task RestoreFromLegacyBackupWithoutFamilyMembers_ShouldClearExistingFamilyMembers()
+    {
+        using var legacyStream = new MemoryStream();
+        using (var archive = new ZipArchive(legacyStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var mw = new StreamWriter(manifestEntry.Open(), Encoding.UTF8))
+            {
+                await mw.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","categoryCount":0,"recipeCount":0}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var dw = new StreamWriter(dataEntry.Open(), Encoding.UTF8))
+            {
+                await dw.WriteAsync("""{"categories":[],"recipes":[],"shoppingListItems":[],"weeklyMenus":[]}""");
+            }
+        }
+        legacyStream.Position = 0;
+
+        var targetNotifier = new FamilyMemberNotifier();
+        var targetService = new FamilyMemberService(_targetDbFactory, targetNotifier);
+        await targetService.CreateAsync("Befintlig");
+
+        var notifyCount = 0;
+        targetNotifier.OnChanged += _ => notifyCount++;
+
+        var restorer = CreateBackupService(_targetDbFactory, "target", familyMemberNotifier: targetNotifier);
+        var result = await restorer.RestoreFromArchiveAsync(legacyStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredFamilyMembers.Should().Be(0);
+        notifyCount.Should().Be(1);
+
+        var remaining = await targetService.GetAllAsync(includeInactive: true);
+        remaining.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task RestoreFromArchive_WithDuplicateCaseInsensitiveFamilyMembers_ShouldRollbackAndNotNotify()
+    {
+        using var badStream = new MemoryStream();
+        using (var archive = new ZipArchive(badStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var mw = new StreamWriter(manifestEntry.Open(), Encoding.UTF8))
+            {
+                await mw.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","familyMemberCount":2}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var dw = new StreamWriter(dataEntry.Open(), Encoding.UTF8))
+            {
+                await dw.WriteAsync("""
+                    {
+                      "categories": [],
+                      "recipes": [],
+                      "shoppingListItems": [],
+                      "weeklyMenus": [],
+                      "familyMembers": [
+                        { "name": "Ebba", "isActive": true, "sortOrder": 1 },
+                        { "name": "ebba", "isActive": false, "sortOrder": 2 }
+                      ]
+                    }
+                    """);
+            }
+        }
+        badStream.Position = 0;
+
+        var targetNotifier = new FamilyMemberNotifier();
+        var targetService = new FamilyMemberService(_targetDbFactory, targetNotifier);
+        await targetService.CreateAsync("Original");
+
+        var notifyCount = 0;
+        targetNotifier.OnChanged += _ => notifyCount++;
+
+        var restorer = CreateBackupService(_targetDbFactory, "target", familyMemberNotifier: targetNotifier);
+        var result = await restorer.RestoreFromArchiveAsync(badStream, replaceExisting: true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("duplicerad");
+        notifyCount.Should().Be(0);
+
+        var existing = await targetService.GetAllAsync(includeInactive: true);
+        existing.Should().ContainSingle(m => m.Name == "Original");
     }
 
     public void Dispose()

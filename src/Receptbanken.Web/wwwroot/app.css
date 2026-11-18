@@ -6482,3 +6482,178 @@ fluent-dialog.recipe-picker-dialog::part(control) {
     z-index: 1050;
   }
 }
+
+/* ==========================================================================
+   Settings Page (/installningar)
+   ========================================================================== */
+
+.settings-page-container {
+  max-width: 960px;
+}
+
+.settings-sections-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+.settings-card-header {
+  margin-bottom: 16px;
+}
+
+.settings-card-header .detail-card-title {
+  margin-bottom: 4px;
+}
+
+.settings-section-desc {
+  font-size: 14px;
+  color: var(--rb-text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.settings-add-member-form {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin-bottom: 12px;
+}
+
+.settings-add-member-form .form-input-custom {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-loading-state {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.settings-empty-state {
+  color: var(--rb-text-muted);
+  font-size: 14px;
+  margin: 12px 0 0;
+}
+
+.settings-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background-color: var(--rb-bg-surface);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-md);
+}
+
+.settings-member-row.is-inactive {
+  opacity: 0.72;
+  border-style: dashed;
+}
+
+.settings-member-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--rb-text-primary);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-member-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.settings-member-actions .btn-sm,
+.settings-member-edit-actions .btn-sm {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-member-move-btn {
+  min-width: 36px;
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.settings-member-edit-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.settings-member-edit-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-member-edit-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.settings-inactive-section {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rb-border);
+}
+
+.settings-inactive-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--rb-text-secondary);
+  margin: 0 0 4px;
+}
+
+.settings-inactive-desc {
+  font-size: 13px;
+  color: var(--rb-text-muted);
+  margin: 0 0 10px;
+  line-height: 1.45;
+}
+
+.settings-notifications-card .calendar-push-info-card {
+  margin-top: 4px;
+}
+
+@media (max-width: 640px) {
+  .settings-add-member-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-member-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .settings-member-actions {
+    justify-content: flex-end;
+  }
+
+  .settings-member-edit-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-member-edit-actions {
+    justify-content: flex-end;
+  }
+}

@@ -34,6 +34,7 @@ public class ZipBackupService : IBackupService
     private readonly ShoppingListNotifier? _shoppingListNotifier;
     private readonly CalendarNotifier? _calendarNotifier;
     private readonly TodoNotifier? _todoNotifier;
+    private readonly FamilyMemberNotifier? _familyMemberNotifier;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -49,7 +50,8 @@ public class ZipBackupService : IBackupService
         ShoppingListNotifier? shoppingListNotifier = null,
         CalendarNotifier? calendarNotifier = null,
         TimeProvider? timeProvider = null,
-        TodoNotifier? todoNotifier = null)
+        TodoNotifier? todoNotifier = null,
+        FamilyMemberNotifier? familyMemberNotifier = null)
     {
         _dbFactory = dbFactory;
         _storageOptions = storageOptions.Value;
@@ -58,6 +60,7 @@ public class ZipBackupService : IBackupService
         _shoppingListNotifier = shoppingListNotifier;
         _calendarNotifier = calendarNotifier;
         _todoNotifier = todoNotifier;
+        _familyMemberNotifier = familyMemberNotifier;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -108,6 +111,13 @@ public class ZipBackupService : IBackupService
             .OrderBy(l => l.IsArchived)
             .ThenBy(l => l.SortOrder)
             .ThenBy(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var familyMembers = await db.FamilyMembers
+            .AsNoTracking()
+            .OrderBy(m => m.IsActive ? 0 : 1)
+            .ThenBy(m => m.SortOrder)
+            .ThenBy(m => m.Id)
             .ToListAsync(cancellationToken);
 
         var recipeTitleById = recipes.ToDictionary(r => r.Id, r => r.Title);
@@ -266,6 +276,14 @@ public class ZipBackupService : IBackupService
                         CreatedAt = i.CreatedAt,
                         UpdatedAt = i.UpdatedAt
                     }).ToList()
+            }).ToList(),
+            FamilyMembers = familyMembers.Select(m => new BackupFamilyMemberDto
+            {
+                Name = m.Name,
+                IsActive = m.IsActive,
+                SortOrder = m.SortOrder,
+                CreatedAt = m.CreatedAt,
+                UpdatedAt = m.UpdatedAt
             }).ToList()
         };
 
@@ -289,7 +307,8 @@ public class ZipBackupService : IBackupService
             WeeklyMenuCount = payload.WeeklyMenus.Count,
             CalendarEventCount = payload.CalendarEvents.Count,
             TodoListCount = payload.TodoLists.Count,
-            TodoItemCount = payload.TodoLists.Sum(l => l.Items.Count)
+            TodoItemCount = payload.TodoLists.Sum(l => l.Items.Count),
+            FamilyMemberCount = payload.FamilyMembers.Count
         };
 
         using var memoryStream = new MemoryStream();
@@ -485,6 +504,7 @@ public class ZipBackupService : IBackupService
 
                 if (replaceExisting)
                 {
+                    db.FamilyMembers.RemoveRange(await db.FamilyMembers.ToListAsync(cancellationToken));
                     db.TodoItems.RemoveRange(await db.TodoItems.ToListAsync(cancellationToken));
                     db.TodoLists.RemoveRange(await db.TodoLists.ToListAsync(cancellationToken));
                     db.CalendarEventExceptions.RemoveRange(await db.CalendarEventExceptions.ToListAsync(cancellationToken));
@@ -764,6 +784,58 @@ public class ZipBackupService : IBackupService
                     await db.SaveChangesAsync(cancellationToken);
                 }
 
+                // Restore FamilyMembers when present in backup (empty in legacy backups)
+                var familyMembersToRestore = payload.FamilyMembers ?? [];
+                var restoredFamilyMembersCount = 0;
+                if (familyMembersToRestore.Count > 0)
+                {
+                    var seenMemberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (!replaceExisting)
+                    {
+                        var existingNames = await db.FamilyMembers
+                            .AsNoTracking()
+                            .Select(m => m.Name)
+                            .ToListAsync(cancellationToken);
+                        foreach (var existingName in existingNames)
+                        {
+                            seenMemberNames.Add(existingName);
+                        }
+                    }
+
+                    foreach (var memberDto in familyMembersToRestore)
+                    {
+                        var trimmedName = (memberDto.Name ?? string.Empty).Trim();
+                        if (string.IsNullOrWhiteSpace(trimmedName))
+                        {
+                            throw new InvalidOperationException("Ogiltig familjemedlem i säkerhetskopian: namn saknas.");
+                        }
+
+                        if (trimmedName.Length > FamilyMember.MaxNameLength)
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltig familjemedlem i säkerhetskopian: namnet \"{trimmedName}\" överskrider {FamilyMember.MaxNameLength} tecken.");
+                        }
+
+                        if (!seenMemberNames.Add(trimmedName))
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltig säkerhetskopia: duplicerad familjemedlem \"{trimmedName}\".");
+                        }
+
+                        db.FamilyMembers.Add(new FamilyMember
+                        {
+                            Name = trimmedName,
+                            IsActive = memberDto.IsActive,
+                            SortOrder = memberDto.SortOrder,
+                            CreatedAt = memberDto.CreatedAt,
+                            UpdatedAt = memberDto.UpdatedAt
+                        });
+                        restoredFamilyMembersCount++;
+                    }
+
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
                 // Persist the restore barrier atomically within the restore transaction so
                 // reminders scheduled prior to this restore cannot fire retroactively even after restart.
                 var restoredAtUtc = _timeProvider.GetUtcNow();
@@ -813,6 +885,7 @@ public class ZipBackupService : IBackupService
                 _shoppingListNotifier?.NotifyOrderingChanged();
                 _calendarNotifier?.NotifyChanged();
                 _todoNotifier?.NotifyChanged();
+                _familyMemberNotifier?.NotifyChanged();
 
                 return new BackupRestoreResult
                 {
@@ -823,7 +896,8 @@ public class ZipBackupService : IBackupService
                     RestoredWeeklyMenus = restoredWeeklyMenusCount,
                     RestoredCalendarEvents = calendarEventsToRestore.Count,
                     RestoredTodoLists = todoListsToRestore.Count,
-                    RestoredTodoItems = restoredTodoItemsCount
+                    RestoredTodoItems = restoredTodoItemsCount,
+                    RestoredFamilyMembers = restoredFamilyMembersCount
                 };
             }
             catch (Exception innerEx)
@@ -893,6 +967,7 @@ public class ZipBackupService : IBackupService
         public List<BackupWeeklyMenuDto> WeeklyMenus { get; set; } = new();
         public List<BackupCalendarEventDto> CalendarEvents { get; set; } = new();
         public List<BackupTodoListDto> TodoLists { get; set; } = new();
+        public List<BackupFamilyMemberDto> FamilyMembers { get; set; } = new();
     }
 
     private sealed class BackupCategoryDto
@@ -1044,6 +1119,15 @@ public class ZipBackupService : IBackupService
         public string? Notes { get; set; }
         public bool IsCompleted { get; set; }
         public DateTimeOffset? CompletedAt { get; set; }
+        public int SortOrder { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class BackupFamilyMemberDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
         public int SortOrder { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }

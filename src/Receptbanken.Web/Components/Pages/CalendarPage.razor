@@ -33,13 +33,6 @@
             </button>
 
             <button type="button"
-                    class="btn-secondary-custom btn-md calendar-notifications-btn"
-                    disabled="@isLoading"
-                    @onclick="OpenPushSettingsModal">
-                <FluentIcon Value="@(new Icons.Regular.Size20.Alert())" Color="Color.Neutral" /> Notiser
-            </button>
-
-            <button type="button"
                     class="btn-primary-custom btn-md calendar-new-event-btn"
                     disabled="@isLoading"
                     @onclick="OpenNewEventForDefaultDate">
@@ -116,30 +109,6 @@ else
                OnConfirm="ConfirmDeleteOneTimeAsync"
                OnCancel="CloseDeleteOneTimeConfirm" />
 
-@if (showPushSettingsModal)
-{
-    <div class="modal-backdrop-custom calendar-push-backdrop"
-         @onclick="ClosePushSettingsModal"
-         @onkeydown="HandlePushModalKeyDown">
-        <div class="modal-dialog-custom calendar-push-dialog"
-             @onclick:stopPropagation="true"
-             role="dialog"
-             aria-modal="true"
-             aria-label="Påminnelser och pushnotiser">
-            <div class="calendar-push-dialog-topbar">
-                <button type="button"
-                        class="calendar-form-close-btn"
-                        aria-label="Stäng"
-                        title="Stäng"
-                        @onclick="ClosePushSettingsModal">
-                    ✕
-                </button>
-            </div>
-            <CalendarPushSettingsCard />
-        </div>
-    </div>
-}
-
 @code {
     [SupplyParameterFromQuery(Name = "datum")] public string? DateQuery { get; set; }
 
@@ -167,7 +136,6 @@ else
 
     private bool showDeleteOneTimeConfirm;
     private CalendarOccurrenceDto? pendingOneTimeDeleteOccurrence;
-    private bool showPushSettingsModal;
     private readonly HashSet<string> expandedOccurrenceKeys = new(StringComparer.Ordinal);
     private DateOnly? _loadedWeekStartDate;
 
@@ -551,24 +519,6 @@ else
             {
                 // Defensive
             }
-        }
-    }
-
-    private void OpenPushSettingsModal()
-    {
-        showPushSettingsModal = true;
-    }
-
-    private void ClosePushSettingsModal()
-    {
-        showPushSettingsModal = false;
-    }
-
-    private void HandlePushModalKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Escape")
-        {
-            ClosePushSettingsModal();
         }
     }
 
