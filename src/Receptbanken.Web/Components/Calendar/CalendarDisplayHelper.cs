@@ -27,6 +27,9 @@ public static class CalendarDisplayHelper
 
     public static string GetShortSwedishDayName(int dayIndex) => ShortSwedishDayNames[dayIndex];
 
+    public static string GetOccurrenceKey(CalendarOccurrenceDto occurrence) =>
+        $"{occurrence.CalendarEventId}:{occurrence.OriginalDate:yyyy-MM-dd}";
+
     public static string FormatTimeRange(bool isAllDay, TimeOnly? startTime, TimeOnly? endTime)
     {
         if (isAllDay)

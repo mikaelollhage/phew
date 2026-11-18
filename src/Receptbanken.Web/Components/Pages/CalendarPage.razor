@@ -82,6 +82,8 @@ else
                              IsToday="@(date == localToday)"
                              Occurrences="dayOccurrences"
                              PlannedMeal="plannedMeal"
+                             ExpandedOccurrenceKeys="expandedOccurrenceKeys"
+                             OnToggleEventExpanded="ToggleEventExpanded"
                              OnAddEvent="OpenNewEventForDate"
                              OnEditEvent="HandleEditEventRequestedAsync"
                              OnDeleteEvent="HandleDeleteEventRequested" />
@@ -166,6 +168,8 @@ else
     private bool showDeleteOneTimeConfirm;
     private CalendarOccurrenceDto? pendingOneTimeDeleteOccurrence;
     private bool showPushSettingsModal;
+    private readonly HashSet<string> expandedOccurrenceKeys = new(StringComparer.Ordinal);
+    private DateOnly? _loadedWeekStartDate;
 
     protected override async Task OnInitializedAsync()
     {
@@ -231,13 +235,19 @@ else
 
     private async Task LoadWeekAsync(DateOnly dateInWeek, bool preserveFeedback = false)
     {
+        var targetWeek = CalendarWeek.FromDate(dateInWeek);
+        if (_loadedWeekStartDate != targetWeek.WeekStartDate)
+        {
+            expandedOccurrenceKeys.Clear();
+        }
+
         isLoading = true;
         if (!preserveFeedback)
         {
             feedback.Clear();
         }
 
-        currentWeek = CalendarWeek.FromDate(dateInWeek);
+        currentWeek = targetWeek;
 
         try
         {
@@ -249,6 +259,12 @@ else
             occurrencesByDate = occurrences
                 .GroupBy(o => o.Date)
                 .ToDictionary(g => g.Key, g => (IReadOnlyList<CalendarOccurrenceDto>)g.ToList());
+
+            _loadedWeekStartDate = currentWeek.WeekStartDate;
+            var validKeys = occurrences
+                .Select(CalendarDisplayHelper.GetOccurrenceKey)
+                .ToHashSet(StringComparer.Ordinal);
+            expandedOccurrenceKeys.IntersectWith(validKeys);
 
             knownFamilyMembers = members;
 
@@ -295,6 +311,14 @@ else
             ? localToday
             : currentWeek.WeekStartDate;
         OpenNewEventForDate(defaultDate);
+    }
+
+    private void ToggleEventExpanded(string occurrenceKey)
+    {
+        if (!expandedOccurrenceKeys.Add(occurrenceKey))
+        {
+            expandedOccurrenceKeys.Remove(occurrenceKey);
+        }
     }
 
     private void OpenNewEventForDate(DateOnly date)

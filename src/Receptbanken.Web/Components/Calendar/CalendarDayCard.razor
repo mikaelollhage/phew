@@ -50,81 +50,135 @@
             {
                 var timeLabel = CalendarDisplayHelper.FormatTimeRange(occurrence.IsAllDay, occurrence.StartTime, occurrence.EndTime);
                 var reminderLabel = CalendarDisplayHelper.FormatReminderLabel(occurrence.IsAllDay, occurrence.ReminderMinutesBefore);
+                var occurrenceKey = CalendarDisplayHelper.GetOccurrenceKey(occurrence);
+                var isExpanded = ExpandedOccurrenceKeys?.Contains(occurrenceKey) == true;
+                var hasDetailsMeta = !string.IsNullOrWhiteSpace(occurrence.Location) ||
+                                     occurrence.FamilyMembers.Count > 0 ||
+                                     !string.IsNullOrWhiteSpace(occurrence.Notes);
 
-                <li class="calendar-event-item @(occurrence.IsAllDay ? "is-all-day" : "is-timed")"
-                    data-event-id="@occurrence.CalendarEventId">
-                    <div class="calendar-event-main">
-                        <div class="calendar-event-top">
+                <li class="calendar-event-item @(occurrence.IsAllDay ? "is-all-day" : "is-timed") @(isExpanded ? "is-expanded" : "")"
+                    data-event-id="@occurrence.CalendarEventId"
+                    data-occurrence-key="@occurrenceKey">
+                    <div class="calendar-event-primary-row">
+                        <div class="calendar-event-primary-main">
                             <span class="calendar-event-time-badge @(occurrence.IsAllDay ? "is-all-day" : "")">
                                 @timeLabel
                             </span>
 
                             <span class="calendar-event-title">@occurrence.Title</span>
 
-                            <div class="calendar-event-indicators">
-                                @if (occurrence.IsRecurring)
-                                {
-                                    var recurrenceTooltip = CalendarDisplayHelper.FormatRecurrenceSummary(
-                                        occurrence.RecurrenceIntervalWeeks,
-                                        occurrence.RecurrenceDaysOfWeekMask);
-                                    <span class="calendar-indicator-badge"
-                                          title="@($"Återkommande: {recurrenceTooltip}")"
-                                          aria-label="@($"Återkommande: {recurrenceTooltip}")">
-                                        🔁
-                                    </span>
-                                }
-                                @if (occurrence.ReminderMinutesBefore.HasValue)
-                                {
-                                    <span class="calendar-indicator-badge"
-                                          title="@($"Påminnelse: {reminderLabel}")"
-                                          aria-label="@($"Påminnelse: {reminderLabel}")">
-                                        🔔
-                                    </span>
-                                }
-                            </div>
+                            @if (occurrence.IsRecurring || occurrence.ReminderMinutesBefore.HasValue)
+                            {
+                                <div class="calendar-event-indicators">
+                                    @if (occurrence.IsRecurring)
+                                    {
+                                        var recurrenceTooltip = CalendarDisplayHelper.FormatRecurrenceSummary(
+                                            occurrence.RecurrenceIntervalWeeks,
+                                            occurrence.RecurrenceDaysOfWeekMask);
+                                        <span class="calendar-indicator-badge calendar-recurring-indicator"
+                                              title="@($"Återkommande: {recurrenceTooltip}")"
+                                              aria-label="@($"Återkommande: {recurrenceTooltip}")">
+                                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowSync())" Color="Color.Custom" CustomColor="currentColor" />
+                                        </span>
+                                    }
+                                    @if (occurrence.ReminderMinutesBefore.HasValue)
+                                    {
+                                        <span class="calendar-indicator-badge"
+                                              title="@($"Påminnelse: {reminderLabel}")"
+                                              aria-label="@($"Påminnelse: {reminderLabel}")">
+                                            🔔
+                                        </span>
+                                    }
+                                </div>
+                            }
+
+                            @if (occurrence.FamilyMembers.Count == 1)
+                            {
+                                <span class="calendar-event-person-badge" title="@occurrence.FamilyMembers[0]">
+                                    @occurrence.FamilyMembers[0]
+                                </span>
+                            }
+                            else if (occurrence.FamilyMembers.Count >= 2)
+                            {
+                                var membersTooltip = string.Join(", ", occurrence.FamilyMembers);
+                                <span class="calendar-event-person-badge is-count"
+                                      title="@membersTooltip"
+                                      aria-label="@($"{occurrence.FamilyMembers.Count} personer: {membersTooltip}")">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.Person())" Color="Color.Custom" CustomColor="currentColor" />
+                                    <span>@occurrence.FamilyMembers.Count</span>
+                                </span>
+                            }
                         </div>
 
-                        @if (!string.IsNullOrWhiteSpace(occurrence.Location) || occurrence.FamilyMembers.Count > 0)
-                        {
-                            <div class="calendar-event-meta">
-                                @if (!string.IsNullOrWhiteSpace(occurrence.Location))
-                                {
-                                    <span class="calendar-event-location">📍 @occurrence.Location</span>
-                                }
-                                @if (occurrence.FamilyMembers.Count > 0)
-                                {
-                                    <div class="calendar-event-members">
-                                        @foreach (var member in occurrence.FamilyMembers)
-                                        {
-                                            <span class="calendar-member-chip">@member</span>
-                                        }
-                                    </div>
-                                }
+                        <button type="button"
+                                class="btn-secondary-custom calendar-event-expand-btn @(isExpanded ? "is-expanded" : "")"
+                                title="@(isExpanded ? "Dölj detaljer" : "Visa detaljer")"
+                                aria-label="@(isExpanded ? $"Dölj detaljer för {occurrence.Title}" : $"Visa detaljer för {occurrence.Title}")"
+                                aria-expanded="@(isExpanded ? "true" : "false")"
+                                @onclick="@(() => HandleToggleExpandedClicked(occurrenceKey))">
+                            @if (isExpanded)
+                            {
+                                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
+                            }
+                            else
+                            {
+                                <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
+                            }
+                        </button>
+                    </div>
+
+                    @if (isExpanded)
+                    {
+                        <div class="calendar-event-details">
+                            @if (hasDetailsMeta)
+                            {
+                                <div class="calendar-event-details-meta">
+                                    @if (!string.IsNullOrWhiteSpace(occurrence.Location))
+                                    {
+                                        <div class="calendar-event-detail-row calendar-event-location">
+                                            <span class="calendar-event-detail-icon" aria-hidden="true">
+                                                <FluentIcon Value="@(new Icons.Regular.Size16.Location())" Color="Color.Custom" CustomColor="currentColor" />
+                                            </span>
+                                            <span>@occurrence.Location</span>
+                                        </div>
+                                    }
+                                    @if (occurrence.FamilyMembers.Count > 0)
+                                    {
+                                        <div class="calendar-event-detail-row calendar-event-members" aria-label="Tilldelade personer">
+                                            <span class="calendar-event-detail-icon" aria-hidden="true">
+                                                <FluentIcon Value="@(new Icons.Regular.Size16.People())" Color="Color.Custom" CustomColor="currentColor" />
+                                            </span>
+                                            <div class="calendar-event-members-list">
+                                                @foreach (var member in occurrence.FamilyMembers)
+                                                {
+                                                    <span class="calendar-member-chip">@member</span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(occurrence.Notes))
+                                    {
+                                        <p class="calendar-event-notes">@occurrence.Notes</p>
+                                    }
+                                </div>
+                            }
+
+                            <div class="calendar-event-details-actions">
+                                <button type="button"
+                                        class="btn-secondary-custom btn-sm calendar-event-edit-btn"
+                                        @onclick="@(() => HandleEditClicked(occurrence))">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.Edit())" Color="Color.Custom" CustomColor="currentColor" />
+                                    <span>Redigera</span>
+                                </button>
+                                <button type="button"
+                                        class="btn-secondary-custom btn-sm calendar-event-delete-btn"
+                                        @onclick="@(() => HandleDeleteClicked(occurrence))">
+                                    <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                                    <span>Radera</span>
+                                </button>
                             </div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(occurrence.Notes))
-                        {
-                            <p class="calendar-event-notes">@occurrence.Notes</p>
-                        }
-                    </div>
-
-                    <div class="calendar-event-actions">
-                        <button type="button"
-                                class="btn-secondary-custom btn-sm calendar-event-edit-btn"
-                                title="@($"Redigera {occurrence.Title}")"
-                                aria-label="@($"Redigera {occurrence.Title}")"
-                                @onclick="@(() => HandleEditClicked(occurrence))">
-                            Redigera
-                        </button>
-                        <button type="button"
-                                class="btn-danger-custom btn-sm calendar-event-delete-btn"
-                                title="@($"Radera {occurrence.Title}")"
-                                aria-label="@($"Radera {occurrence.Title}")"
-                                @onclick="@(() => HandleDeleteClicked(occurrence))">
-                            Radera
-                        </button>
-                    </div>
+                        </div>
+                    }
                 </li>
             }
         </ul>
@@ -136,6 +190,8 @@
     [Parameter] public bool IsToday { get; set; }
     [Parameter] public IReadOnlyList<CalendarOccurrenceDto> Occurrences { get; set; } = [];
     [Parameter] public PlannedDayMealDto? PlannedMeal { get; set; }
+    [Parameter] public IReadOnlySet<string>? ExpandedOccurrenceKeys { get; set; }
+    [Parameter] public EventCallback<string> OnToggleEventExpanded { get; set; }
     [Parameter] public EventCallback<DateOnly> OnAddEvent { get; set; }
     [Parameter] public EventCallback<CalendarOccurrenceDto> OnEditEvent { get; set; }
     [Parameter] public EventCallback<CalendarOccurrenceDto> OnDeleteEvent { get; set; }
@@ -146,6 +202,9 @@
         .ThenBy(o => o.EndTime)
         .ThenBy(o => o.Title, StringComparer.OrdinalIgnoreCase)
         .ToList();
+
+    private Task HandleToggleExpandedClicked(string occurrenceKey) =>
+        OnToggleEventExpanded.HasDelegate ? OnToggleEventExpanded.InvokeAsync(occurrenceKey) : Task.CompletedTask;
 
     private Task HandleAddClicked() =>
         OnAddEvent.HasDelegate ? OnAddEvent.InvokeAsync(Date) : Task.CompletedTask;

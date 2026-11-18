@@ -195,13 +195,25 @@ public class CalendarPageAndHomeTests : TestContext
             mondayCard.TextContent.Should().Contain("Heldag");
             mondayCard.TextContent.Should().Contain("08:30");
             mondayCard.TextContent.Should().Contain("18:00–19:30");
-            mondayCard.TextContent.Should().Contain("Hallen");
-            mondayCard.TextContent.Should().Contain("Erik");
-            mondayCard.TextContent.Should().Contain("Anna");
+            // Collapsed state hides location and shows compact person count for 2+ people
+            mondayCard.TextContent.Should().NotContain("Hallen");
+            mondayCard.QuerySelector(".calendar-event-person-badge.is-count")!.TextContent.Trim().Should().Be("2");
             mondayCard.QuerySelectorAll(".calendar-indicator-badge").Should().NotBeEmpty();
+            mondayCard.QuerySelector(".calendar-recurring-indicator svg").Should().NotBeNull();
+            mondayCard.TextContent.Should().NotContain("🔁");
 
             var tuesdayCard = cut.Find(".calendar-day-card[data-date='2026-11-10']");
             tuesdayCard.TextContent.Should().Contain("Inga händelser planerade.");
+        });
+
+        // Expanding Kvällsträning reveals location and full member names
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(2).Click();
+        cut.WaitForAssertion(() =>
+        {
+            var mondayCard = cut.Find(".calendar-day-card[data-date='2026-11-09']");
+            mondayCard.TextContent.Should().Contain("Hallen");
+            mondayCard.TextContent.Should().Contain("Erik");
+            mondayCard.TextContent.Should().Contain("Anna");
         });
     }
 
@@ -237,11 +249,16 @@ public class CalendarPageAndHomeTests : TestContext
             cut.FindAll(".calendar-form-dialog").Should().BeEmpty();
             var tuesday = cut.Find(".calendar-day-card[data-date='2026-11-10']");
             tuesday.TextContent.Should().Contain("Utflykt");
-            tuesday.TextContent.Should().Contain("Skogen");
             tuesday.TextContent.Should().Contain("Lisa");
+            tuesday.TextContent.Should().NotContain("Skogen");
         });
 
-        // Edit one-time event
+        // Expand event to view location and Edit/Delete actions
+        cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-expand-btn").Click();
+        cut.WaitForAssertion(() =>
+            cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Skogen"));
+
+        // Edit one-time event from expanded details
         cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-edit-btn").Click();
         cut.WaitForAssertion(() => cut.Find("#calendar-event-title").GetAttribute("value").Should().Be("Utflykt"));
         cut.Find("#calendar-event-title").Change("Skogsutflykt");
@@ -250,7 +267,7 @@ public class CalendarPageAndHomeTests : TestContext
         cut.WaitForAssertion(() =>
             cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Skogsutflykt"));
 
-        // Delete one-time event
+        // Delete one-time event from expanded details (remains expanded across same-week edit)
         cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-delete-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".modal-dialog-custom").TextContent.Should().Contain("Radera händelse?"));
         cut.Find(".modal-dialog-custom .btn-danger-custom").Click();
@@ -285,6 +302,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Edit Monday occurrence -> choose "Endast detta tillfälle" and move to Tuesday 2026-11-10
+        cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").Click();
         cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-edit-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
         cut.Find(".calendar-scope-single-btn").Click();
@@ -302,6 +320,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Delete Wednesday occurrence -> choose "Endast detta tillfälle"
+        cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-expand-btn").Click();
         cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-delete-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
         cut.Find(".calendar-scope-single-btn").Click();
@@ -313,6 +332,11 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Delete remaining occurrence -> choose "Hela serien"
+        var tuesdayExpandBtn = cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-expand-btn");
+        if (tuesdayExpandBtn.GetAttribute("aria-expanded") != "true")
+        {
+            tuesdayExpandBtn.Click();
+        }
         cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-delete-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
         cut.Find(".calendar-scope-series-btn").Click();
@@ -450,5 +474,96 @@ public class CalendarPageAndHomeTests : TestContext
 
         var cut = RenderComponent<CalendarPage>();
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("Familjekalender"));
+    }
+
+    [Fact]
+    public async Task CalendarPage_ExpandableEventCards_ShouldSupportMultipleExpandedPersonBadgesAndWeekReset()
+    {
+        var monday = new DateOnly(2026, 11, 9);
+        using var bundle = SetupServices(monday);
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Innebandy",
+            StartDate = monday,
+            IsAllDay = false,
+            StartTime = new TimeOnly(16, 45),
+            EndTime = new TimeOnly(18, 0),
+            Notes = "Glöm inte klubba"
+        });
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Simträning",
+            StartDate = monday,
+            IsAllDay = false,
+            StartTime = new TimeOnly(18, 30),
+            EndTime = new TimeOnly(19, 30),
+            Location = "Badhuset",
+            FamilyMembers = ["Leo"]
+        });
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Familjemiddag",
+            StartDate = monday,
+            IsAllDay = false,
+            StartTime = new TimeOnly(19, 45),
+            FamilyMembers = ["Leo", "Maya", "Erik"],
+            RecurrenceIntervalWeeks = 1,
+            RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday | IsoWeekdayMask.Wednesday
+        });
+
+        var cut = RenderComponent<CalendarPage>();
+        cut.WaitForAssertion(() => cut.FindAll(".calendar-event-item").Should().HaveCount(4));
+
+        var mondayItems = cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-item").ToList();
+        mondayItems.Should().HaveCount(3);
+
+        // 0 people -> no person badge; 1 person -> name badge; 3 people -> icon + count
+        mondayItems[0].QuerySelectorAll(".calendar-event-person-badge").Should().BeEmpty();
+        mondayItems[1].QuerySelector(".calendar-event-person-badge")!.TextContent.Trim().Should().Be("Leo");
+        var multiBadge = mondayItems[2].QuerySelector(".calendar-event-person-badge.is-count")!;
+        multiBadge.TextContent.Trim().Should().Be("3");
+        multiBadge.GetAttribute("title").Should().Be("Leo, Maya, Erik");
+        multiBadge.QuerySelector("svg").Should().NotBeNull();
+
+        // All collapsed initially; no floating menus or permanently visible edit/delete buttons
+        cut.FindAll(".calendar-event-details").Should().BeEmpty();
+        cut.FindAll(".calendar-event-edit-btn").Should().BeEmpty();
+        cut.FindAll(".calendar-event-delete-btn").Should().BeEmpty();
+        cut.FindAll(".calendar-event-menu-popover").Should().BeEmpty();
+
+        // Expand first and third event simultaneously
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(0).Click();
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(2).Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var expanded = cut.FindAll(".calendar-event-item.is-expanded").ToList();
+            expanded.Should().HaveCount(2);
+            expanded[0].TextContent.Should().Contain("Glöm inte klubba");
+            expanded[1].TextContent.Should().Contain("Leo");
+            expanded[1].TextContent.Should().Contain("Maya");
+            expanded[1].TextContent.Should().Contain("Erik");
+
+            // Wednesday occurrence of the same recurring event remains collapsed
+            var wednesdayItem = cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-item");
+            wednesdayItem.ClassList.Should().NotContain("is-expanded");
+            wednesdayItem.QuerySelector(".calendar-event-expand-btn")!.GetAttribute("aria-expanded").Should().Be("false");
+        });
+
+        // Collapse first event; third stays expanded
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(0).Click();
+        cut.WaitForAssertion(() => cut.FindAll(".calendar-event-item.is-expanded").Should().HaveCount(1));
+
+        // Navigating to another week and back clears expanded state
+        cut.Find(".calendar-next-week-btn").Click();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Vecka 47, 2026"));
+        cut.FindAll(".calendar-event-item.is-expanded").Should().BeEmpty();
+
+        cut.Find(".calendar-prev-week-btn").Click();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Vecka 46, 2026"));
+        cut.FindAll(".calendar-event-item.is-expanded").Should().BeEmpty();
     }
 }
