@@ -97,8 +97,9 @@ public class TodoPageComponentTests : TestContext
         var cut = RenderComponent<TodoPage>();
         cut.WaitForAssertion(() => cut.Find(".todo-active-list-title").TextContent.Should().Be("Respackning"));
 
-        // Archive via UI
-        cut.Find("#todo-archive-list-btn").Click();
+        // Archive via list tab floating menu
+        cut.Find($"[data-todo-list-id='{list.Id}'] .todo-list-menu-btn").Click();
+        cut.Find($"[data-todo-list-id='{list.Id}'] .todo-list-archive-btn").Click();
         cut.WaitForAssertion(() => cut.Find("#todo-toggle-archived-btn").TextContent.Should().Contain("1"));
 
         // Open archived drawer and select archived list
@@ -129,5 +130,141 @@ public class TodoPageComponentTests : TestContext
             var titles = cut.FindAll(".todo-task-title").Select(e => e.TextContent).ToList();
             titles.Should().Contain("Tandborste");
         });
+    }
+
+    [Fact]
+    public async Task ListTabMenu_ShouldFollowListDuringRepeatedMoves_NotSelectTab_AndCloseOnEscapeOrBackdrop()
+    {
+        var l1 = await _service.CreateListAsync("Lista A");
+        var l2 = await _service.CreateListAsync("Lista B");
+        var l3 = await _service.CreateListAsync("Lista C");
+
+        var cut = RenderComponent<TodoPage>();
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll(".todo-list-tabs .todo-list-pill").Should().HaveCount(3);
+            cut.Find(".todo-active-list-title").TextContent.Should().Be("Lista A");
+        });
+
+        // Header should not contain old list management buttons
+        cut.FindAll(".todo-list-controls").Should().BeEmpty();
+        cut.FindAll("#todo-move-list-prev-btn").Should().BeEmpty();
+        cut.FindAll("#todo-move-list-next-btn").Should().BeEmpty();
+        cut.FindAll("#todo-rename-list-btn").Should().BeEmpty();
+        cut.FindAll("#todo-archive-list-btn").Should().BeEmpty();
+
+        // Open menu on second tab ("Lista B") while "Lista A" is selected -> should not change selection
+        cut.Find($"[data-todo-list-id='{l2.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-active-list-title").TextContent.Should().Be("Lista A");
+        cut.Find($"[data-todo-list-id='{l2.Id}'] .todo-list-menu-popover").Should().NotBeNull();
+        cut.Find(".todo-list-move-left-btn").HasAttribute("disabled").Should().BeFalse();
+        cut.Find(".todo-list-move-right-btn").HasAttribute("disabled").Should().BeFalse();
+
+        // Move "Lista B" left -> becomes first, menu stays open on "Lista B", move-left now disabled
+        cut.Find(".todo-list-move-left-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".todo-list-tabs .todo-list-pill-name").Select(e => e.TextContent).ToList();
+            names.Should().Equal("Lista B", "Lista A", "Lista C");
+            cut.Find($"[data-todo-list-id='{l2.Id}'] .todo-list-menu-popover").Should().NotBeNull();
+            cut.Find(".todo-list-move-left-btn").HasAttribute("disabled").Should().BeTrue();
+            cut.Find(".todo-list-move-right-btn").HasAttribute("disabled").Should().BeFalse();
+        });
+
+        // Move "Lista B" right twice -> becomes last, menu stays open on "Lista B", move-right now disabled
+        cut.Find(".todo-list-move-right-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".todo-list-tabs .todo-list-pill-name").Select(e => e.TextContent).ToList();
+            names.Should().Equal("Lista A", "Lista B", "Lista C");
+            cut.Find(".todo-list-move-right-btn").HasAttribute("disabled").Should().BeFalse();
+        });
+
+        cut.Find(".todo-list-move-right-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".todo-list-tabs .todo-list-pill-name").Select(e => e.TextContent).ToList();
+            names.Should().Equal("Lista A", "Lista C", "Lista B");
+            cut.Find($"[data-todo-list-id='{l2.Id}'] .todo-list-menu-popover").Should().NotBeNull();
+            cut.Find(".todo-list-move-left-btn").HasAttribute("disabled").Should().BeFalse();
+            cut.Find(".todo-list-move-right-btn").HasAttribute("disabled").Should().BeTrue();
+        });
+
+        // Selection should still be "Lista A"
+        cut.Find(".todo-active-list-title").TextContent.Should().Be("Lista A");
+
+        // Close on Escape
+        cut.Find($"[data-todo-list-id='{l2.Id}'] .todo-list-menu-anchor")
+            .KeyDown(new KeyboardEventArgs { Key = "Escape" });
+        cut.FindAll(".todo-list-menu-popover").Should().BeEmpty();
+
+        // Re-open and close on outside click backdrop
+        cut.Find($"[data-todo-list-id='{l3.Id}'] .todo-list-menu-btn").Click();
+        cut.FindAll(".todo-list-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-row-menu-backdrop").Click();
+        cut.FindAll(".todo-list-menu-popover").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ListTabMenu_ShouldSupportRenameAndDelete_AndCloseMenu()
+    {
+        var list = await _service.CreateListAsync("Gammalt namn");
+
+        var cut = RenderComponent<TodoPage>();
+        cut.WaitForAssertion(() => cut.Find(".todo-active-list-title").TextContent.Should().Be("Gammalt namn"));
+
+        // Rename via tab menu
+        cut.Find($"[data-todo-list-id='{list.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-list-rename-btn").Click();
+        cut.FindAll(".todo-list-menu-popover").Should().BeEmpty();
+        cut.Find("#todo-rename-list-input").Input("Nytt namn");
+        cut.Find(".todo-rename-list-form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find(".todo-active-list-title").TextContent.Should().Be("Nytt namn");
+            cut.Find($"[data-todo-list-id='{list.Id}'] .todo-list-pill-name").TextContent.Should().Be("Nytt namn");
+        });
+
+        // Delete via tab menu -> opens ConfirmDialog, closes menu
+        cut.Find($"[data-todo-list-id='{list.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-list-delete-btn").Click();
+        cut.FindAll(".todo-list-menu-popover").Should().BeEmpty();
+        cut.Find(".modal-dialog-custom .btn-danger-custom").Click();
+
+        cut.WaitForAssertion(() => cut.FindAll(".todo-list-tabs .todo-list-pill").Should().BeEmpty());
+    }
+
+    [Fact]
+    public async Task TaskInlineEdit_ShouldCollapseNotesByDefaultUnlessPresentOrExpanded()
+    {
+        var list = await _service.CreateListAsync("Helgfix");
+        var withoutNotes = await _service.AddItemAsync(list.Id, "Utan anteckning");
+        var withNotes = await _service.AddItemAsync(list.Id, "Med anteckning", "Befintlig notis");
+
+        var cut = RenderComponent<TodoPage>();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-task-row").Should().HaveCount(2));
+
+        // Edit task without notes -> notes input hidden initially, toggle visible
+        cut.Find($"[data-todo-item-id='{withoutNotes.Id}'] .todo-task-menu-btn").Click();
+        cut.Find(".todo-edit-task-btn").Click();
+
+        cut.FindAll(".todo-inline-edit-notes").Should().BeEmpty();
+        cut.Find(".todo-edit-notes-toggle").Click();
+        cut.FindAll(".todo-inline-edit-notes").Should().ContainSingle();
+        cut.Find(".todo-inline-edit-notes").Input("Ny anteckning");
+        cut.Find(".todo-edit-save-btn").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find($"[data-todo-item-id='{withoutNotes.Id}'] .todo-task-notes").TextContent.Should().Be("Ny anteckning");
+        });
+
+        // Edit task that already has notes -> notes input expanded automatically
+        cut.Find($"[data-todo-item-id='{withNotes.Id}'] .todo-task-menu-btn").Click();
+        cut.Find(".todo-edit-task-btn").Click();
+
+        cut.FindAll(".todo-edit-notes-toggle").Should().BeEmpty();
+        cut.Find(".todo-inline-edit-notes").GetAttribute("value").Should().Be("Befintlig notis");
     }
 }

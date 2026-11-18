@@ -9,9 +9,6 @@
     var activeLists = allLists.Where(l => !l.IsArchived).ToList();
     var archivedLists = allLists.Where(l => l.IsArchived).ToList();
     var selectedList = GetSelectedList(activeLists, archivedLists);
-    var selectedActiveIndex = selectedList != null && !selectedList.IsArchived
-        ? activeLists.FindIndex(l => l.Id == selectedList.Id)
-        : -1;
 }
 
 <div class="todo-page-container">
@@ -89,30 +86,108 @@
         </div>
     }
 
+    @if (openTaskMenuId.HasValue || openListMenuId.HasValue)
+    {
+        <div class="ingredient-row-menu-backdrop @(openListMenuId.HasValue ? "todo-list-menu-backdrop" : "")"
+             @onclick="CloseAllMenus"
+             @onclick:stopPropagation="true"></div>
+    }
+
     @if (activeLists.Count > 0)
     {
         <div class="todo-list-tabs" role="tablist" aria-label="Aktiva att göra-listor">
-            @foreach (var list in activeLists)
+            @for (var listIdx = 0; listIdx < activeLists.Count; listIdx++)
             {
+                var list = activeLists[listIdx];
                 var doneCount = list.Items.Count(i => i.IsCompleted);
                 var totalCount = list.Items.Count;
                 var isSelected = selectedList?.Id == list.Id;
+                var isMenuOpen = openListMenuId == list.Id;
+                var canMoveLeft = listIdx > 0;
+                var canMoveRight = listIdx < activeLists.Count - 1;
                 var progressPct = totalCount > 0 ? (int)Math.Round(doneCount * 100.0 / totalCount) : 0;
 
-                <button type="button"
-                        role="tab"
-                        aria-selected="@(isSelected ? "true" : "false")"
-                        @key="list.Id"
-                        class="todo-list-pill @(isSelected ? "is-selected" : "")"
-                        @onclick="@(() => SelectList(list.Id))">
-                    <span class="todo-list-pill-top">
-                        <span class="todo-list-pill-name">@list.Name</span>
-                        <span class="todo-list-pill-progress">@doneCount/@totalCount</span>
-                    </span>
+                <div @key="list.Id"
+                     class="todo-list-pill @(isSelected ? "is-selected" : "") @(isMenuOpen ? "is-menu-open" : "")"
+                     data-todo-list-id="@list.Id">
+                    <div class="todo-list-pill-top">
+                        <button type="button"
+                                role="tab"
+                                aria-selected="@(isSelected ? "true" : "false")"
+                                class="todo-list-pill-select"
+                                @onclick="@(() => SelectList(list.Id))">
+                            <span class="todo-list-pill-name">@list.Name</span>
+                            <span class="todo-list-pill-progress">@doneCount/@totalCount</span>
+                        </button>
+
+                        <div class="ingredient-row-menu-anchor todo-list-menu-anchor @(isMenuOpen ? "is-open" : "")"
+                             @onkeydown="@(e => HandleListMenuKeyDown(e, list.Id))">
+                            <button type="button"
+                                    class="btn-secondary-custom ingredient-row-menu-btn todo-list-menu-btn @(isMenuOpen ? "is-active" : "")"
+                                    title="Åtgärder för lista"
+                                    aria-label="@($"Åtgärder för {list.Name}")"
+                                    aria-haspopup="menu"
+                                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                                    @onclick="@(() => ToggleListMenu(list.Id))"
+                                    @onclick:stopPropagation="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+                            </button>
+
+                            @if (isMenuOpen)
+                            {
+                                <div class="ingredient-row-menu-popover todo-list-menu-popover"
+                                     role="menu"
+                                     aria-label="@($"Åtgärder för {list.Name}")"
+                                     @onclick:stopPropagation="true">
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="ingredient-row-menu-item todo-list-move-left-btn"
+                                            disabled="@(!canMoveLeft || isBusy)"
+                                            @onclick="@(() => MoveListAsync(list.Id, -1))">
+                                        <span class="ingredient-row-menu-icon" aria-hidden="true">←</span>
+                                        <span>Flytta vänster</span>
+                                    </button>
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="ingredient-row-menu-item todo-list-move-right-btn"
+                                            disabled="@(!canMoveRight || isBusy)"
+                                            @onclick="@(() => MoveListAsync(list.Id, 1))">
+                                        <span class="ingredient-row-menu-icon" aria-hidden="true">→</span>
+                                        <span>Flytta höger</span>
+                                    </button>
+                                    <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="ingredient-row-menu-item todo-list-rename-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => StartRenameList(list))">
+                                        <span class="ingredient-row-menu-icon" aria-hidden="true">✏️</span>
+                                        <span>Byt namn</span>
+                                    </button>
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="ingredient-row-menu-item todo-list-archive-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => ArchiveListAsync(list.Id))">
+                                        <span class="ingredient-row-menu-icon" aria-hidden="true">📦</span>
+                                        <span>Arkivera lista</span>
+                                    </button>
+                                    <button type="button"
+                                            role="menuitem"
+                                            class="ingredient-row-menu-item todo-list-delete-btn"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => RequestDeleteList(list))">
+                                        <span class="ingredient-row-menu-icon" aria-hidden="true">🗑️</span>
+                                        <span>Ta bort lista</span>
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
                     <span class="todo-list-pill-bar" aria-hidden="true">
                         <span class="todo-list-pill-bar-fill" style="width: @($"{progressPct}%")"></span>
                     </span>
-                </button>
+                </div>
             }
         </div>
     }
@@ -230,56 +305,6 @@
                         </div>
                     }
                 </div>
-
-                @if (!selectedList.IsArchived && !isRenamingList)
-                {
-                    <div class="todo-list-controls">
-                        <button type="button"
-                                id="todo-move-list-prev-btn"
-                                class="btn-secondary-custom todo-icon-btn"
-                                title="Flytta lista tidigare"
-                                aria-label="Flytta lista tidigare"
-                                disabled="@(isBusy || selectedActiveIndex <= 0)"
-                                @onclick="@(() => MoveListAsync(selectedList.Id, -1))">
-                            ‹
-                        </button>
-                        <button type="button"
-                                id="todo-move-list-next-btn"
-                                class="btn-secondary-custom todo-icon-btn"
-                                title="Flytta lista senare"
-                                aria-label="Flytta lista senare"
-                                disabled="@(isBusy || selectedActiveIndex < 0 || selectedActiveIndex >= activeLists.Count - 1)"
-                                @onclick="@(() => MoveListAsync(selectedList.Id, 1))">
-                            ›
-                        </button>
-                        <button type="button"
-                                id="todo-rename-list-btn"
-                                class="btn-secondary-custom todo-icon-btn"
-                                title="Byt namn på lista"
-                                aria-label="Byt namn på lista"
-                                disabled="@isBusy"
-                                @onclick="@(() => StartRenameList(selectedList))">
-                            ✏️
-                        </button>
-                        <button type="button"
-                                id="todo-archive-list-btn"
-                                class="btn-secondary-custom"
-                                title="Arkivera lista"
-                                disabled="@isBusy"
-                                @onclick="@(() => ArchiveListAsync(selectedList.Id))">
-                            📦 Arkivera
-                        </button>
-                        <button type="button"
-                                id="todo-delete-list-btn"
-                                class="btn-danger-custom todo-icon-btn"
-                                title="Ta bort lista"
-                                aria-label="Ta bort lista"
-                                disabled="@isBusy"
-                                @onclick="@(() => RequestDeleteList(selectedList))">
-                            🗑️
-                        </button>
-                    </div>
-                }
             </div>
 
             @if (!selectedList.IsArchived)
@@ -301,13 +326,6 @@
                         + Lägg till
                     </button>
                 </form>
-            }
-
-            @if (openTaskMenuId.HasValue)
-            {
-                <div class="ingredient-row-menu-backdrop"
-                     @onclick="CloseTaskMenu"
-                     @onclick:stopPropagation="true"></div>
             }
 
             @if (totalCount == 0)
@@ -397,7 +415,9 @@
     private int? editingItemId;
     private string editItemTitle = string.Empty;
     private string editItemNotes = string.Empty;
+    private bool showEditItemNotes;
 
+    private int? openListMenuId;
     private int? openTaskMenuId;
     private TodoList? listPendingDelete;
 
@@ -438,32 +458,47 @@
                 @if (isEditing)
                 {
                     <div class="todo-inline-edit-form" @onkeydown="@(e => HandleEditKeyDown(e, item.Id))">
-                        <input type="text"
-                               class="form-input-custom todo-inline-edit-title"
-                               maxlength="@TodoItem.MaxTitleLength"
-                               aria-label="Uppgiftens titel"
-                               @bind="editItemTitle"
-                               @bind:event="oninput" />
-                        <input type="text"
-                               class="form-input-custom todo-inline-edit-notes"
-                               maxlength="@TodoItem.MaxNotesLength"
-                               placeholder="Anteckning (valfri)"
-                               aria-label="Anteckning"
-                               @bind="editItemNotes"
-                               @bind:event="oninput" />
-                        <div class="todo-inline-edit-actions">
-                            <button type="button"
-                                    class="btn-primary-custom todo-edit-save-btn"
-                                    disabled="@(isBusy || string.IsNullOrWhiteSpace(editItemTitle))"
-                                    @onclick="@(() => SaveTaskEditAsync(item.Id))">
-                                Spara
-                            </button>
-                            <button type="button"
-                                    class="btn-secondary-custom todo-edit-cancel-btn"
-                                    @onclick="CancelEditTask">
-                                Avbryt
-                            </button>
+                        <div class="todo-inline-edit-primary">
+                            <input type="text"
+                                   class="form-input-custom todo-inline-edit-title"
+                                   maxlength="@TodoItem.MaxTitleLength"
+                                   aria-label="Uppgiftens titel"
+                                   @bind="editItemTitle"
+                                   @bind:event="oninput" />
+                            <div class="todo-inline-edit-actions">
+                                <button type="button"
+                                        class="btn-primary-custom todo-edit-save-btn"
+                                        disabled="@(isBusy || string.IsNullOrWhiteSpace(editItemTitle))"
+                                        @onclick="@(() => SaveTaskEditAsync(item.Id))">
+                                    Spara
+                                </button>
+                                <button type="button"
+                                        class="btn-secondary-custom todo-edit-cancel-btn"
+                                        @onclick="CancelEditTask">
+                                    Avbryt
+                                </button>
+                            </div>
                         </div>
+                        @if (showEditItemNotes)
+                        {
+                            <input type="text"
+                                   class="form-input-custom todo-inline-edit-notes"
+                                   maxlength="@TodoItem.MaxNotesLength"
+                                   placeholder="Anteckning (valfri)"
+                                   aria-label="Anteckning"
+                                   @bind="editItemNotes"
+                                   @bind:event="oninput" />
+                        }
+                        else
+                        {
+                            <div class="todo-inline-edit-secondary">
+                                <button type="button"
+                                        class="todo-edit-notes-toggle"
+                                        @onclick="ExpandEditNotes">
+                                    + Lägg till anteckning
+                                </button>
+                            </div>
+                        }
                     </div>
                 }
                 else
@@ -548,6 +583,11 @@
             selectedListId = null;
         }
 
+        if (openListMenuId.HasValue && allLists.All(l => l.Id != openListMenuId.Value || l.IsArchived))
+        {
+            openListMenuId = null;
+        }
+
         if (!selectedListId.HasValue)
         {
             selectedListId = allLists.FirstOrDefault(l => !l.IsArchived)?.Id;
@@ -574,11 +614,14 @@
         isRenamingList = false;
         editingItemId = null;
         openTaskMenuId = null;
+        openListMenuId = null;
         feedback.Clear();
     }
 
     private void ToggleCreateListForm()
     {
+        openTaskMenuId = null;
+        openListMenuId = null;
         showCreateListForm = !showCreateListForm;
         if (!showCreateListForm)
         {
@@ -588,6 +631,8 @@
 
     private void ToggleArchivedSection()
     {
+        openTaskMenuId = null;
+        openListMenuId = null;
         showArchivedSection = !showArchivedSection;
     }
 
@@ -608,9 +653,11 @@
 
     private void StartRenameList(TodoList list)
     {
+        selectedListId = list.Id;
         isRenamingList = true;
         renameListDraft = list.Name;
         openTaskMenuId = null;
+        openListMenuId = null;
     }
 
     private void CancelRenameList()
@@ -635,6 +682,7 @@
 
     private async Task MoveListAsync(int listId, int direction)
     {
+        // Keep openListMenuId intact so the floating menu stays open and follows the list tab.
         await RunActionAsync(async () =>
         {
             await TodoService.MoveListAsync(listId, direction);
@@ -644,14 +692,18 @@
 
     private async Task ArchiveListAsync(int listId)
     {
+        openListMenuId = null;
+        openTaskMenuId = null;
         await RunActionAsync(async () =>
         {
             await TodoService.ArchiveListAsync(listId);
             isRenamingList = false;
             editingItemId = null;
-            openTaskMenuId = null;
             await ReloadAsync();
-            selectedListId = allLists.FirstOrDefault(l => !l.IsArchived)?.Id;
+            if (selectedListId == listId)
+            {
+                selectedListId = allLists.FirstOrDefault(l => !l.IsArchived)?.Id;
+            }
             feedback.ShowSuccess("Listan har arkiverats.");
         });
     }
@@ -675,6 +727,7 @@
     {
         listPendingDelete = list;
         openTaskMenuId = null;
+        openListMenuId = null;
     }
 
     private async Task ConfirmDeleteListAsync()
@@ -715,13 +768,29 @@
         });
     }
 
+    private void ToggleListMenu(int listId)
+    {
+        openTaskMenuId = null;
+        openListMenuId = openListMenuId == listId ? null : listId;
+    }
+
+    private void HandleListMenuKeyDown(KeyboardEventArgs e, int listId)
+    {
+        if (e.Key == "Escape" && openListMenuId == listId)
+        {
+            openListMenuId = null;
+        }
+    }
+
     private void ToggleTaskMenu(int itemId)
     {
+        openListMenuId = null;
         openTaskMenuId = openTaskMenuId == itemId ? null : itemId;
     }
 
-    private void CloseTaskMenu()
+    private void CloseAllMenus()
     {
+        openListMenuId = null;
         openTaskMenuId = null;
     }
 
@@ -745,10 +814,17 @@
 
     private void StartEditTask(TodoItem item)
     {
+        openListMenuId = null;
         openTaskMenuId = null;
         editingItemId = item.Id;
         editItemTitle = item.Title;
         editItemNotes = item.Notes ?? string.Empty;
+        showEditItemNotes = !string.IsNullOrWhiteSpace(item.Notes);
+    }
+
+    private void ExpandEditNotes()
+    {
+        showEditItemNotes = true;
     }
 
     private void CancelEditTask()
@@ -756,6 +832,7 @@
         editingItemId = null;
         editItemTitle = string.Empty;
         editItemNotes = string.Empty;
+        showEditItemNotes = false;
     }
 
     private async Task HandleEditKeyDown(KeyboardEventArgs e, int itemId)
