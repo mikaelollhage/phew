@@ -166,8 +166,9 @@ public class ShoppingListRealtimeComponentTests
             phoneB.FindAll(".shopping-checked-list .shopping-item-row").Should().ContainSingle();
             phoneB.Find(".shopping-checked-list").TextContent.Should().Contain("1,5 l mjölk");
 
-            // Phone B shows the contextual Undo banner with "Ångra" button
+            // Phone B shows the contextual Undo toast with "Ångra" button
             var undoBanner = phoneB.Find(".shopping-undo-feedback.rb-feedback-success");
+            undoBanner.ClassList.Should().Contain("rb-feedback-floating");
             undoBanner.TextContent.Should().Contain("\"mjölk\" markerad som klar.");
             phoneB.Find(".shopping-undo-feedback .rb-feedback-action-btn").TextContent.Trim().Should().Be("Ångra");
         });
@@ -1586,5 +1587,75 @@ public class ShoppingListRealtimeComponentTests
         await view.InvokeAsync(() => view.FindAll(".shopping-unchecked-list .shopping-row-menu-btn").ElementAt(0).Click());
         view.WaitForAssertion(() =>
             view.FindAll(".shopping-unchecked-list .shopping-row-menu-anchor").ElementAt(0).ClassList.Should().Contain("is-open"));
+    }
+
+    [Fact]
+    public async Task UndoToast_RepeatedCheckOffsResetAutoDismiss_AndWarningRemainsInline()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var sharedNotifier = new ShoppingListNotifier();
+        var timeProvider = new ManualTimeProvider();
+
+        using var ctx = CreateSessionContext(dbFactory, sharedNotifier, timeProvider);
+        var view = ctx.RenderComponent<ShoppingPlaceholder>();
+        view.WaitForAssertion(() => view.Markup.Should().Contain("Inköpslistan är tom"));
+
+        foreach (var itemText in new[] { "1 l mjölk", "2 st ägg", "500 g mjöl" })
+        {
+            await view.InvokeAsync(() => view.Find("#shopping-manual-input").Input(itemText));
+            await view.InvokeAsync(() => view.Find("#shopping-add-manual-btn").ClickAsync(new MouseEventArgs()));
+        }
+
+        view.WaitForAssertion(() =>
+            view.FindAll(".shopping-unchecked-list .shopping-item-row").Should().HaveCount(3));
+
+        // 1. Check off first item -> floating Undo toast appears
+        await view.InvokeAsync(() =>
+            view.FindAll(".shopping-unchecked-list .shopping-row-check-target").First().ClickAsync(new MouseEventArgs()));
+        view.WaitForAssertion(() =>
+        {
+            var toast = view.Find(".shopping-undo-feedback.rb-feedback-success");
+            toast.ClassList.Should().Contain("rb-feedback-floating");
+            toast.TextContent.Should().Contain("\"mjölk\" markerad som klar.");
+        });
+
+        // Advance 2.5s (1.5s remaining on first timer)
+        timeProvider.Advance(TimeSpan.FromMilliseconds(2500));
+        view.FindAll(".shopping-undo-feedback").Should().ContainSingle();
+
+        // 2. Check off second item -> toast updates and resets 4s auto-dismiss timer
+        await view.InvokeAsync(() =>
+            view.FindAll(".shopping-unchecked-list .shopping-row-check-target").First().ClickAsync(new MouseEventArgs()));
+        view.WaitForAssertion(() =>
+        {
+            var toast = view.Find(".shopping-undo-feedback.rb-feedback-floating");
+            toast.TextContent.Should().Contain("\"ägg\" markerad som klar.");
+        });
+
+        // Advance 2.0s (4.5s since first, 2.0s since second) -> still visible
+        timeProvider.Advance(TimeSpan.FromMilliseconds(2000));
+        view.FindAll(".shopping-undo-feedback").Should().ContainSingle();
+
+        // Advance 2.1s (4.1s since second) -> auto-dismissed
+        timeProvider.Advance(TimeSpan.FromMilliseconds(2100));
+        view.WaitForAssertion(() => view.FindAll(".shopping-undo-feedback").Should().BeEmpty());
+
+        // 3. Warning feedback on shopping-list-feedback remains inline (not floating)
+        await using (var db = dbFactory.CreateDbContext())
+        {
+            var remaining = db.ShoppingListItems.Single(i => !i.IsChecked);
+            db.ShoppingListItems.Remove(remaining);
+            await db.SaveChangesAsync();
+        }
+
+        await view.InvokeAsync(() =>
+            view.FindAll(".shopping-unchecked-list .shopping-row-check-target").First().ClickAsync(new MouseEventArgs()));
+
+        view.WaitForAssertion(() =>
+        {
+            var warning = view.Find(".shopping-list-feedback.rb-feedback-warning");
+            warning.ClassList.Should().NotContain("rb-feedback-floating");
+            warning.TextContent.Should().Contain("Varan fanns inte längre kvar i inköpslistan.");
+        });
     }
 }

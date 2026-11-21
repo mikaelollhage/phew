@@ -325,38 +325,47 @@ a:hover {
   animation: rbFeedbackFadeIn 0.15s ease-out;
 }
 
-.rb-feedback-floating {
+.rb-feedback-floating,
+.rb-feedback.rb-feedback-floating {
   position: fixed;
-  top: max(16px, env(safe-area-inset-top));
-  right: 24px;
+  top: auto;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  left: 0;
+  right: 0;
   z-index: 950;
-  width: min(440px, calc(100vw - 300px));
-  margin: 0;
+  width: min(420px, calc(100vw - 32px));
+  max-width: min(420px, calc(100vw - 32px));
+  margin: 0 auto;
   padding: 10px 14px;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(8px);
+  background-color: var(--rb-bg-card);
+  background-image: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 @media (max-width: 768px) {
-  .rb-feedback-floating {
-    top: max(8px, env(safe-area-inset-top));
+  .rb-feedback-floating,
+  .rb-feedback.rb-feedback-floating {
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     left: 12px;
     right: 12px;
     width: auto;
-    padding: 9px 12px;
+    max-width: min(420px, calc(100vw - 24px));
+    margin: 0 auto;
+    padding: 10px 12px;
   }
 }
 
-.recipe-shopping-feedback,
-.image-upload-feedback,
-.backup-export-feedback,
-.backup-restore-feedback,
-.shopping-manual-feedback,
-.shopping-recipe-feedback,
-.category-form-feedback,
-.import-discard-feedback,
-.recipe-save-feedback-bottom,
-.import-save-feedback-bottom {
+.recipe-shopping-feedback:not(.rb-feedback-floating),
+.image-upload-feedback:not(.rb-feedback-floating),
+.backup-export-feedback:not(.rb-feedback-floating),
+.backup-restore-feedback:not(.rb-feedback-floating),
+.shopping-manual-feedback:not(.rb-feedback-floating),
+.shopping-recipe-feedback:not(.rb-feedback-floating),
+.category-form-feedback:not(.rb-feedback-floating),
+.import-discard-feedback:not(.rb-feedback-floating),
+.recipe-save-feedback-bottom:not(.rb-feedback-floating),
+.import-save-feedback-bottom:not(.rb-feedback-floating) {
   margin-top: 16px;
   margin-bottom: 0;
 }
@@ -402,6 +411,45 @@ a:hover {
   color: #fecaca;
 }
 
+.rb-feedback-floating.rb-feedback-success,
+.rb-feedback.rb-feedback-floating.rb-feedback-success {
+  background-color: var(--rb-bg-card);
+  background-image: none;
+  border-color: #235c49;
+  border-left-color: var(--rb-success);
+  color: var(--rb-text-primary);
+}
+
+.rb-feedback-floating.rb-feedback-success .rb-feedback-icon {
+  color: var(--rb-success);
+}
+
+.rb-feedback-floating.rb-feedback-warning,
+.rb-feedback.rb-feedback-floating.rb-feedback-warning {
+  background-color: var(--rb-bg-card);
+  background-image: none;
+  border-color: #6b4e24;
+  border-left-color: var(--rb-accent-gold);
+  color: var(--rb-text-primary);
+}
+
+.rb-feedback-floating.rb-feedback-warning .rb-feedback-icon {
+  color: var(--rb-accent-gold);
+}
+
+.rb-feedback-floating.rb-feedback-error,
+.rb-feedback.rb-feedback-floating.rb-feedback-error {
+  background-color: var(--rb-bg-card);
+  background-image: none;
+  border-color: #6e2a2a;
+  border-left-color: var(--rb-danger);
+  color: var(--rb-text-primary);
+}
+
+.rb-feedback-floating.rb-feedback-error .rb-feedback-icon {
+  color: var(--rb-danger);
+}
+
 .rb-feedback-content {
   display: flex;
   align-items: flex-start;
@@ -430,6 +478,10 @@ a:hover {
 
 .rb-feedback-message {
   font-size: 14px;
+}
+
+.rb-feedback-floating .rb-feedback-message {
+  overflow-wrap: break-word;
 }
 
 .rb-feedback-action-btn {
@@ -3084,51 +3136,13 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   width: 100%;
 }
 
-.weekly-feedback-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  border-radius: var(--rb-radius-md);
+.weekly-feedback-banner:not(.rb-feedback-floating) {
   margin-bottom: 16px;
-  font-size: 14px;
-  font-weight: 500;
 }
 
-.weekly-feedback-banner.weekly-feedback-bottom {
+.weekly-feedback-banner.weekly-feedback-bottom:not(.rb-feedback-floating) {
   margin-top: 16px;
   margin-bottom: 0;
-}
-
-.weekly-feedback-banner.success {
-  background-color: rgba(16, 185, 129, 0.14);
-  border: 1px solid rgba(16, 185, 129, 0.4);
-  border-left: 4px solid #10b981;
-  color: #a7f3d0;
-}
-
-.weekly-feedback-banner.warning {
-  background-color: rgba(242, 166, 90, 0.14);
-  border: 1px solid rgba(242, 166, 90, 0.45);
-  border-left: 4px solid var(--rb-accent-gold);
-  color: #fde68a;
-}
-
-.weekly-feedback-banner.error {
-  background-color: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.48);
-  border-left: 4px solid var(--rb-danger);
-  color: #fecaca;
-}
-
-.weekly-feedback-close {
-  background: none;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 2px 6px;
 }
 
 /* Pantry Section ("Ingredienser hemma") */
@@ -3911,7 +3925,6 @@ body.weekly-touch-reordering .weekly-drag-handle {
   font-weight: normal;
 }
 
-.shopping-undo-feedback,
 .shopping-list-feedback {
   margin-bottom: 14px;
 }

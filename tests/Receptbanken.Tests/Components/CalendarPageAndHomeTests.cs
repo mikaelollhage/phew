@@ -251,6 +251,9 @@ public class CalendarPageAndHomeTests : TestContext
             tuesday.TextContent.Should().Contain("Utflykt");
             tuesday.TextContent.Should().Contain("Lisa");
             tuesday.TextContent.Should().NotContain("Skogen");
+            var feedback = cut.Find(".weekly-feedback-banner.rb-feedback-success");
+            feedback.ClassList.Should().Contain("rb-feedback-floating");
+            feedback.TextContent.Should().Contain("Händelsen sparades.");
         });
 
         // Expand event to view location and Edit/Delete actions
@@ -265,7 +268,11 @@ public class CalendarPageAndHomeTests : TestContext
         cut.Find("form.calendar-form-body").Submit();
 
         cut.WaitForAssertion(() =>
-            cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Skogsutflykt"));
+        {
+            cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Skogsutflykt");
+            cut.Find(".weekly-feedback-banner.rb-feedback-success.rb-feedback-floating")
+                .TextContent.Should().Contain("Händelsen sparades.");
+        });
 
         // Delete one-time event from expanded details (remains expanded across same-week edit)
         cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-delete-btn").Click();
@@ -273,7 +280,11 @@ public class CalendarPageAndHomeTests : TestContext
         cut.Find(".modal-dialog-custom .btn-danger-custom").Click();
 
         cut.WaitForAssertion(() =>
-            cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Inga händelser planerade."));
+        {
+            cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Inga händelser planerade.");
+            cut.Find(".weekly-feedback-banner.rb-feedback-success.rb-feedback-floating")
+                .TextContent.Should().Contain("togs bort");
+        });
     }
 
     [Fact]

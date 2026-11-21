@@ -53,7 +53,7 @@
     </div>
 </div>
 
-<ContextualFeedback State="feedback" CssClass="weekly-feedback-banner" />
+<ContextualFeedback State="feedback" Floating="@feedback.IsSuccess" CssClass="weekly-feedback-banner" />
 
 @if (isLoading)
 {

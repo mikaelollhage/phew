@@ -267,4 +267,107 @@ public class TodoPageComponentTests : TestContext
         cut.FindAll(".todo-edit-notes-toggle").Should().BeEmpty();
         cut.Find(".todo-inline-edit-notes").GetAttribute("value").Should().Be("Befintlig notis");
     }
+
+    [Fact]
+    public async Task TodoPage_ArchiveRestoreAndDelete_ShouldShowFloatingSuccessFeedback_AndPreserveBannerAndDialog()
+    {
+        var list1 = await _service.CreateListAsync("Aktiva ärenden");
+        var list2 = await _service.CreateListAsync("Helgfix");
+
+        var cut = RenderComponent<TodoPage>();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-list-tabs .todo-list-pill").Should().HaveCount(2));
+
+        // 1. Archive list2 -> floating success toast
+        cut.Find($"[data-todo-list-id='{list2.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-list-archive-btn").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var toast = cut.Find(".todo-feedback.rb-feedback-success");
+            toast.ClassList.Should().Contain("rb-feedback-floating");
+            toast.TextContent.Should().Contain("Listan har arkiverats.");
+        });
+
+        // 2. Open archived section -> select archived list -> archived-list banner with restore button is preserved; restore -> floating success toast
+        cut.Find("#todo-toggle-archived-btn").Click();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-archived-chips .todo-list-pill.is-archived").Should().ContainSingle());
+        cut.Find(".todo-archived-chips .todo-list-pill.is-archived").Click();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-archived-banner").Should().ContainSingle());
+
+        cut.Find("#todo-restore-list-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var toast = cut.Find(".todo-feedback.rb-feedback-success");
+            toast.ClassList.Should().Contain("rb-feedback-floating");
+            toast.TextContent.Should().Contain("Listan har återställts.");
+        });
+
+        // 3. Delete list2 -> confirmation dialog preserved; confirm -> floating success toast
+        cut.Find($"[data-todo-list-id='{list2.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-list-delete-btn").Click();
+        cut.Find(".modal-dialog-custom").TextContent.Should().Contain("Helgfix");
+        cut.Find(".modal-dialog-custom .btn-danger-custom").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var toast = cut.Find(".todo-feedback.rb-feedback-success");
+            toast.ClassList.Should().Contain("rb-feedback-floating");
+            toast.TextContent.Should().Contain("Helgfix");
+            toast.TextContent.Should().Contain("togs bort.");
+        });
+    }
+
+    [Fact]
+    public async Task TodoPage_AllRepresentativeActions_ShouldInvokeHandlersCorrectly_EvenWhileFloatingFeedbackIsVisible()
+    {
+        var listA = await _service.CreateListAsync("Lista A");
+        var listB = await _service.CreateListAsync("Lista B");
+        await _service.AddItemAsync(listA.Id, "Uppgift A1");
+
+        var cut = RenderComponent<TodoPage>();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-list-tabs .todo-list-pill").Should().HaveCount(2));
+
+        // 1. Switch between list tabs
+        cut.Find($"[data-todo-list-id='{listB.Id}'] .todo-list-pill-select").Click();
+        cut.WaitForAssertion(() => cut.Find(".todo-active-list-title").TextContent.Should().Be("Lista B"));
+
+        // 2. Create a task on Lista B
+        cut.Find("#todo-quick-add-input").Input("Ny uppgift B1");
+        cut.Find(".todo-quick-add-form").Submit();
+        cut.WaitForAssertion(() => cut.FindAll(".todo-task-row").Should().ContainSingle());
+        var taskTitle = cut.Find(".todo-task-title").TextContent;
+        taskTitle.Should().Be("Ny uppgift B1");
+
+        // 3. Open task contextual menu and edit task
+        cut.Find(".todo-task-menu-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".todo-edit-task-btn").Click();
+        cut.Find(".todo-inline-edit-title").Input("Uppdaterad B1");
+        cut.Find(".todo-edit-save-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".todo-task-title").TextContent.Should().Be("Uppdaterad B1"));
+
+        // 4. Check and uncheck task
+        cut.Find(".todo-check-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".todo-check-btn").ClassList.Should().Contain("is-checked"));
+        cut.Find(".todo-check-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".todo-check-btn").ClassList.Should().NotContain("is-checked"));
+
+        // 5. Open list contextual menu and archive Lista B -> floating feedback becomes visible
+        cut.Find($"[data-todo-list-id='{listB.Id}'] .todo-list-menu-btn").Click();
+        cut.Find(".todo-list-archive-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find(".todo-feedback.rb-feedback-floating").TextContent.Should().Contain("Listan har arkiverats.");
+            cut.Find(".todo-active-list-title").TextContent.Should().Be("Lista A");
+        });
+
+        // 6. While floating feedback is visible, interactions on Lista A still work (no overlay/backdrop interception)
+        cut.Find("#todo-new-list-toggle-btn").Click();
+        cut.FindAll("#todo-new-list-input").Should().ContainSingle();
+        cut.Find("#todo-new-list-toggle-btn").Click();
+        cut.FindAll("#todo-new-list-input").Should().BeEmpty();
+
+        cut.Find(".todo-check-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".todo-check-btn").ClassList.Should().Contain("is-checked"));
+    }
 }

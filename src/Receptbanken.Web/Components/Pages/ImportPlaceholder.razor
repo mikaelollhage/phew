@@ -20,7 +20,7 @@
     </div>
 </div>
 
-<ContextualFeedback State="discardFeedback" CssClass="import-discard-feedback" />
+<ContextualFeedback State="discardFeedback" Floating="true" CssClass="import-discard-feedback" />
 
 <div class="form-section">
     <h2 class="form-section-title">1. Ange receptets webbadress (URL)</h2>
@@ -318,7 +318,7 @@
                         </div>
                     }
 
-                    <ContextualFeedback State="imageUploadFeedback" CssClass="image-upload-feedback" />
+                    <ContextualFeedback State="imageUploadFeedback" Floating="@imageUploadFeedback.IsSuccess" CssClass="image-upload-feedback" />
                 </div>
 
                 <div>
@@ -810,6 +810,10 @@
             draft.ImagePath = savedPath;
             imageLoadFailed = false;
             imageFetchNotice = null;
+            if (discardFeedback.IsSuccess)
+            {
+                discardFeedback.Clear();
+            }
             imageUploadFeedback.ShowSuccess("Bilden har laddats upp och sparats!");
         }
         catch (Exception ex)

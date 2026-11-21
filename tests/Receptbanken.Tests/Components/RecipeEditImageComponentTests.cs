@@ -112,7 +112,9 @@ public class RecipeEditImageComponentTests : TestContext
         {
             var img = cut.Find(".recipe-image-preview-img");
             img.GetAttribute("src").Should().StartWith("/images/recipes/");
-            cut.Find(".image-upload-feedback.rb-feedback-success").TextContent.Should().Contain("Bilden har laddats upp och sparats!");
+            var successBanner = cut.Find(".image-upload-feedback.rb-feedback-success");
+            successBanner.ClassList.Should().Contain("rb-feedback-floating");
+            successBanner.TextContent.Should().Contain("Bilden har laddats upp och sparats!");
         });
 
         var firstSrc = cut.Find(".recipe-image-preview-img").GetAttribute("src");
@@ -199,7 +201,9 @@ public class RecipeEditImageComponentTests : TestContext
 
         cut.WaitForAssertion(() =>
         {
-            cut.Find(".image-upload-feedback.rb-feedback-error").TextContent.Should().Contain("Ogiltigt bildformat");
+            var formatError = cut.Find(".image-upload-feedback.rb-feedback-error");
+        formatError.ClassList.Should().NotContain("rb-feedback-floating");
+        formatError.TextContent.Should().Contain("Ogiltigt bildformat");
             cut.Find(".recipe-image-preview-img").GetAttribute("src").Should().Be("/images/safe.webp");
         });
 

@@ -78,7 +78,7 @@
 
 @if (feedbackPlacement == FeedbackPlacement.Top)
 {
-    <ContextualFeedback State="feedback" CssClass="weekly-feedback-banner" />
+    <ContextualFeedback State="feedback" Floating="@feedback.IsSuccess" CssClass="weekly-feedback-banner" />
 }
 
 <!-- Pantry Section: "Ingredienser hemma" -->
@@ -266,7 +266,7 @@ else
 
     @if (feedbackPlacement == FeedbackPlacement.Bottom)
     {
-        <ContextualFeedback State="feedback" CssClass="weekly-feedback-banner weekly-feedback-bottom" />
+        <ContextualFeedback State="feedback" Floating="@feedback.IsSuccess" CssClass="weekly-feedback-banner weekly-feedback-bottom" />
     }
 
     <div class="weekly-bottom-bar">

@@ -24,7 +24,7 @@ else if (recipe == null)
 }
 else
 {
-    <ContextualFeedback State="actionFeedback" CssClass="recipe-detail-feedback" />
+    <ContextualFeedback State="actionFeedback" Floating="@actionFeedback.IsSuccess" CssClass="recipe-detail-feedback" />
 
     <!-- Hero Banner -->
     <div class="recipe-detail-hero">
@@ -200,7 +200,7 @@ else
                         <button type="button" class="btn-secondary-custom" style="width: 100%; justify-content: center;" @onclick="AddToShoppingList">
                             🛒 Lägg till i inköpslista (@currentServings @recipe.ServingsUnit)
                         </button>
-                        <ContextualFeedback State="shoppingFeedback" CssClass="recipe-shopping-feedback" />
+                        <ContextualFeedback State="shoppingFeedback" Floating="@shoppingFeedback.IsSuccess" CssClass="recipe-shopping-feedback" />
                     </div>
                 }
             </div>
@@ -297,11 +297,19 @@ else
             if (Saved)
             {
                 acknowledgedBannerRecipeId = recipe.Id;
+                if (shoppingFeedback.IsSuccess)
+                {
+                    shoppingFeedback.Clear();
+                }
                 actionFeedback.ShowSuccess($"Receptet '{recipe.Title}' har sparats i din receptbank och är redo att användas.", "Receptet har sparats!");
             }
             else if (Duplicated)
             {
                 acknowledgedBannerRecipeId = recipe.Id;
+                if (shoppingFeedback.IsSuccess)
+                {
+                    shoppingFeedback.Clear();
+                }
                 actionFeedback.ShowSuccess($"Receptet har duplicerats som '{recipe.Title}'.", "Receptet har duplicerats!");
             }
         }
@@ -337,6 +345,10 @@ else
         try
         {
             var count = await ShoppingListService.AddRecipeIngredientsAsync(recipe.Id, currentServings);
+            if (actionFeedback.IsSuccess)
+            {
+                actionFeedback.Clear();
+            }
             shoppingFeedback.ShowSuccess($"{count} ingredienser lades till i inköpslistan.");
         }
         catch (Exception ex)

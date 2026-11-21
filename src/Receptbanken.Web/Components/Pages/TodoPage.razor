@@ -38,7 +38,7 @@
         </div>
     </div>
 
-    <ContextualFeedback State="feedback" CssClass="todo-feedback" />
+    <ContextualFeedback State="feedback" Floating="@feedback.IsSuccess" CssClass="todo-feedback" />
 
     @if (showCreateListForm)
     {

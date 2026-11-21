@@ -117,12 +117,12 @@ public class ContextualFeedbackComponentTests : TestContext
     private sealed class FakeBrowserFile : IBrowserFile
     {
         private readonly byte[] _bytes;
-        public FakeBrowserFile(string name, string contentType, byte[] bytes)
+        public FakeBrowserFile(string name, string contentType, byte[] bytes, long? sizeOverride = null)
         {
             Name = name;
             ContentType = contentType;
             _bytes = bytes;
-            Size = bytes.Length;
+            Size = sizeOverride ?? bytes.Length;
         }
 
         public string Name { get; }
@@ -342,8 +342,10 @@ public class ContextualFeedbackComponentTests : TestContext
         {
             // Exactly ONE confirmation banner on the page (top), and NO global AppNotificationService banner
             cut.FindAll(".weekly-feedback-banner").Should().ContainSingle();
-            cut.Find(".weekly-feedback-banner").ClassList.Should().NotContain("weekly-feedback-bottom");
-            cut.Find(".weekly-feedback-banner").TextContent.Should().Contain("är nu spikad!");
+            var topBanner = cut.Find(".weekly-feedback-banner");
+            topBanner.ClassList.Should().Contain("rb-feedback-floating");
+            topBanner.ClassList.Should().NotContain("weekly-feedback-bottom");
+            topBanner.TextContent.Should().Contain("är nu spikad!");
             notifService.HasNotification.Should().BeFalse();
         });
 
@@ -361,6 +363,7 @@ public class ContextualFeedbackComponentTests : TestContext
         {
             cut.FindAll(".weekly-feedback-banner").Should().ContainSingle();
             var bottomBanner = cut.Find(".weekly-feedback-banner.weekly-feedback-bottom");
+            bottomBanner.ClassList.Should().Contain("rb-feedback-floating");
             bottomBanner.TextContent.Should().Contain("Ändringarna i veckomenyn för vecka 45 har sparats!");
             notifService.HasNotification.Should().BeFalse();
         });
@@ -409,7 +412,8 @@ public class ContextualFeedbackComponentTests : TestContext
             cut.Find(".weekly-day-card[data-day-index='0'] .weekly-day-recipe-title").TextContent.Should().Contain("Enda rätten");
         });
 
-        // Close the initial generation summary warning so we can verify reroll doesn't create a top banner
+        // Partial generation warning must remain inline (not floating), then close it so we can verify reroll doesn't create a top banner
+        cut.Find(".weekly-feedback-banner.rb-feedback-warning").ClassList.Should().NotContain("rb-feedback-floating");
         cut.Find(".weekly-feedback-banner .weekly-feedback-close").Click();
         cut.FindAll(".weekly-feedback-banner").Should().BeEmpty();
 
@@ -495,8 +499,9 @@ public class ContextualFeedbackComponentTests : TestContext
             fieldErrors.ElementAt(0).TextContent.Should().Contain("Ange en titel för receptet.");
             fieldErrors.ElementAt(1).TextContent.Should().Contain("Antal portioner måste vara minst 1.");
 
-            // Contextual error banner is shown at the bottom save bar
+            // Contextual error banner is shown inline at the bottom save bar
             var bottomBanner = cut.Find(".recipe-save-feedback-bottom.rb-feedback-error");
+            bottomBanner.ClassList.Should().NotContain("rb-feedback-floating");
             bottomBanner.GetAttribute("role").Should().Be("alert");
             bottomBanner.TextContent.Should().Contain("Ange en titel för receptet.");
             bottomBanner.TextContent.Should().Contain("Antal portioner måste vara minst 1.");
@@ -557,6 +562,7 @@ public class ContextualFeedbackComponentTests : TestContext
         cut.WaitForAssertion(() =>
         {
             var feedback = cut.Find(".recipe-shopping-feedback.rb-feedback-success");
+            feedback.ClassList.Should().Contain("rb-feedback-floating");
             feedback.GetAttribute("role").Should().Be("status");
             feedback.TextContent.Should().Contain("2 ingredienser lades till i inköpslistan.");
         });
@@ -585,6 +591,7 @@ public class ContextualFeedbackComponentTests : TestContext
         listCut.WaitForAssertion(() =>
         {
             var banner = listCut.Find(".home-feedback.rb-feedback-success");
+            banner.ClassList.Should().Contain("rb-feedback-floating");
             banner.TextContent.Should().Contain("Receptet har raderats.");
         });
     }
@@ -807,7 +814,9 @@ public class ContextualFeedbackComponentTests : TestContext
         importCut.WaitForAssertion(() =>
         {
             importCut.Find(".field-validation-error").TextContent.Should().Be("Antal portioner måste vara minst 1.");
-            importCut.Find(".import-save-feedback.rb-feedback-error").TextContent.Should().Contain("Antal portioner måste vara minst 1.");
+            var errorBanner = importCut.Find(".import-save-feedback.rb-feedback-error");
+            errorBanner.ClassList.Should().NotContain("rb-feedback-floating");
+            errorBanner.TextContent.Should().Contain("Antal portioner måste vara minst 1.");
         });
 
         // 3. Direct service-level guard
@@ -950,6 +959,163 @@ public class ContextualFeedbackComponentTests : TestContext
         var dialogText = cut.Find(".modal-dialog-custom").TextContent;
         dialogText.Should().Contain("ersättas helt");
         dialogText.Should().Contain("recept, ingredienser, kategorier, bilder, inköpslistan, att göra-listor, veckomenyer, familjemedlemmar samt familjekalendern inklusive återkommande händelser");
+    }
+
+    [Fact]
+    public async Task RecipeDetail_QueryStringSuccessAndShoppingList_ShouldFloatAndPreventOverlap()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var imageStorage = new MockImageStorageService();
+        var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
+        var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
+        var servingCalc = new ServingCalculator();
+        var shoppingListService = new ShoppingListService(dbFactory, new ShoppingListAggregator(servingCalc), new SwedishIngredientParser());
+
+        var recipe = await recipeService.CreateRecipeAsync(new Recipe
+        {
+            Title = "Pannbiff",
+            Servings = 4,
+            ServingsUnit = "portioner",
+            Ingredients =
+            [
+                new Ingredient { Name = "Köttfärs", Quantity = 500, Unit = "g", RawText = "500 g Köttfärs" }
+            ],
+            Instructions = [new InstructionStep { StepNumber = 1, InstructionText = "Stek i panna." }]
+        });
+
+        Services.AddFluentUIComponents();
+        Services.AddSingleton<IImageStorageService>(imageStorage);
+        Services.AddSingleton(recipeService);
+        Services.AddSingleton(categoryService);
+        Services.AddSingleton(shoppingListService);
+        Services.AddSingleton(servingCalc);
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var nav = Services.GetRequiredService<NavigationManager>();
+        nav.NavigateTo($"/recept/{recipe.Id}?saved=true");
+
+        var cut = RenderComponent<RecipeDetail>(p => p
+            .Add(x => x.Id, recipe.Id));
+
+        cut.WaitForAssertion(() =>
+        {
+            var actionToast = cut.Find(".recipe-detail-feedback.rb-feedback-success");
+            actionToast.ClassList.Should().Contain("rb-feedback-floating");
+            actionToast.TextContent.Should().Contain("Pannbiff");
+            cut.FindAll(".rb-feedback-floating").Should().ContainSingle();
+        });
+
+        // Adding to shopping list must show shopping toast and clear actionFeedback so floating toasts never overlap
+        var addShoppingBtn = cut.FindAll("button").First(b => b.TextContent.Contains("Lägg till i inköpslista"));
+        addShoppingBtn.Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var shoppingToast = cut.Find(".recipe-shopping-feedback.rb-feedback-success");
+            shoppingToast.ClassList.Should().Contain("rb-feedback-floating");
+            shoppingToast.TextContent.Should().Contain("1 ingredienser lades till i inköpslistan.");
+            cut.FindAll(".recipe-detail-feedback").Should().BeEmpty();
+            cut.FindAll(".rb-feedback-floating").Should().ContainSingle();
+        });
+    }
+
+    [Fact]
+    public async Task ImportPlaceholder_DiscardAndImageUpload_ShouldFloatSuccess_WhileWarningsAndErrorsStayInline()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var imageStorage = new MockImageStorageService();
+        var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
+        var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
+        var parser = new SwedishIngredientParser();
+        var importer = new WebRecipeImporter(
+            new HttpClient(),
+            new JsonLdRecipeExtractor(parser),
+            new HtmlFallbackExtractor(parser),
+            imageStorage,
+            NullLogger<WebRecipeImporter>.Instance);
+
+        Services.AddFluentUIComponents();
+        Services.AddSingleton<IRecipeImporter>(importer);
+        Services.AddSingleton<IImageStorageService>(imageStorage);
+        Services.AddSingleton(recipeService);
+        Services.AddSingleton(categoryService);
+        JSInterop.Mode = JSRuntimeMode.Loose;
+
+        var cut = RenderComponent<ImportPlaceholder>();
+
+        // 1. Parse JSON-LD and discard draft -> discard success toast is floating
+        cut.Find("#jsonld-toggle").Click();
+        cut.Find("#jsonld-input").Input(IcaRecipeFixtures.ConsoleArrayJson);
+        cut.Find("#parse-jsonld-btn").Click();
+        cut.WaitForAssertion(() => cut.FindAll("#import-servings").Should().ContainSingle());
+
+        cut.FindAll("button").First(b => b.TextContent.Contains("Förkasta utkast")).Click();
+        cut.WaitForAssertion(() =>
+        {
+            var discardToast = cut.Find(".import-discard-feedback.rb-feedback-success");
+            discardToast.ClassList.Should().Contain("rb-feedback-floating");
+            discardToast.TextContent.Should().Contain("Utkastet förkastades");
+        });
+
+        // 2. Re-parse noisy text recipe -> quality warning remains inline
+        cut.Find("#recipe-text-toggle").Click();
+        cut.Find("#recipe-text-input").Input(NiiinisRecipeFixtures.NoisyBulkPageWithManyItems);
+        cut.Find("#parse-recipe-text-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var warning = cut.Find(".import-quality-warning.rb-feedback-warning");
+            warning.ClassList.Should().NotContain("rb-feedback-floating");
+        });
+
+        // 3. Oversized image upload -> error remains inline
+        var inputFile = cut.FindComponent<InputFile>();
+        var invalidFile = new FakeBrowserFile("huge.jpg", "image/jpeg", [1, 2, 3], 10 * 1024 * 1024 + 1);
+        await cut.InvokeAsync(() => inputFile.Instance.OnChange.InvokeAsync(new InputFileChangeEventArgs([invalidFile])));
+
+        cut.WaitForAssertion(() =>
+        {
+            var uploadError = cut.Find(".image-upload-feedback.rb-feedback-error");
+            uploadError.ClassList.Should().NotContain("rb-feedback-floating");
+        });
+
+        // 4. Valid image upload -> success toast is floating and only one floating toast is active
+        inputFile = cut.FindComponent<InputFile>();
+        var validFile = new FakeBrowserFile("good.jpg", "image/jpeg", [1, 2, 3]);
+        await cut.InvokeAsync(() => inputFile.Instance.OnChange.InvokeAsync(new InputFileChangeEventArgs([validFile])));
+
+        cut.WaitForAssertion(() =>
+        {
+            var uploadSuccess = cut.Find(".image-upload-feedback.rb-feedback-success");
+            uploadSuccess.ClassList.Should().Contain("rb-feedback-floating");
+            uploadSuccess.TextContent.Should().Contain("Bilden har laddats upp och sparats!");
+            cut.FindAll(".rb-feedback-floating").Should().ContainSingle();
+        });
+    }
+
+    [Fact]
+    public void AppCss_FloatingToastRules_ShouldPositionAtBottomCenteredAndOpaque_WithoutObsoleteTopOffsetsOrTranslucentOverrides()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var appCssPath = Path.Combine(repoRoot, "src", "Receptbanken.Web", "wwwroot", "app.css");
+        File.Exists(appCssPath).Should().BeTrue($"app.css should exist at {appCssPath}");
+
+        var css = File.ReadAllText(appCssPath);
+
+        // Must not contain obsolete top offsets (104px / 116px) or conflicting translucent .weekly-feedback-banner.success override
+        css.Should().NotContain("104px");
+        css.Should().NotContain("116px");
+        css.Should().NotContain(".weekly-feedback-banner.success");
+
+        // Base floating toast rule: bottom-positioned, centered via left/right 0 + margin 0 auto, max-width 420px, opaque background
+        css.Should().Contain("bottom: calc(20px + env(safe-area-inset-bottom, 0px));");
+        css.Should().Contain("width: min(420px, calc(100vw - 32px));");
+        css.Should().Contain("max-width: min(420px, calc(100vw - 32px));");
+        css.Should().Contain("margin: 0 auto;");
+        css.Should().Contain("background-image: none;");
+
+        // Mobile floating toast rule: bottom-positioned with 12px side margins and width: auto
+        css.Should().Contain("bottom: calc(12px + env(safe-area-inset-bottom, 0px));");
+        css.Should().Contain("max-width: min(420px, calc(100vw - 24px));");
     }
 }
 
