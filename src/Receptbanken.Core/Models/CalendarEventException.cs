@@ -40,6 +40,14 @@ public class CalendarEventException
     /// </summary>
     public bool OverrideReminderCleared { get; set; }
 
+    /// <summary>
+    /// True when the participant selection was explicitly overridden for this single occurrence,
+    /// distinguishing inherited series participants (false) from an explicit selection including zero participants (true).
+    /// </summary>
+    public bool OverrideParticipants { get; set; }
+
+    public List<CalendarEventExceptionParticipant> Participants { get; set; } = new();
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

@@ -293,6 +293,7 @@ public class SettingsPageTests : TestContext
         Services.AddSingleton<ILocalDateProvider>(new StubLocalDateProvider(new DateOnly(2026, 11, 18)));
         Services.AddSingleton(calendarNotifier);
         Services.AddSingleton(calendarService);
+        Services.AddSingleton(new FamilyMemberService(dbFactory, new FamilyMemberNotifier(), calendarNotifier: calendarNotifier));
         Services.AddSingleton(weeklyMenuService);
         JSInterop.Mode = JSRuntimeMode.Loose;
 

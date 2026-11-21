@@ -1,7 +1,10 @@
 @page "/recept/{id:int}"
+@implements IDisposable
+@using Receptbanken.Core.Services
 @inject RecipeService RecipeService
 @inject ShoppingListService ShoppingListService
 @inject ServingCalculator ServingCalculator
+@inject IServiceProvider ServiceProvider
 @inject NavigationManager Navigation
 @inject ILogger<RecipeDetail> Logger
 
@@ -61,7 +64,11 @@ else
                 }
             </div>
 
-            <div style="display: flex; gap: 10px;">
+            <div class="recipe-detail-hero-actions">
+                <RecipeRatingBadge Summary="ratingSummary"
+                                   RecipeTitle="@recipe.Title"
+                                   CssClass="recipe-detail-hero-rating-badge"
+                                   OnClick="@(() => showRatingModal = true)" />
                 <button type="button" class="btn-secondary-custom" @onclick="ToggleFavorite" title="Favorit">
                     @if (recipe.IsFavorite)
                     {
@@ -132,6 +139,12 @@ else
                    CancelText="Avbryt"
                    OnConfirm="ConfirmDeleteRecipe"
                    OnCancel="@(() => showDeleteConfirm = false)" />
+
+    <RecipeRatingModal IsVisible="showRatingModal"
+                       RecipeId="recipe.Id"
+                       RecipeTitle="@recipe.Title"
+                       OnClose="@(() => showRatingModal = false)"
+                       OnRatingChanged="HandleRatingChanged" />
 
     <!-- Main Content Grid -->
     <div class="recipe-detail-grid">
@@ -271,10 +284,23 @@ else
     private HashSet<int> checkedIngredients = new();
     private bool isLoading = true;
     private bool showDeleteConfirm = false;
+    private bool showRatingModal = false;
     private bool imageLoadFailed = false;
+    private bool _isDisposed;
+    private RecipeRatingSummary ratingSummary = RecipeRatingSummary.Empty;
+    private RecipeRatingNotifier? _ratingNotifier;
 
     private readonly FeedbackState actionFeedback = new();
     private readonly FeedbackState shoppingFeedback = new();
+
+    protected override void OnInitialized()
+    {
+        _ratingNotifier = ServiceProvider.GetService<RecipeRatingNotifier>();
+        if (_ratingNotifier != null)
+        {
+            _ratingNotifier.OnChanged += HandleRatingsChanged;
+        }
+    }
 
     private void HandleImageError()
     {
@@ -324,8 +350,52 @@ else
             currentServings = recipe.Servings;
             checkedIngredients.Clear();
             imageLoadFailed = false;
+            ratingSummary = RecipeRatingSummary.FromRatings(recipe.Ratings);
+        }
+        else
+        {
+            ratingSummary = RecipeRatingSummary.Empty;
         }
         isLoading = false;
+    }
+
+    private void HandleRatingChanged(RecipeRatingSummary updatedSummary)
+    {
+        ratingSummary = updatedSummary;
+    }
+
+    private void HandleRatingsChanged(long _version)
+    {
+        if (_isDisposed || recipe == null)
+        {
+            return;
+        }
+
+        var ratingService = ServiceProvider.GetService<RecipeRatingService>();
+        if (ratingService == null)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed || recipe == null)
+            {
+                return;
+            }
+
+            ratingSummary = await ratingService.GetSummaryAsync(recipe.Id);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        _isDisposed = true;
+        if (_ratingNotifier != null)
+        {
+            _ratingNotifier.OnChanged -= HandleRatingsChanged;
+        }
     }
 
     private void HandleServingsChanged(int newServings)

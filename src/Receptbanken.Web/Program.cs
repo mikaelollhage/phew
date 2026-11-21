@@ -79,6 +79,7 @@ builder.Services.AddSingleton<ShoppingListNotifier>();
 builder.Services.AddSingleton<CalendarNotifier>();
 builder.Services.AddSingleton<TodoNotifier>();
 builder.Services.AddSingleton<FamilyMemberNotifier>();
+builder.Services.AddSingleton<RecipeRatingNotifier>();
 builder.Services.AddSingleton<IRandomProvider, SystemRandomProvider>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PantryIngredientMatcher>();
@@ -92,6 +93,7 @@ builder.Services.AddScoped<WeeklyMenuService>();
 builder.Services.AddScoped<CalendarService>();
 builder.Services.AddScoped<TodoService>();
 builder.Services.AddScoped<FamilyMemberService>();
+builder.Services.AddScoped<RecipeRatingService>();
 builder.Services.AddScoped<IBackupService, ZipBackupService>();
 builder.Services.AddScoped<AppNotificationService>();
 

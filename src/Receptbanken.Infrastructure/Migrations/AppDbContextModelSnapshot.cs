@@ -133,6 +133,11 @@ namespace Receptbanken.Infrastructure.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("OverrideParticipants")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("OverrideReminderCleared")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
@@ -161,6 +166,38 @@ namespace Receptbanken.Infrastructure.Migrations
                         .HasDatabaseName("IX_CalendarEventExceptions_CalendarEventId_OriginalDate");
 
                     b.ToTable("CalendarEventExceptions");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.CalendarEventExceptionParticipant", b =>
+                {
+                    b.Property<int>("CalendarEventExceptionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FamilyMemberId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("CalendarEventExceptionId", "FamilyMemberId");
+
+                    b.HasIndex("FamilyMemberId")
+                        .HasDatabaseName("IX_CalendarEventExceptionParticipants_FamilyMemberId");
+
+                    b.ToTable("CalendarEventExceptionParticipants");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.CalendarEventParticipant", b =>
+                {
+                    b.Property<int>("CalendarEventId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FamilyMemberId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("CalendarEventId", "FamilyMemberId");
+
+                    b.HasIndex("FamilyMemberId")
+                        .HasDatabaseName("IX_CalendarEventParticipants_FamilyMemberId");
+
+                    b.ToTable("CalendarEventParticipants");
                 });
 
             modelBuilder.Entity("Receptbanken.Core.Models.CalendarReminderDelivery", b =>
@@ -534,6 +571,42 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.ToTable("RecipeCategories");
                 });
 
+            modelBuilder.Entity("Receptbanken.Core.Models.RecipeRating", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("FamilyMemberId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("RecipeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Stars")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("UpdatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FamilyMemberId")
+                        .HasDatabaseName("IX_RecipeRatings_FamilyMemberId");
+
+                    b.HasIndex("RecipeId", "FamilyMemberId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_RecipeRatings_RecipeId_FamilyMemberId");
+
+                    b.ToTable("RecipeRatings", t =>
+                        {
+                            t.HasCheckConstraint("CK_RecipeRatings_Stars", "Stars >= 1 AND Stars <= 5");
+                        });
+                });
+
             modelBuilder.Entity("Receptbanken.Core.Models.ShoppingListItem", b =>
                 {
                     b.Property<int>("Id")
@@ -848,6 +921,44 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.Navigation("CalendarEvent");
                 });
 
+            modelBuilder.Entity("Receptbanken.Core.Models.CalendarEventExceptionParticipant", b =>
+                {
+                    b.HasOne("Receptbanken.Core.Models.CalendarEventException", "CalendarEventException")
+                        .WithMany("Participants")
+                        .HasForeignKey("CalendarEventExceptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Receptbanken.Core.Models.FamilyMember", "FamilyMember")
+                        .WithMany()
+                        .HasForeignKey("FamilyMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CalendarEventException");
+
+                    b.Navigation("FamilyMember");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.CalendarEventParticipant", b =>
+                {
+                    b.HasOne("Receptbanken.Core.Models.CalendarEvent", "CalendarEvent")
+                        .WithMany("Participants")
+                        .HasForeignKey("CalendarEventId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Receptbanken.Core.Models.FamilyMember", "FamilyMember")
+                        .WithMany()
+                        .HasForeignKey("FamilyMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("CalendarEvent");
+
+                    b.Navigation("FamilyMember");
+                });
+
             modelBuilder.Entity("Receptbanken.Core.Models.CalendarReminderDelivery", b =>
                 {
                     b.HasOne("Receptbanken.Core.Models.CalendarEvent", "CalendarEvent")
@@ -904,6 +1015,25 @@ namespace Receptbanken.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Category");
+
+                    b.Navigation("Recipe");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.RecipeRating", b =>
+                {
+                    b.HasOne("Receptbanken.Core.Models.FamilyMember", "FamilyMember")
+                        .WithMany()
+                        .HasForeignKey("FamilyMemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Receptbanken.Core.Models.Recipe", "Recipe")
+                        .WithMany("Ratings")
+                        .HasForeignKey("RecipeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("FamilyMember");
 
                     b.Navigation("Recipe");
                 });
@@ -991,6 +1121,13 @@ namespace Receptbanken.Infrastructure.Migrations
             modelBuilder.Entity("Receptbanken.Core.Models.CalendarEvent", b =>
                 {
                     b.Navigation("Exceptions");
+
+                    b.Navigation("Participants");
+                });
+
+            modelBuilder.Entity("Receptbanken.Core.Models.CalendarEventException", b =>
+                {
+                    b.Navigation("Participants");
                 });
 
             modelBuilder.Entity("Receptbanken.Core.Models.Category", b =>
@@ -1003,6 +1140,8 @@ namespace Receptbanken.Infrastructure.Migrations
                     b.Navigation("Ingredients");
 
                     b.Navigation("Instructions");
+
+                    b.Navigation("Ratings");
 
                     b.Navigation("RecipeCategories");
                 });

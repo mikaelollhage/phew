@@ -147,13 +147,33 @@
                     @if (recipe.TotalTimeMinutes.HasValue)
                     {
                         <span class="weekly-day-meta-item">@recipe.TotalTimeMinutes minuter</span>
-                        <span class="weekly-day-meta-sep">·</span>
+                        <span class="weekly-day-meta-sep" aria-hidden="true">·</span>
                     }
                     <div class="weekly-day-meta-item weekly-day-servings-control">
                         <ServingAdjuster CurrentServings="servings"
                                          Unit="@recipe.ServingsUnit"
                                          OnServingsChanged="HandleServingsChanged" />
                     </div>
+                    @{
+                        var effectiveRatingSummary = RatingSummary ?? RecipeRatingSummary.FromRatings(recipe.Ratings);
+                    }
+                    <span class="weekly-day-meta-sep" aria-hidden="true">·</span>
+                    @if (effectiveRatingSummary.HasRatings)
+                    {
+                        <span class="weekly-day-meta-item weekly-day-rating is-rated"
+                              aria-label="@($"Betyg {effectiveRatingSummary.FormatAverageSwedish()} av 5 ({effectiveRatingSummary.FormatVoteCountSwedish()})")">
+                            <span class="weekly-day-rating-star is-filled" aria-hidden="true">★</span>
+                            <span>@effectiveRatingSummary.FormatAverageSwedish() (@effectiveRatingSummary.FormatVoteCountSwedish())</span>
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="weekly-day-meta-item weekly-day-rating is-unrated"
+                              aria-label="Inga betyg ännu">
+                            <span class="weekly-day-rating-star is-empty" aria-hidden="true">☆</span>
+                            <span>Inga betyg</span>
+                        </span>
+                    }
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(Day.StatusMessage))
@@ -243,6 +263,7 @@
     [Parameter] public IReadOnlyList<Recipe> AllRecipes { get; set; } = Array.Empty<Recipe>();
     [Parameter] public bool IsToday { get; set; }
     [Parameter] public bool IsReorderMenuOpen { get; set; }
+    [Parameter] public RecipeRatingSummary? RatingSummary { get; set; }
 
     [Parameter] public EventCallback<int> OnToggleReorderMenu { get; set; }
     [Parameter] public EventCallback<int> OnMoveUp { get; set; }

@@ -25,7 +25,10 @@ else if (mealPlan != null)
 {
     @if (mealPlan.TodayMeal.HasRecipe)
     {
-        <TodaysDinnerCard Meal="mealPlan.TodayMeal" ShowDiscreetLink="false" />
+        <TodaysDinnerCard Meal="mealPlan.TodayMeal"
+                          ShowDiscreetLink="false"
+                          SummaryOverride="todayRatingSummary"
+                          OnRateRecipe="OpenRatingModal" />
     }
     else if (mealPlan.TodayMeal.HasSavedMenu)
     {
@@ -139,6 +142,15 @@ else if (mealPlan != null)
     </section>
 }
 
+@if (ratingTargetRecipe != null)
+{
+    <RecipeRatingModal IsVisible="showRatingModal"
+                       RecipeId="ratingTargetRecipe.Id"
+                       RecipeTitle="@ratingTargetRecipe.Title"
+                       OnClose="CloseRatingModal"
+                       OnRatingChanged="HandleRatingChanged" />
+}
+
 @code {
     private static readonly CultureInfo SwedishCulture = CultureInfo.GetCultureInfo("sv-SE");
 
@@ -151,7 +163,12 @@ else if (mealPlan != null)
     private bool _isDisposed;
     private long _lastCalendarVersion;
     private CalendarService? _calendarService;
+    private FamilyMemberNotifier? _familyMemberNotifier;
+    private RecipeRatingNotifier? _recipeRatingNotifier;
     private CancellationTokenSource? _midnightWatcherCts;
+    private Recipe? ratingTargetRecipe;
+    private bool showRatingModal;
+    private RecipeRatingSummary? todayRatingSummary;
 
     protected override async Task OnInitializedAsync()
     {
@@ -163,6 +180,18 @@ else if (mealPlan != null)
         if (_calendarService != null)
         {
             _calendarService.Notifier.OnChanged += HandleCalendarChanged;
+        }
+
+        _familyMemberNotifier = ServiceProvider.GetService<FamilyMemberNotifier>();
+        if (_familyMemberNotifier != null)
+        {
+            _familyMemberNotifier.OnChanged += HandleFamilyMembersChanged;
+        }
+
+        _recipeRatingNotifier = ServiceProvider.GetService<RecipeRatingNotifier>();
+        if (_recipeRatingNotifier != null)
+        {
+            _recipeRatingNotifier.OnChanged += HandleRecipeRatingsChanged;
         }
 
         await LoadDataAsync();
@@ -206,6 +235,9 @@ else if (mealPlan != null)
         if (weeklyMenuService != null)
         {
             mealPlan = await weeklyMenuService.GetHomeMealPlanAsync(currentLocalToday);
+            todayRatingSummary = mealPlan.TodayMeal.Recipe != null
+                ? RecipeRatingSummary.FromRatings(mealPlan.TodayMeal.Recipe.Ratings)
+                : null;
         }
 
         await LoadCalendarDataAsync();
@@ -241,6 +273,28 @@ else if (mealPlan != null)
         _ = InvokeAsync(async () =>
         {
             if (_isDisposed || newVersion <= _lastCalendarVersion)
+                return;
+
+            try
+            {
+                await LoadCalendarDataAsync();
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore if component is disposing
+            }
+        });
+    }
+
+    private void HandleFamilyMembersChanged(long _version)
+    {
+        if (_isDisposed || _calendarService == null)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
                 return;
 
             try
@@ -291,6 +345,54 @@ else if (mealPlan != null)
         }
     }
 
+    private void OpenRatingModal(Recipe recipe)
+    {
+        ratingTargetRecipe = recipe;
+        showRatingModal = true;
+    }
+
+    private void CloseRatingModal()
+    {
+        showRatingModal = false;
+    }
+
+    private void HandleRatingChanged(RecipeRatingSummary updatedSummary)
+    {
+        if (mealPlan?.TodayMeal.Recipe != null &&
+            ratingTargetRecipe != null &&
+            mealPlan.TodayMeal.Recipe.Id == ratingTargetRecipe.Id)
+        {
+            todayRatingSummary = updatedSummary;
+        }
+    }
+
+    private void HandleRecipeRatingsChanged(long _version)
+    {
+        if (_isDisposed || mealPlan?.TodayMeal.Recipe == null)
+            return;
+
+        var ratingService = ServiceProvider.GetService<RecipeRatingService>();
+        if (ratingService == null)
+            return;
+
+        var todayRecipeId = mealPlan.TodayMeal.Recipe.Id;
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            try
+            {
+                todayRatingSummary = await ratingService.GetSummaryAsync(todayRecipeId);
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+                // Ignore if component is disposing
+            }
+        });
+    }
+
     public void Dispose()
     {
         if (_isDisposed)
@@ -300,6 +402,14 @@ else if (mealPlan != null)
         if (_calendarService != null)
         {
             _calendarService.Notifier.OnChanged -= HandleCalendarChanged;
+        }
+        if (_familyMemberNotifier != null)
+        {
+            _familyMemberNotifier.OnChanged -= HandleFamilyMembersChanged;
+        }
+        if (_recipeRatingNotifier != null)
+        {
+            _recipeRatingNotifier.OnChanged -= HandleRecipeRatingsChanged;
         }
 
         _midnightWatcherCts?.Cancel();

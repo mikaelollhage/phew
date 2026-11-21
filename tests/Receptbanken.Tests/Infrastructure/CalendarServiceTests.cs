@@ -11,12 +11,16 @@ public class CalendarServiceTests : IDisposable
 {
     private readonly TestDbContextFactory _dbFactory;
     private readonly CalendarNotifier _notifier;
+    private readonly FamilyMemberNotifier _familyMemberNotifier;
+    private readonly FamilyMemberService _familyMemberService;
     private readonly CalendarService _service;
 
     public CalendarServiceTests()
     {
         _dbFactory = new TestDbContextFactory();
         _notifier = new CalendarNotifier();
+        _familyMemberNotifier = new FamilyMemberNotifier();
+        _familyMemberService = new FamilyMemberService(_dbFactory, _familyMemberNotifier, calendarNotifier: _notifier);
         _service = new CalendarService(_dbFactory, _notifier, NullLogger<CalendarService>.Instance);
     }
 
@@ -28,6 +32,7 @@ public class CalendarServiceTests : IDisposable
     [Fact]
     public async Task CreateAndGetWeekOccurrences_OneTimeAndAllDayEvents_ShouldPersistAndNotify()
     {
+        var anna = await _familyMemberService.CreateAsync("Anna");
         long? notifiedVersion = null;
         _notifier.OnChanged += v => notifiedVersion = v;
 
@@ -40,7 +45,7 @@ public class CalendarServiceTests : IDisposable
             EndTime = new TimeOnly(11, 15),
             Location = "Vårdcentralen",
             Notes = "Ta med legitimation",
-            FamilyMembers = ["Anna"],
+            ParticipantMemberIds = [anna.Id],
             ReminderMinutesBefore = CalendarReminderOptions.Hour1
         });
 
@@ -73,6 +78,9 @@ public class CalendarServiceTests : IDisposable
     [Fact]
     public async Task SingleOccurrenceEditMoveAndDelete_ShouldOnlyAffectTargetedOccurrence()
     {
+        var erik = await _familyMemberService.CreateAsync("Erik");
+        var mikael = await _familyMemberService.CreateAsync("Mikael");
+
         var series = await _service.CreateEventAsync(new CalendarEventInput
         {
             Title = "Fotbollsträning",
@@ -81,7 +89,7 @@ public class CalendarServiceTests : IDisposable
             StartTime = new TimeOnly(18, 0),
             EndTime = new TimeOnly(19, 30),
             Location = "IP Skogen",
-            FamilyMembers = ["Erik"],
+            ParticipantMemberIds = [erik.Id],
             ReminderMinutesBefore = CalendarReminderOptions.Minutes30,
             RecurrenceIntervalWeeks = 1,
             RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday
@@ -100,7 +108,7 @@ public class CalendarServiceTests : IDisposable
                 EndTime = new TimeOnly(16, 0),
                 Location = "Bortaplan",
                 Notes = "Samling 13:15",
-                FamilyMembers = ["Erik", "Mikael"],
+                ParticipantMemberIds = [erik.Id, mikael.Id],
                 ReminderMinutesBefore = null
             });
 
@@ -180,39 +188,101 @@ public class CalendarServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task FamilyMembers_ShouldNormalizeAndReturnDistinctKnownNames()
+    public async Task Participants_ZeroOneMultiple_Rename_PermanentDelete_AndInvalidId_ShouldBehaveCorrectly()
     {
-        await _service.CreateEventAsync(new CalendarEventInput
+        var anna = await _familyMemberService.CreateAsync("Anna");
+        var erik = await _familyMemberService.CreateAsync("Erik");
+
+        // Zero participants
+        var evZero = await _service.CreateEventAsync(new CalendarEventInput
         {
-            Title = "Händelse 1",
+            Title = "Ingen deltagare",
             StartDate = new DateOnly(2026, 11, 10),
             IsAllDay = true,
-            FamilyMembers = ["  Anna ", "erik", "ANNA", "  "]
+            ParticipantMemberIds = []
         });
+
+        // Multiple participants (with duplicate ID in input)
+        var evMulti = await _service.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Flera deltagare",
+            StartDate = new DateOnly(2026, 11, 11),
+            IsAllDay = true,
+            ParticipantMemberIds = [anna.Id, erik.Id, anna.Id]
+        });
+
+        // Invalid participant ID should throw
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Ogiltig",
+            StartDate = new DateOnly(2026, 11, 12),
+            IsAllDay = true,
+            ParticipantMemberIds = [9999]
+        }));
+
+        var initial = await _service.GetWeekOccurrencesAsync(new DateOnly(2026, 11, 10));
+        initial.Single(o => o.CalendarEventId == evZero.Id).FamilyMembers.Should().BeEmpty();
+        initial.Single(o => o.CalendarEventId == evMulti.Id).FamilyMembers.Should().Equal("Anna", "Erik");
+        initial.Single(o => o.CalendarEventId == evMulti.Id).ParticipantMemberIds.Should().Equal(anna.Id, erik.Id);
+
+        // Rename Anna -> Annika without touching calendar events
+        await _familyMemberService.RenameAsync(anna.Id, "Annika");
+        var afterRename = await _service.GetWeekOccurrencesAsync(new DateOnly(2026, 11, 10));
+        afterRename.Single(o => o.CalendarEventId == evMulti.Id).FamilyMembers.Should().Equal("Annika", "Erik");
+
+        // Permanently delete Erik -> removes association, keeps event & Annika
+        await _familyMemberService.DeleteAsync(erik.Id);
+        var afterDelete = await _service.GetWeekOccurrencesAsync(new DateOnly(2026, 11, 10));
+        var multiOccurrence = afterDelete.Single(o => o.CalendarEventId == evMulti.Id);
+        multiOccurrence.FamilyMembers.Should().Equal("Annika");
+        multiOccurrence.ParticipantMemberIds.Should().Equal(anna.Id);
+    }
+
+    [Fact]
+    public async Task RecurringSeries_ParticipantInheritance_And_ExplicitZeroOverride_ShouldWork()
+    {
+        var anna = await _familyMemberService.CreateAsync("Anna");
+        var erik = await _familyMemberService.CreateAsync("Erik");
 
         var series = await _service.CreateEventAsync(new CalendarEventInput
         {
-            Title = "Händelse 2",
-            StartDate = new DateOnly(2026, 11, 11),
+            Title = "Veckomöte",
+            StartDate = new DateOnly(2026, 11, 9),
             IsAllDay = true,
-            FamilyMembers = ["Erik", "Mikael"],
+            ParticipantMemberIds = [anna.Id],
             RecurrenceIntervalWeeks = 1,
-            RecurrenceDaysOfWeekMask = IsoWeekdayMask.Wednesday
+            RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday
         });
 
+        // Override W47 (Nov 16) to explicitly have 0 participants
         await _service.UpdateSingleOccurrenceAsync(
             series.Id,
-            new DateOnly(2026, 11, 18),
+            new DateOnly(2026, 11, 16),
             new CalendarOccurrenceOverrideInput
             {
-                Title = "Händelse 2 special",
-                Date = new DateOnly(2026, 11, 18),
+                Title = "Veckomöte (ingen deltagare)",
+                Date = new DateOnly(2026, 11, 16),
                 IsAllDay = true,
-                FamilyMembers = ["Sofia", "anna"]
+                ParticipantMemberIds = []
             });
 
-        var known = await _service.GetKnownFamilyMembersAsync();
-        known.Should().Equal("Anna", "erik", "Mikael", "Sofia");
+        // Update series participants to [anna, erik] -> W46 and W48 inherit, W47 stays empty
+        await _service.UpdateEventAsync(series.Id, new CalendarEventInput
+        {
+            Title = "Veckomöte",
+            StartDate = new DateOnly(2026, 11, 9),
+            IsAllDay = true,
+            ParticipantMemberIds = [anna.Id, erik.Id],
+            RecurrenceIntervalWeeks = 1,
+            RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday
+        });
+
+        var occurrences = await _service.GetOccurrencesAsync(new DateOnly(2026, 11, 9), new DateOnly(2026, 11, 23));
+        occurrences.Should().HaveCount(3);
+        occurrences[0].FamilyMembers.Should().Equal("Anna", "Erik");
+        occurrences[1].FamilyMembers.Should().BeEmpty();
+        occurrences[1].ParticipantMemberIds.Should().BeEmpty();
+        occurrences[2].FamilyMembers.Should().Equal("Anna", "Erik");
     }
 
     [Fact]

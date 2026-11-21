@@ -35,6 +35,7 @@ public class ZipBackupService : IBackupService
     private readonly CalendarNotifier? _calendarNotifier;
     private readonly TodoNotifier? _todoNotifier;
     private readonly FamilyMemberNotifier? _familyMemberNotifier;
+    private readonly RecipeRatingNotifier? _recipeRatingNotifier;
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
@@ -51,7 +52,8 @@ public class ZipBackupService : IBackupService
         CalendarNotifier? calendarNotifier = null,
         TimeProvider? timeProvider = null,
         TodoNotifier? todoNotifier = null,
-        FamilyMemberNotifier? familyMemberNotifier = null)
+        FamilyMemberNotifier? familyMemberNotifier = null,
+        RecipeRatingNotifier? recipeRatingNotifier = null)
     {
         _dbFactory = dbFactory;
         _storageOptions = storageOptions.Value;
@@ -61,6 +63,7 @@ public class ZipBackupService : IBackupService
         _calendarNotifier = calendarNotifier;
         _todoNotifier = todoNotifier;
         _familyMemberNotifier = familyMemberNotifier;
+        _recipeRatingNotifier = recipeRatingNotifier;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -101,7 +104,12 @@ public class ZipBackupService : IBackupService
 
         var calendarEvents = await db.CalendarEvents
             .AsNoTracking()
+            .AsSplitQuery()
+            .Include(e => e.Participants)
+                .ThenInclude(p => p.FamilyMember)
             .Include(e => e.Exceptions.OrderBy(ex => ex.OriginalDate))
+                .ThenInclude(ex => ex.Participants)
+                    .ThenInclude(p => p.FamilyMember)
             .OrderBy(e => e.Id)
             .ToListAsync(cancellationToken);
 
@@ -120,7 +128,14 @@ public class ZipBackupService : IBackupService
             .ThenBy(m => m.Id)
             .ToListAsync(cancellationToken);
 
+        var recipeRatings = await db.RecipeRatings
+            .AsNoTracking()
+            .OrderBy(r => r.RecipeId)
+            .ThenBy(r => r.FamilyMemberId)
+            .ToListAsync(cancellationToken);
+
         var recipeTitleById = recipes.ToDictionary(r => r.Id, r => r.Title);
+        var familyMemberNameById = familyMembers.ToDictionary(m => m.Id, m => m.Name);
 
         var payload = new BackupDataPayload
         {
@@ -131,6 +146,7 @@ public class ZipBackupService : IBackupService
             }).ToList(),
             Recipes = recipes.Select(r => new BackupRecipeDto
             {
+                Id = r.Id,
                 Title = r.Title,
                 Description = r.Description,
                 Notes = r.Notes,
@@ -229,6 +245,13 @@ public class ZipBackupService : IBackupService
                 Location = e.Location,
                 Notes = e.Notes,
                 FamilyMembersCsv = e.FamilyMembersCsv,
+                ParticipantNames = e.Participants
+                    .Where(p => p.FamilyMember != null)
+                    .OrderBy(p => p.FamilyMember!.SortOrder)
+                    .ThenBy(p => p.FamilyMember!.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(p => p.FamilyMemberId)
+                    .Select(p => p.FamilyMember!.Name)
+                    .ToList(),
                 ReminderMinutesBefore = e.ReminderMinutesBefore,
                 RecurrenceIntervalWeeks = e.RecurrenceIntervalWeeks,
                 RecurrenceDaysOfWeekMask = e.RecurrenceDaysOfWeekMask,
@@ -249,6 +272,16 @@ public class ZipBackupService : IBackupService
                         OverrideLocation = ex.OverrideLocation,
                         OverrideNotes = ex.OverrideNotes,
                         OverrideFamilyMembersCsv = ex.OverrideFamilyMembersCsv,
+                        OverrideParticipants = ex.OverrideParticipants,
+                        ParticipantNames = ex.OverrideParticipants
+                            ? ex.Participants
+                                .Where(p => p.FamilyMember != null)
+                                .OrderBy(p => p.FamilyMember!.SortOrder)
+                                .ThenBy(p => p.FamilyMember!.Name, StringComparer.OrdinalIgnoreCase)
+                                .ThenBy(p => p.FamilyMemberId)
+                                .Select(p => p.FamilyMember!.Name)
+                                .ToList()
+                            : new List<string>(),
                         OverrideReminderMinutesBefore = ex.OverrideReminderMinutesBefore,
                         OverrideReminderCleared = ex.OverrideReminderCleared,
                         CreatedAt = ex.CreatedAt,
@@ -279,11 +312,22 @@ public class ZipBackupService : IBackupService
             }).ToList(),
             FamilyMembers = familyMembers.Select(m => new BackupFamilyMemberDto
             {
+                Id = m.Id,
                 Name = m.Name,
                 IsActive = m.IsActive,
                 SortOrder = m.SortOrder,
                 CreatedAt = m.CreatedAt,
                 UpdatedAt = m.UpdatedAt
+            }).ToList(),
+            RecipeRatings = recipeRatings.Select(rr => new BackupRecipeRatingDto
+            {
+                RecipeId = rr.RecipeId,
+                RecipeTitle = recipeTitleById.GetValueOrDefault(rr.RecipeId),
+                FamilyMemberId = rr.FamilyMemberId,
+                FamilyMemberName = familyMemberNameById.GetValueOrDefault(rr.FamilyMemberId),
+                Stars = rr.Stars,
+                CreatedAt = rr.CreatedAt,
+                UpdatedAt = rr.UpdatedAt
             }).ToList()
         };
 
@@ -504,6 +548,9 @@ public class ZipBackupService : IBackupService
 
                 if (replaceExisting)
                 {
+                    db.RecipeRatings.RemoveRange(await db.RecipeRatings.ToListAsync(cancellationToken));
+                    db.CalendarEventExceptionParticipants.RemoveRange(await db.CalendarEventExceptionParticipants.ToListAsync(cancellationToken));
+                    db.CalendarEventParticipants.RemoveRange(await db.CalendarEventParticipants.ToListAsync(cancellationToken));
                     db.FamilyMembers.RemoveRange(await db.FamilyMembers.ToListAsync(cancellationToken));
                     db.TodoItems.RemoveRange(await db.TodoItems.ToListAsync(cancellationToken));
                     db.TodoLists.RemoveRange(await db.TodoLists.ToListAsync(cancellationToken));
@@ -541,6 +588,7 @@ public class ZipBackupService : IBackupService
                 await db.SaveChangesAsync(cancellationToken);
 
                 // Restore Recipes
+                var restoredRecipesByOldId = new Dictionary<int, Recipe>();
                 foreach (var recDto in payload.Recipes)
                 {
                     var recipe = new Recipe
@@ -587,6 +635,10 @@ public class ZipBackupService : IBackupService
                     }
 
                     db.Recipes.Add(recipe);
+                    if (recDto.Id > 0)
+                    {
+                        restoredRecipesByOldId[recDto.Id] = recipe;
+                    }
                 }
 
                 // Restore Shopping List Items
@@ -699,10 +751,169 @@ public class ZipBackupService : IBackupService
                     await db.SaveChangesAsync(cancellationToken);
                 }
 
+                // Restore FamilyMembers before CalendarEvents so participant associations can resolve by name
+                var familyMembersToRestore = payload.FamilyMembers ?? [];
+                var restoredFamilyMembersCount = 0;
+                var restoredMembersByOldId = new Dictionary<int, FamilyMember>();
+                if (familyMembersToRestore.Count > 0)
+                {
+                    var seenMemberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    if (!replaceExisting)
+                    {
+                        var existingNames = await db.FamilyMembers
+                            .AsNoTracking()
+                            .Select(m => m.Name)
+                            .ToListAsync(cancellationToken);
+                        foreach (var existingName in existingNames)
+                        {
+                            seenMemberNames.Add(existingName);
+                        }
+                    }
+
+                    foreach (var memberDto in familyMembersToRestore)
+                    {
+                        var trimmedName = (memberDto.Name ?? string.Empty).Trim();
+                        if (string.IsNullOrWhiteSpace(trimmedName))
+                        {
+                            throw new InvalidOperationException("Ogiltig familjemedlem i säkerhetskopian: namn saknas.");
+                        }
+
+                        if (trimmedName.Length > FamilyMember.MaxNameLength)
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltig familjemedlem i säkerhetskopian: namnet \"{trimmedName}\" överskrider {FamilyMember.MaxNameLength} tecken.");
+                        }
+
+                        if (!seenMemberNames.Add(trimmedName))
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltig säkerhetskopia: duplicerad familjemedlem \"{trimmedName}\".");
+                        }
+
+                        var member = new FamilyMember
+                        {
+                            Name = trimmedName,
+                            IsActive = memberDto.IsActive,
+                            SortOrder = memberDto.SortOrder,
+                            CreatedAt = memberDto.CreatedAt,
+                            UpdatedAt = memberDto.UpdatedAt
+                        };
+                        db.FamilyMembers.Add(member);
+                        if (memberDto.Id > 0)
+                        {
+                            restoredMembersByOldId[memberDto.Id] = member;
+                        }
+                        restoredFamilyMembersCount++;
+                    }
+
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
+                // Restore RecipeRatings when present in backup (empty in legacy backups)
+                var recipeRatingsToRestore = payload.RecipeRatings ?? [];
+                if (recipeRatingsToRestore.Count > 0)
+                {
+                    await db.SaveChangesAsync(cancellationToken);
+
+                    var allRecipesList = await db.Recipes
+                        .AsNoTracking()
+                        .Select(r => new { r.Id, r.Title })
+                        .ToListAsync(cancellationToken);
+
+                    var allRecipesByTitle = allRecipesList
+                        .GroupBy(r => r.Title, StringComparer.OrdinalIgnoreCase)
+                        .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.OrdinalIgnoreCase);
+
+                    var allMemberIdByName = await db.FamilyMembers
+                        .AsNoTracking()
+                        .ToDictionaryAsync(m => m.Name, m => m.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
+                    var existingRatings = replaceExisting
+                        ? new Dictionary<(int RecipeId, int FamilyMemberId), RecipeRating>()
+                        : await db.RecipeRatings.ToDictionaryAsync(
+                            r => (r.RecipeId, r.FamilyMemberId),
+                            cancellationToken);
+
+                    var seenRatingKeys = new HashSet<(int RecipeId, int FamilyMemberId)>();
+
+                    foreach (var ratingDto in recipeRatingsToRestore)
+                    {
+                        if (ratingDto.Stars < RecipeRating.MinStars || ratingDto.Stars > RecipeRating.MaxStars)
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltigt receptbetyg i säkerhetskopian: stjärnvärde {ratingDto.Stars} måste vara mellan {RecipeRating.MinStars} och {RecipeRating.MaxStars}.");
+                        }
+
+                        int resolvedRecipeId;
+                        if (ratingDto.RecipeId > 0 && restoredRecipesByOldId.TryGetValue(ratingDto.RecipeId, out var mappedRecipe))
+                        {
+                            resolvedRecipeId = mappedRecipe.Id;
+                        }
+                        else if (ratingDto.RecipeId <= 0 &&
+                                 !string.IsNullOrWhiteSpace(ratingDto.RecipeTitle) &&
+                                 allRecipesByTitle.TryGetValue(ratingDto.RecipeTitle.Trim(), out var titleRecipeId))
+                        {
+                            resolvedRecipeId = titleRecipeId;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltigt receptbetyg i säkerhetskopian: receptet (ID {ratingDto.RecipeId}) kunde inte hittas.");
+                        }
+
+                        int resolvedMemberId;
+                        if (ratingDto.FamilyMemberId > 0 && restoredMembersByOldId.TryGetValue(ratingDto.FamilyMemberId, out var mappedMember))
+                        {
+                            resolvedMemberId = mappedMember.Id;
+                        }
+                        else if (ratingDto.FamilyMemberId <= 0 &&
+                                 !string.IsNullOrWhiteSpace(ratingDto.FamilyMemberName) &&
+                                 allMemberIdByName.TryGetValue(ratingDto.FamilyMemberName.Trim(), out var nameMemberId))
+                        {
+                            resolvedMemberId = nameMemberId;
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException(
+                                $"Ogiltigt receptbetyg i säkerhetskopian: familjemedlemmen (ID {ratingDto.FamilyMemberId}) kunde inte hittas.");
+                        }
+
+                        var key = (resolvedRecipeId, resolvedMemberId);
+                        if (!seenRatingKeys.Add(key))
+                        {
+                            throw new InvalidOperationException(
+                                "Ogiltig säkerhetskopia: duplicerat receptbetyg för samma recept och familjemedlem.");
+                        }
+
+                        if (existingRatings.TryGetValue(key, out var existingRating))
+                        {
+                            existingRating.Stars = ratingDto.Stars;
+                            existingRating.UpdatedAt = ratingDto.UpdatedAt;
+                        }
+                        else
+                        {
+                            db.RecipeRatings.Add(new RecipeRating
+                            {
+                                RecipeId = resolvedRecipeId,
+                                FamilyMemberId = resolvedMemberId,
+                                Stars = ratingDto.Stars,
+                                CreatedAt = ratingDto.CreatedAt,
+                                UpdatedAt = ratingDto.UpdatedAt
+                            });
+                        }
+                    }
+
+                    await db.SaveChangesAsync(cancellationToken);
+                }
+
                 // Restore Calendar Events and Exceptions when present in backup (empty in legacy backups)
                 var calendarEventsToRestore = payload.CalendarEvents ?? [];
                 if (calendarEventsToRestore.Count > 0)
                 {
+                    var memberIdByName = await db.FamilyMembers
+                        .AsNoTracking()
+                        .ToDictionaryAsync(m => m.Name, m => m.Id, StringComparer.OrdinalIgnoreCase, cancellationToken);
+
                     foreach (var calDto in calendarEventsToRestore)
                     {
                         var restoredEvent = new CalendarEvent
@@ -721,8 +932,29 @@ public class ZipBackupService : IBackupService
                             RecurrenceDaysOfWeekMask = calDto.RecurrenceDaysOfWeekMask,
                             RecurrenceEndDate = calDto.RecurrenceEndDate,
                             CreatedAt = calDto.CreatedAt,
-                            UpdatedAt = calDto.UpdatedAt,
-                            Exceptions = (calDto.Exceptions ?? []).Select(exDto => new CalendarEventException
+                            UpdatedAt = calDto.UpdatedAt
+                        };
+
+                        foreach (var participantName in (calDto.ParticipantNames ?? [])
+                            .Where(n => !string.IsNullOrWhiteSpace(n))
+                            .Select(n => n.Trim())
+                            .Distinct(StringComparer.OrdinalIgnoreCase))
+                        {
+                            if (!memberIdByName.TryGetValue(participantName, out var memberId))
+                            {
+                                throw new InvalidOperationException(
+                                    $"Ogiltig säkerhetskopia: kalenderhändelsen \"{calDto.Title}\" refererar till okänd familjemedlem \"{participantName}\".");
+                            }
+
+                            restoredEvent.Participants.Add(new CalendarEventParticipant
+                            {
+                                FamilyMemberId = memberId
+                            });
+                        }
+
+                        foreach (var exDto in calDto.Exceptions ?? [])
+                        {
+                            var restoredException = new CalendarEventException
                             {
                                 OriginalDate = exDto.OriginalDate,
                                 IsCancelled = exDto.IsCancelled,
@@ -737,12 +969,35 @@ public class ZipBackupService : IBackupService
                                     ? null
                                     : (CalendarFamilyMemberHelper.FormatCsv(
                                            CalendarFamilyMemberHelper.ParseCsv(exDto.OverrideFamilyMembersCsv)) ?? string.Empty),
+                                OverrideParticipants = exDto.OverrideParticipants,
                                 OverrideReminderMinutesBefore = exDto.OverrideReminderMinutesBefore,
                                 OverrideReminderCleared = exDto.OverrideReminderCleared,
                                 CreatedAt = exDto.CreatedAt,
                                 UpdatedAt = exDto.UpdatedAt
-                            }).ToList()
-                        };
+                            };
+
+                            if (exDto.OverrideParticipants)
+                            {
+                                foreach (var participantName in (exDto.ParticipantNames ?? [])
+                                    .Where(n => !string.IsNullOrWhiteSpace(n))
+                                    .Select(n => n.Trim())
+                                    .Distinct(StringComparer.OrdinalIgnoreCase))
+                                {
+                                    if (!memberIdByName.TryGetValue(participantName, out var memberId))
+                                    {
+                                        throw new InvalidOperationException(
+                                            $"Ogiltig säkerhetskopia: kalenderundantag för \"{calDto.Title}\" ({exDto.OriginalDate:yyyy-MM-dd}) refererar till okänd familjemedlem \"{participantName}\".");
+                                    }
+
+                                    restoredException.Participants.Add(new CalendarEventExceptionParticipant
+                                    {
+                                        FamilyMemberId = memberId
+                                    });
+                                }
+                            }
+
+                            restoredEvent.Exceptions.Add(restoredException);
+                        }
 
                         db.CalendarEvents.Add(restoredEvent);
                     }
@@ -779,58 +1034,6 @@ public class ZipBackupService : IBackupService
 
                         restoredTodoItemsCount += restoredList.Items.Count;
                         db.TodoLists.Add(restoredList);
-                    }
-
-                    await db.SaveChangesAsync(cancellationToken);
-                }
-
-                // Restore FamilyMembers when present in backup (empty in legacy backups)
-                var familyMembersToRestore = payload.FamilyMembers ?? [];
-                var restoredFamilyMembersCount = 0;
-                if (familyMembersToRestore.Count > 0)
-                {
-                    var seenMemberNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    if (!replaceExisting)
-                    {
-                        var existingNames = await db.FamilyMembers
-                            .AsNoTracking()
-                            .Select(m => m.Name)
-                            .ToListAsync(cancellationToken);
-                        foreach (var existingName in existingNames)
-                        {
-                            seenMemberNames.Add(existingName);
-                        }
-                    }
-
-                    foreach (var memberDto in familyMembersToRestore)
-                    {
-                        var trimmedName = (memberDto.Name ?? string.Empty).Trim();
-                        if (string.IsNullOrWhiteSpace(trimmedName))
-                        {
-                            throw new InvalidOperationException("Ogiltig familjemedlem i säkerhetskopian: namn saknas.");
-                        }
-
-                        if (trimmedName.Length > FamilyMember.MaxNameLength)
-                        {
-                            throw new InvalidOperationException(
-                                $"Ogiltig familjemedlem i säkerhetskopian: namnet \"{trimmedName}\" överskrider {FamilyMember.MaxNameLength} tecken.");
-                        }
-
-                        if (!seenMemberNames.Add(trimmedName))
-                        {
-                            throw new InvalidOperationException(
-                                $"Ogiltig säkerhetskopia: duplicerad familjemedlem \"{trimmedName}\".");
-                        }
-
-                        db.FamilyMembers.Add(new FamilyMember
-                        {
-                            Name = trimmedName,
-                            IsActive = memberDto.IsActive,
-                            SortOrder = memberDto.SortOrder,
-                            CreatedAt = memberDto.CreatedAt,
-                            UpdatedAt = memberDto.UpdatedAt
-                        });
-                        restoredFamilyMembersCount++;
                     }
 
                     await db.SaveChangesAsync(cancellationToken);
@@ -886,6 +1089,7 @@ public class ZipBackupService : IBackupService
                 _calendarNotifier?.NotifyChanged();
                 _todoNotifier?.NotifyChanged();
                 _familyMemberNotifier?.NotifyChanged();
+                _recipeRatingNotifier?.NotifyChanged();
 
                 return new BackupRestoreResult
                 {
@@ -968,6 +1172,7 @@ public class ZipBackupService : IBackupService
         public List<BackupCalendarEventDto> CalendarEvents { get; set; } = new();
         public List<BackupTodoListDto> TodoLists { get; set; } = new();
         public List<BackupFamilyMemberDto> FamilyMembers { get; set; } = new();
+        public List<BackupRecipeRatingDto> RecipeRatings { get; set; } = new();
     }
 
     private sealed class BackupCategoryDto
@@ -978,6 +1183,7 @@ public class ZipBackupService : IBackupService
 
     private sealed class BackupRecipeDto
     {
+        public int Id { get; set; }
         public string Title { get; set; } = string.Empty;
         public string? Description { get; set; }
         public string? Notes { get; set; }
@@ -1075,6 +1281,7 @@ public class ZipBackupService : IBackupService
         public string? Location { get; set; }
         public string? Notes { get; set; }
         public string? FamilyMembersCsv { get; set; }
+        public List<string> ParticipantNames { get; set; } = new();
         public int? ReminderMinutesBefore { get; set; }
         public int RecurrenceIntervalWeeks { get; set; }
         public int RecurrenceDaysOfWeekMask { get; set; }
@@ -1096,6 +1303,8 @@ public class ZipBackupService : IBackupService
         public string? OverrideLocation { get; set; }
         public string? OverrideNotes { get; set; }
         public string? OverrideFamilyMembersCsv { get; set; }
+        public bool OverrideParticipants { get; set; }
+        public List<string> ParticipantNames { get; set; } = new();
         public int? OverrideReminderMinutesBefore { get; set; }
         public bool OverrideReminderCleared { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
@@ -1126,9 +1335,21 @@ public class ZipBackupService : IBackupService
 
     private sealed class BackupFamilyMemberDto
     {
+        public int Id { get; set; }
         public string Name { get; set; } = string.Empty;
         public bool IsActive { get; set; } = true;
         public int SortOrder { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class BackupRecipeRatingDto
+    {
+        public int RecipeId { get; set; }
+        public string? RecipeTitle { get; set; }
+        public int FamilyMemberId { get; set; }
+        public string? FamilyMemberName { get; set; }
+        public int Stars { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
         public DateTimeOffset UpdatedAt { get; set; }
     }

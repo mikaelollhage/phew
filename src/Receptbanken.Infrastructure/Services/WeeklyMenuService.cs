@@ -412,6 +412,7 @@ public class WeeklyMenuService
 
         var confirmedMenu = await context.WeeklyMenus
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(m => m.Status == WeeklyMenuStatus.Confirmed && m.WeekStartDate == week.WeekStartDate)
             .Include(m => m.Days)
                 .ThenInclude(d => d.Recipe)
@@ -420,6 +421,9 @@ public class WeeklyMenuService
                 .ThenInclude(d => d.Recipe)
                     .ThenInclude(r => r!.RecipeCategories)
                         .ThenInclude(rc => rc.Category)
+            .Include(m => m.Days)
+                .ThenInclude(d => d.Recipe)
+                    .ThenInclude(r => r!.Ratings)
             .FirstOrDefaultAsync(cancellationToken);
 
         if (confirmedMenu == null)
@@ -473,6 +477,7 @@ public class WeeklyMenuService
 
         var savedMenus = await context.WeeklyMenus
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(m => targetMondays.Contains(m.WeekStartDate))
             .Include(m => m.Days)
                 .ThenInclude(d => d.Recipe)
@@ -481,6 +486,9 @@ public class WeeklyMenuService
                 .ThenInclude(d => d.Recipe)
                     .ThenInclude(r => r!.RecipeCategories)
                         .ThenInclude(rc => rc.Category)
+            .Include(m => m.Days)
+                .ThenInclude(d => d.Recipe)
+                    .ThenInclude(r => r!.Ratings)
             .ToListAsync(cancellationToken);
 
         var todayMenu = savedMenus.FirstOrDefault(m => m.WeekStartDate == todayWeek.WeekStartDate);
@@ -610,6 +618,7 @@ public class WeeklyMenuService
     {
         return await context.WeeklyMenus
             .AsNoTracking()
+            .AsSplitQuery()
             .Where(m => m.WeekStartDate == weekStartDate)
             .Include(m => m.PantryItems.OrderBy(p => p.OrderIndex))
             .Include(m => m.Days.OrderBy(d => d.DayIndex))
@@ -619,6 +628,9 @@ public class WeeklyMenuService
             .Include(m => m.Days)
                 .ThenInclude(d => d.Recipe)
                     .ThenInclude(r => r!.Ingredients)
+            .Include(m => m.Days)
+                .ThenInclude(d => d.Recipe)
+                    .ThenInclude(r => r!.Ratings)
             .Include(m => m.Days)
                 .ThenInclude(d => d.SelectedCategories)
                     .ThenInclude(sc => sc.Category)
@@ -631,9 +643,11 @@ public class WeeklyMenuService
     {
         return await context.Recipes
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(r => r.RecipeCategories)
                 .ThenInclude(rc => rc.Category)
             .Include(r => r.Ingredients)
+            .Include(r => r.Ratings)
             .OrderBy(r => r.Id)
             .ToListAsync(cancellationToken);
     }

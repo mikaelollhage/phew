@@ -175,5 +175,72 @@ public class MigrationTests : IDisposable
         var memberCount = await context.FamilyMembers.CountAsync();
         memberCount.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Migrate_AddCalendarEventParticipants_WhenExistingEventsAndMembersPresent_ShouldPreserveData()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={_dbPath}")
+            .Options;
+
+        await using var context = new AppDbContext(options);
+
+        var migrator = context.Database.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+        await migrator.MigrateAsync("20261118183412_AddFamilyMembers");
+
+        await context.Database.ExecuteSqlRawAsync("""
+            INSERT INTO FamilyMembers (Name, IsActive, SortOrder, CreatedAt, UpdatedAt)
+            VALUES ('Anna', 1, 1, 639297000000000000, 639297000000000000);
+
+            INSERT INTO CalendarEvents (Title, StartDate, IsAllDay, RecurrenceIntervalWeeks, RecurrenceDaysOfWeekMask, CreatedAt, UpdatedAt)
+            VALUES ('Befintlig händelse', '2026-11-20', 1, 0, 0, 639297000000000000, 639297000000000000);
+            """);
+
+        await context.Database.MigrateAsync();
+
+        var appliedAfter = (await context.Database.GetAppliedMigrationsAsync()).ToList();
+        appliedAfter.Should().Contain(m => m.Contains("AddCalendarEventParticipants"));
+
+        var existingEvent = await context.CalendarEvents.AsNoTracking().SingleAsync();
+        existingEvent.Title.Should().Be("Befintlig händelse");
+        var member = await context.FamilyMembers.AsNoTracking().SingleAsync();
+        member.Name.Should().Be("Anna");
+
+        (await context.CalendarEventParticipants.CountAsync()).Should().Be(0);
+        (await context.CalendarEventExceptionParticipants.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Migrate_AddRecipeRatings_WhenExistingRecipesAndMembersPresent_ShouldPreserveData()
+    {
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite($"Data Source={_dbPath}")
+            .Options;
+
+        await using var context = new AppDbContext(options);
+
+        var migrator = context.Database.GetService<Microsoft.EntityFrameworkCore.Migrations.IMigrator>();
+        await migrator.MigrateAsync("20261121142534_AddCalendarEventParticipants");
+
+        await context.Database.ExecuteSqlRawAsync("""
+            INSERT INTO FamilyMembers (Name, IsActive, SortOrder, CreatedAt, UpdatedAt)
+            VALUES ('Anna', 1, 1, 639297000000000000, 639297000000000000);
+
+            INSERT INTO Recipes (Title, Servings, ServingsUnit, IsFavorite, CreatedAt, UpdatedAt)
+            VALUES ('Befintligt recept', 4, 'portioner', 0, 639297000000000000, 639297000000000000);
+            """);
+
+        await context.Database.MigrateAsync();
+
+        var appliedAfter = (await context.Database.GetAppliedMigrationsAsync()).ToList();
+        appliedAfter.Should().Contain(m => m.Contains("AddRecipeRatings"));
+
+        var recipe = await context.Recipes.AsNoTracking().SingleAsync();
+        recipe.Title.Should().Be("Befintligt recept");
+        var member = await context.FamilyMembers.AsNoTracking().SingleAsync();
+        member.Name.Should().Be("Anna");
+
+        (await context.RecipeRatings.CountAsync()).Should().Be(0);
+    }
 }
 

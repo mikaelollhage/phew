@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Receptbanken.Core.Models;
@@ -377,6 +378,11 @@ public class ZipBackupServiceTests : IDisposable
     [Fact]
     public async Task ExportAndRestore_WithCalendarEventsAndExceptions_ShouldRoundTripAndNotifyCalendarNotifier()
     {
+        var sourceMemberService = new FamilyMemberService(_sourceDbFactory);
+        var anna = await sourceMemberService.CreateAsync("Anna");
+        var erik = await sourceMemberService.CreateAsync("Erik");
+        var mikael = await sourceMemberService.CreateAsync("Mikael");
+
         var sourceCalNotifier = new CalendarNotifier();
         var sourceCalService = new CalendarService(_sourceDbFactory, sourceCalNotifier, NullLogger<CalendarService>.Instance);
 
@@ -388,7 +394,7 @@ public class ZipBackupServiceTests : IDisposable
             StartTime = new TimeOnly(10, 0),
             EndTime = new TimeOnly(11, 0),
             Location = "Folktandvården",
-            FamilyMembers = ["Anna"],
+            ParticipantMemberIds = [anna.Id],
             ReminderMinutesBefore = CalendarReminderOptions.Hour1
         });
 
@@ -398,7 +404,7 @@ public class ZipBackupServiceTests : IDisposable
             StartDate = new DateOnly(2026, 11, 9),
             IsAllDay = false,
             StartTime = new TimeOnly(18, 0),
-            FamilyMembers = ["Erik"],
+            ParticipantMemberIds = [erik.Id],
             ReminderMinutesBefore = CalendarReminderOptions.Minutes30,
             RecurrenceIntervalWeeks = 1,
             RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday
@@ -414,7 +420,7 @@ public class ZipBackupServiceTests : IDisposable
                 Date = new DateOnly(2026, 11, 24),
                 IsAllDay = false,
                 StartTime = new TimeOnly(17, 30),
-                FamilyMembers = ["Erik", "Mikael"],
+                ParticipantMemberIds = [erik.Id, mikael.Id],
                 ReminderMinutesBefore = null
             });
 
@@ -443,7 +449,112 @@ public class ZipBackupServiceTests : IDisposable
             (new DateOnly(2026, 11, 30), "Fotboll"));
 
         occurrences.Single(o => o.Title == "Tandläkare").CalendarEventId.Should().BeGreaterThan(0);
+        occurrences.Single(o => o.Title == "Tandläkare").FamilyMembers.Should().Equal("Anna");
         occurrences.Single(o => o.Title == "Match").ReminderMinutesBefore.Should().BeNull();
+        occurrences.Single(o => o.Title == "Match").FamilyMembers.Should().Equal("Erik", "Mikael");
+        occurrences.First(o => o.Title == "Fotboll").FamilyMembers.Should().Equal("Erik");
+    }
+
+    [Fact]
+    public async Task RestoreFromArchive_WithUnresolvedCalendarParticipantName_ShouldRollbackAndFail()
+    {
+        var targetCalService = new CalendarService(_targetDbFactory, new CalendarNotifier(), NullLogger<CalendarService>.Instance);
+        await targetCalService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Befintlig händelse",
+            StartDate = new DateOnly(2026, 11, 10),
+            IsAllDay = true
+        });
+
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var mw = new StreamWriter(manifestEntry.Open()))
+            {
+                await mw.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","calendarEventCount":1,"familyMemberCount":1}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var dw = new StreamWriter(dataEntry.Open()))
+            {
+                await dw.WriteAsync("""
+                    {
+                      "categories": [],
+                      "recipes": [],
+                      "shoppingListItems": [],
+                      "weeklyMenus": [],
+                      "familyMembers": [
+                        { "name": "Anna", "isActive": true, "sortOrder": 1 }
+                      ],
+                      "calendarEvents": [
+                        {
+                          "title": "Trasig händelse",
+                          "startDate": "2026-11-12",
+                          "isAllDay": true,
+                          "participantNames": ["OkändPerson"]
+                        }
+                      ]
+                    }
+                    """);
+            }
+        }
+        ms.Position = 0;
+
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        var result = await restorer.RestoreFromArchiveAsync(ms, replaceExisting: true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("OkändPerson");
+
+        // Rollback must preserve existing target event
+        var remaining = await targetCalService.GetWeekOccurrencesAsync(new DateOnly(2026, 11, 10));
+        remaining.Should().ContainSingle(o => o.Title == "Befintlig händelse");
+    }
+
+    [Fact]
+    public async Task RestoreFromArchive_LegacyBackupWithoutParticipantNames_ShouldRestoreCleanly()
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var mw = new StreamWriter(manifestEntry.Open()))
+            {
+                await mw.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","calendarEventCount":1}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var dw = new StreamWriter(dataEntry.Open()))
+            {
+                await dw.WriteAsync("""
+                    {
+                      "categories": [],
+                      "recipes": [],
+                      "shoppingListItems": [],
+                      "weeklyMenus": [],
+                      "calendarEvents": [
+                        {
+                          "title": "Äldre händelse",
+                          "startDate": "2026-11-12",
+                          "isAllDay": true
+                        }
+                      ]
+                    }
+                    """);
+            }
+        }
+        ms.Position = 0;
+
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        var result = await restorer.RestoreFromArchiveAsync(ms, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredCalendarEvents.Should().Be(1);
+
+        var targetCalService = new CalendarService(_targetDbFactory, new CalendarNotifier(), NullLogger<CalendarService>.Instance);
+        var restored = await targetCalService.GetWeekOccurrencesAsync(new DateOnly(2026, 11, 12));
+        restored.Should().ContainSingle(o => o.Title == "Äldre händelse" && o.FamilyMembers.Count == 0);
     }
 
     [Fact]
@@ -764,6 +875,128 @@ public class ZipBackupServiceTests : IDisposable
         var targetService = new FamilyMemberService(_targetDbFactory);
         var restored = await targetService.GetAllAsync(includeInactive: true);
         restored.Should().ContainSingle(m => m.Name == "Anna" && m.IsActive);
+    }
+
+    [Fact]
+    public async Task ExportAndRestore_WithRecipeRatings_ShouldRemapIdsReliably()
+    {
+        var sourceMemberService = new FamilyMemberService(_sourceDbFactory);
+        var sourceRecipeService = new RecipeService(_sourceDbFactory, new MockImageStorageService(), NullLogger<RecipeService>.Instance);
+        var sourceRatingService = new RecipeRatingService(_sourceDbFactory);
+
+        // Create extra records so source IDs differ from target IDs
+        var deletedMember = await sourceMemberService.CreateAsync("Temp");
+        await sourceMemberService.DeleteAsync(deletedMember.Id);
+        var anna = await sourceMemberService.CreateAsync("Anna");
+        var erik = await sourceMemberService.CreateAsync("Erik");
+
+        var deletedRecipe = await sourceRecipeService.CreateRecipeAsync(new Recipe { Title = "TempRecept", Servings = 4 });
+        await sourceRecipeService.DeleteRecipeAsync(deletedRecipe.Id);
+        var pasta = await sourceRecipeService.CreateRecipeAsync(new Recipe { Title = "Pasta", Servings = 4 });
+
+        await sourceRatingService.SetRatingAsync(pasta.Id, anna.Id, 5);
+        await sourceRatingService.SetRatingAsync(pasta.Id, erik.Id, 3);
+
+        var exporter = CreateBackupService(_sourceDbFactory, "source");
+        var zipBytes = await exporter.CreateBackupArchiveAsync();
+
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        using var zipStream = new MemoryStream(zipBytes);
+        var result = await restorer.RestoreFromArchiveAsync(zipStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredRecipes.Should().Be(1);
+        result.RestoredFamilyMembers.Should().Be(2);
+
+        await using var targetDb = _targetDbFactory.CreateDbContext();
+        var restoredPasta = await targetDb.Recipes.SingleAsync(r => r.Title == "Pasta");
+        var restoredRatings = await targetDb.RecipeRatings
+            .Include(r => r.FamilyMember)
+            .Where(r => r.RecipeId == restoredPasta.Id)
+            .ToListAsync();
+
+        restoredRatings.Should().HaveCount(2);
+        restoredRatings.Single(r => r.FamilyMember.Name == "Anna").Stars.Should().Be(5);
+        restoredRatings.Single(r => r.FamilyMember.Name == "Erik").Stars.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task Restore_LegacyBackupWithoutRecipeRatings_ShouldSucceedWithZeroRatings()
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var s = manifestEntry.Open())
+            await using (var w = new StreamWriter(s))
+            {
+                await w.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","recipeCount":1,"familyMemberCount":1}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var s = dataEntry.Open())
+            await using (var w = new StreamWriter(s))
+            {
+                await w.WriteAsync("""
+                {
+                  "categories": [],
+                  "recipes": [{"title":"LegacyPasta","servings":4,"servingsUnit":"portioner","ingredients":[],"instructions":[],"categoryNames":[]}],
+                  "shoppingListItems": [],
+                  "weeklyMenus": [],
+                  "familyMembers": [{"name":"Anna","isActive":true,"sortOrder":1}]
+                }
+                """);
+            }
+        }
+
+        ms.Position = 0;
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        var result = await restorer.RestoreFromArchiveAsync(ms, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredRecipes.Should().Be(1);
+        result.RestoredFamilyMembers.Should().Be(1);
+
+        await using var targetDb = _targetDbFactory.CreateDbContext();
+        (await targetDb.RecipeRatings.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Restore_BackupWithUnresolvedRecipeRating_ShouldFailAndNotSilentlyDiscard()
+    {
+        using var ms = new MemoryStream();
+        using (var archive = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            var manifestEntry = archive.CreateEntry("manifest.json");
+            await using (var s = manifestEntry.Open())
+            await using (var w = new StreamWriter(s))
+            {
+                await w.WriteAsync("""{"formatVersion":1,"application":"Receptbanken","recipeCount":1,"familyMemberCount":1}""");
+            }
+
+            var dataEntry = archive.CreateEntry("data.json");
+            await using (var s = dataEntry.Open())
+            await using (var w = new StreamWriter(s))
+            {
+                await w.WriteAsync("""
+                {
+                  "categories": [],
+                  "recipes": [{"id":10,"title":"Pasta","servings":4,"servingsUnit":"portioner","ingredients":[],"instructions":[],"categoryNames":[]}],
+                  "shoppingListItems": [],
+                  "weeklyMenus": [],
+                  "familyMembers": [{"id":5,"name":"Anna","isActive":true,"sortOrder":1}],
+                  "recipeRatings": [{"recipeId":999,"familyMemberId":5,"stars":4}]
+                }
+                """);
+            }
+        }
+
+        ms.Position = 0;
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        var result = await restorer.RestoreFromArchiveAsync(ms, replaceExisting: true);
+
+        result.Success.Should().BeFalse();
+        result.ErrorMessage.Should().Contain("receptbetyg");
     }
 
     public void Dispose()

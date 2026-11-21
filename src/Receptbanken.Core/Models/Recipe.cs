@@ -25,5 +25,6 @@ public class Recipe
     public List<Ingredient> Ingredients { get; set; } = new();
     public List<InstructionStep> Instructions { get; set; } = new();
     public List<RecipeCategory> RecipeCategories { get; set; } = new();
+    public List<RecipeRating> Ratings { get; set; } = new();
 }
 

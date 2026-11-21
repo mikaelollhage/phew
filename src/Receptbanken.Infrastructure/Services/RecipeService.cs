@@ -32,9 +32,11 @@ public class RecipeService
 
         var query = context.Recipes
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(r => r.RecipeCategories)
                 .ThenInclude(rc => rc.Category)
             .Include(r => r.Ingredients)
+            .Include(r => r.Ratings)
             .AsQueryable();
 
         if (favoritesOnly == true)
@@ -68,10 +70,12 @@ public class RecipeService
 
         return await context.Recipes
             .AsNoTracking()
+            .AsSplitQuery()
             .Include(r => r.RecipeCategories)
                 .ThenInclude(rc => rc.Category)
             .Include(r => r.Ingredients.OrderBy(i => i.OrderIndex))
             .Include(r => r.Instructions.OrderBy(s => s.StepNumber))
+            .Include(r => r.Ratings)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
     }
 

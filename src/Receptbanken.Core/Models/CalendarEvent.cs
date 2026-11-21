@@ -71,6 +71,8 @@ public class CalendarEvent
 
     public List<CalendarEventException> Exceptions { get; set; } = new();
 
+    public List<CalendarEventParticipant> Participants { get; set; } = new();
+
     [NotMapped]
     public IReadOnlyList<string> FamilyMembers
     {

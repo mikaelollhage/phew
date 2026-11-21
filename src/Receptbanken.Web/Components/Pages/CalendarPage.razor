@@ -1,6 +1,7 @@
 @page "/kalender"
 @implements IAsyncDisposable
 @inject CalendarService CalendarService
+@inject FamilyMemberService FamilyMemberService
 @inject ILocalDateProvider LocalDateProvider
 @inject IJSRuntime JSRuntime
 @inject ILogger<CalendarPage> Logger
@@ -86,7 +87,7 @@ else
                         EditScope="formEditScope"
                         OccurrenceToEdit="formOccurrenceToEdit"
                         SeriesEventToEdit="formSeriesEventToEdit"
-                        KnownFamilyMembers="knownFamilyMembers"
+                        AvailableFamilyMembers="availableFamilyMembers"
                         OnSaved="HandleEventSavedAsync"
                         OnCancel="CloseEventFormModal" />
 
@@ -117,7 +118,7 @@ else
     private CancellationTokenSource? _midnightWatcherCts;
 
     private Dictionary<DateOnly, IReadOnlyList<CalendarOccurrenceDto>> occurrencesByDate = new();
-    private List<string> knownFamilyMembers = [];
+    private List<FamilyMember> availableFamilyMembers = [];
     private readonly FeedbackState feedback = new();
 
     private bool showEventFormModal;
@@ -142,6 +143,7 @@ else
         currentWeek = CalendarWeek.FromDate(initialDate);
 
         CalendarService.Notifier.OnChanged += HandleCalendarChanged;
+        FamilyMemberService.OnChanged += HandleFamilyMembersChanged;
 
         await LoadWeekAsync(currentWeek.WeekStartDate);
 
@@ -217,7 +219,7 @@ else
         {
             var versionBeforeLoad = CalendarService.Notifier.Version;
             var occurrences = await CalendarService.GetWeekOccurrencesAsync(currentWeek.WeekStartDate);
-            var members = await CalendarService.GetKnownFamilyMembersAsync();
+            var members = await FamilyMemberService.GetAllAsync(includeInactive: false);
 
             occurrencesByDate = occurrences
                 .GroupBy(o => o.Date)
@@ -229,7 +231,7 @@ else
                 .ToHashSet(StringComparer.Ordinal);
             expandedOccurrenceKeys.IntersectWith(validKeys);
 
-            knownFamilyMembers = members;
+            availableFamilyMembers = members;
 
             _lastLoadedVersion = Math.Max(versionBeforeLoad, CalendarService.Notifier.Version);
         }
@@ -507,6 +509,28 @@ else
         return fallback;
     }
 
+    private void HandleFamilyMembersChanged(long _version)
+    {
+        if (_isDisposed)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            try
+            {
+                await LoadWeekAsync(currentWeek.WeekStartDate, preserveFeedback: true);
+                StateHasChanged();
+            }
+            catch (Exception ex) when (!_isDisposed)
+            {
+                Logger.LogWarning(ex, "Kunde inte uppdatera familjemedlemmar i kalendern vid realtidshändelse.");
+            }
+        });
+    }
+
     public ValueTask DisposeAsync()
     {
         if (_isDisposed)
@@ -514,6 +538,7 @@ else
 
         _isDisposed = true;
         CalendarService.Notifier.OnChanged -= HandleCalendarChanged;
+        FamilyMemberService.OnChanged -= HandleFamilyMembersChanged;
 
         _midnightWatcherCts?.Cancel();
         _midnightWatcherCts?.Dispose();

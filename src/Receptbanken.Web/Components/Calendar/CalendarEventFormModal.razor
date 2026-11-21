@@ -111,55 +111,38 @@
                 </div>
 
                 <div class="calendar-form-field">
-                    <label class="calendar-form-label">Familjemedlemmar</label>
-
-                    @if (KnownFamilyMembers.Count > 0)
-                    {
-                        <div class="calendar-member-quickselect" role="group" aria-label="Tidigare använda familjemedlemmar">
-                            @foreach (var known in KnownFamilyMembers)
-                            {
-                                var isSelected = selectedMembers.Contains(known, StringComparer.OrdinalIgnoreCase);
-                                <button type="button"
-                                        class="calendar-member-toggle-chip @(isSelected ? "selected" : "")"
-                                        aria-pressed="@(isSelected ? "true" : "false")"
-                                        @onclick="@(() => ToggleKnownMember(known))">
-                                    <span>@known</span>
-                                    <span>@(isSelected ? "✓" : "+")</span>
-                                </button>
-                            }
-                        </div>
-                    }
-
-                    <div class="calendar-member-input-row">
-                        <input id="calendar-event-member-input"
-                               type="text"
-                               class="form-input-custom"
-                               placeholder="Lägg till namn (t.ex. Anna)..."
-                               @bind="newMemberInput"
-                               @bind:event="oninput"
-                               @onkeydown="HandleMemberKeyDown" />
-                        <button type="button"
-                                class="btn-secondary-custom btn-sm calendar-member-add-btn"
-                                @onclick="AddMemberFromInput">
-                            + Lägg till
-                        </button>
+                    <div class="calendar-participants-header">
+                        <label class="calendar-form-label">Deltagare</label>
+                        @if (AvailableFamilyMembers.Count > 0)
+                        {
+                            <span class="calendar-participants-count">
+                                @(selectedMemberIds.Count == 0 ? "Inga valda" : $"{selectedMemberIds.Count} valda")
+                            </span>
+                        }
                     </div>
 
-                    @if (selectedMembers.Count > 0)
+                    @if (AvailableFamilyMembers.Count == 0)
                     {
-                        <div class="calendar-selected-members">
-                            @foreach (var member in selectedMembers)
+                        <p class="calendar-participants-empty">
+                            Inga familjemedlemmar registrerade ännu.
+                            <a href="/installningar">Lägg till under Inställningar</a>.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="calendar-member-quickselect" role="group" aria-label="Välj deltagare">
+                            @foreach (var member in AvailableFamilyMembers)
                             {
-                                <span class="calendar-member-chip is-removable">
-                                    <span>@member</span>
-                                    <button type="button"
-                                            class="calendar-member-remove-btn"
-                                            aria-label="@($"Ta bort {member}")"
-                                            title="@($"Ta bort {member}")"
-                                            @onclick="@(() => RemoveMember(member))">
-                                        ×
-                                    </button>
-                                </span>
+                                var isSelected = selectedMemberIds.Contains(member.Id);
+                                <button type="button"
+                                        class="calendar-member-toggle-chip @(isSelected ? "selected" : "")"
+                                        data-member-id="@member.Id"
+                                        aria-pressed="@(isSelected ? "true" : "false")"
+                                        aria-label="@(isSelected ? $"Ta bort {member.Name} som deltagare" : $"Välj {member.Name} som deltagare")"
+                                        @onclick="@(() => ToggleMember(member.Id))">
+                                    <span>@member.Name</span>
+                                    <span class="calendar-member-toggle-indicator" aria-hidden="true">@(isSelected ? "✓" : "+")</span>
+                                </button>
                             }
                         </div>
                     }
@@ -271,7 +254,7 @@
     [Parameter] public CalendarEditScope EditScope { get; set; } = CalendarEditScope.NewEvent;
     [Parameter] public CalendarOccurrenceDto? OccurrenceToEdit { get; set; }
     [Parameter] public CalendarEvent? SeriesEventToEdit { get; set; }
-    [Parameter] public IReadOnlyList<string> KnownFamilyMembers { get; set; } = [];
+    [Parameter] public IReadOnlyList<FamilyMember> AvailableFamilyMembers { get; set; } = [];
     [Parameter] public EventCallback<DateOnly> OnSaved { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
@@ -282,8 +265,7 @@
     private string endTimeString = string.Empty;
     private string? location;
     private string? notes;
-    private List<string> selectedMembers = [];
-    private string newMemberInput = string.Empty;
+    private List<int> selectedMemberIds = [];
     private int? reminderMinutesBefore;
     private bool isRecurring;
     private int recurrenceIntervalWeeks = 1;
@@ -317,7 +299,6 @@
     {
         validationError = null;
         isSaving = false;
-        newMemberInput = string.Empty;
 
         if (EditScope == CalendarEditScope.NewEvent)
         {
@@ -328,7 +309,7 @@
             endTimeString = string.Empty;
             location = null;
             notes = null;
-            selectedMembers = [];
+            selectedMemberIds = [];
             reminderMinutesBefore = null;
             isRecurring = false;
             recurrenceIntervalWeeks = 1;
@@ -346,7 +327,7 @@
             endTimeString = OccurrenceToEdit.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty;
             location = OccurrenceToEdit.Location;
             notes = OccurrenceToEdit.Notes;
-            selectedMembers = OccurrenceToEdit.FamilyMembers.ToList();
+            selectedMemberIds = OccurrenceToEdit.ParticipantMemberIds.Distinct().ToList();
             reminderMinutesBefore = OccurrenceToEdit.ReminderMinutesBefore;
             isRecurring = OccurrenceToEdit.IsRecurring;
             recurrenceIntervalWeeks = OccurrenceToEdit.RecurrenceIntervalWeeks;
@@ -364,7 +345,10 @@
             endTimeString = SeriesEventToEdit.EndTime?.ToString("HH:mm", CultureInfo.InvariantCulture) ?? string.Empty;
             location = SeriesEventToEdit.Location;
             notes = SeriesEventToEdit.Notes;
-            selectedMembers = SeriesEventToEdit.FamilyMembers.ToList();
+            selectedMemberIds = SeriesEventToEdit.Participants
+                .Select(p => p.FamilyMemberId)
+                .Distinct()
+                .ToList();
             reminderMinutesBefore = SeriesEventToEdit.ReminderMinutesBefore;
             isRecurring = SeriesEventToEdit.RecurrenceIntervalWeeks > 0;
             recurrenceIntervalWeeks = isRecurring ? SeriesEventToEdit.RecurrenceIntervalWeeks : 1;
@@ -418,40 +402,12 @@
         recurrenceDaysMask ^= bit;
     }
 
-    private void ToggleKnownMember(string name)
+    private void ToggleMember(int memberId)
     {
-        var existing = selectedMembers.FirstOrDefault(m => string.Equals(m, name, StringComparison.OrdinalIgnoreCase));
-        if (existing != null)
+        if (!selectedMemberIds.Remove(memberId))
         {
-            selectedMembers.Remove(existing);
+            selectedMemberIds.Add(memberId);
         }
-        else
-        {
-            selectedMembers.Add(name);
-        }
-    }
-
-    private void AddMemberFromInput()
-    {
-        if (string.IsNullOrWhiteSpace(newMemberInput))
-            return;
-
-        var combined = CalendarFamilyMemberHelper.Normalize(selectedMembers.Append(newMemberInput));
-        selectedMembers = combined.ToList();
-        newMemberInput = string.Empty;
-    }
-
-    private void HandleMemberKeyDown(KeyboardEventArgs e)
-    {
-        if (e.Key == "Enter")
-        {
-            AddMemberFromInput();
-        }
-    }
-
-    private void RemoveMember(string name)
-    {
-        selectedMembers.RemoveAll(m => string.Equals(m, name, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task HandleSubmitAsync()
@@ -506,9 +462,7 @@
             parsedRecurrenceEndDate = red;
         }
 
-        var membersToSave = string.IsNullOrWhiteSpace(newMemberInput)
-            ? selectedMembers
-            : CalendarFamilyMemberHelper.Normalize(selectedMembers.Append(newMemberInput)).ToList();
+        var membersToSave = selectedMemberIds.Distinct().ToList();
 
         isSaving = true;
         try
@@ -524,7 +478,7 @@
                     EndTime = parsedEndTime,
                     Location = location,
                     Notes = notes,
-                    FamilyMembers = membersToSave,
+                    ParticipantMemberIds = membersToSave,
                     ReminderMinutesBefore = reminderMinutesBefore
                 };
 
@@ -544,7 +498,7 @@
                     EndTime = parsedEndTime,
                     Location = location,
                     Notes = notes,
-                    FamilyMembers = membersToSave,
+                    ParticipantMemberIds = membersToSave,
                     ReminderMinutesBefore = reminderMinutesBefore,
                     RecurrenceIntervalWeeks = isRecurring ? recurrenceIntervalWeeks : 0,
                     RecurrenceDaysOfWeekMask = isRecurring ? recurrenceDaysMask : IsoWeekdayMask.None,

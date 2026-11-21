@@ -30,12 +30,15 @@ public class AppDbContext : DbContext
     public DbSet<WeeklyMenuShoppingContribution> WeeklyMenuShoppingContributions => Set<WeeklyMenuShoppingContribution>();
     public DbSet<CalendarEvent> CalendarEvents => Set<CalendarEvent>();
     public DbSet<CalendarEventException> CalendarEventExceptions => Set<CalendarEventException>();
+    public DbSet<CalendarEventParticipant> CalendarEventParticipants => Set<CalendarEventParticipant>();
+    public DbSet<CalendarEventExceptionParticipant> CalendarEventExceptionParticipants => Set<CalendarEventExceptionParticipant>();
     public DbSet<PushSubscriptionEntity> PushSubscriptions => Set<PushSubscriptionEntity>();
     public DbSet<CalendarReminderDelivery> CalendarReminderDeliveries => Set<CalendarReminderDelivery>();
     public DbSet<CalendarReminderSystemState> CalendarReminderSystemStates => Set<CalendarReminderSystemState>();
     public DbSet<TodoList> TodoLists => Set<TodoList>();
     public DbSet<TodoItem> TodoItems => Set<TodoItem>();
     public DbSet<FamilyMember> FamilyMembers => Set<FamilyMember>();
+    public DbSet<RecipeRating> RecipeRatings => Set<RecipeRating>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -263,12 +266,51 @@ public class AppDbContext : DbContext
             entity.Property(e => e.OverrideFamilyMembersCsv).HasMaxLength(CalendarEvent.MaxFamilyMembersCsvLength);
             entity.Property(e => e.IsCancelled).HasDefaultValue(false);
             entity.Property(e => e.OverrideReminderCleared).HasDefaultValue(false);
+            entity.Property(e => e.OverrideParticipants).HasDefaultValue(false);
 
             entity.HasIndex(e => new { e.CalendarEventId, e.OriginalDate })
                 .IsUnique()
                 .HasDatabaseName("IX_CalendarEventExceptions_CalendarEventId_OriginalDate");
             entity.HasIndex(e => e.OverrideDate)
                 .HasDatabaseName("IX_CalendarEventExceptions_OverrideDate");
+        });
+
+        // CalendarEventParticipant (Join Table)
+        modelBuilder.Entity<CalendarEventParticipant>(entity =>
+        {
+            entity.HasKey(p => new { p.CalendarEventId, p.FamilyMemberId });
+
+            entity.HasIndex(p => p.FamilyMemberId)
+                .HasDatabaseName("IX_CalendarEventParticipants_FamilyMemberId");
+
+            entity.HasOne(p => p.CalendarEvent)
+                .WithMany(e => e.Participants)
+                .HasForeignKey(p => p.CalendarEventId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.FamilyMember)
+                .WithMany()
+                .HasForeignKey(p => p.FamilyMemberId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // CalendarEventExceptionParticipant (Join Table)
+        modelBuilder.Entity<CalendarEventExceptionParticipant>(entity =>
+        {
+            entity.HasKey(p => new { p.CalendarEventExceptionId, p.FamilyMemberId });
+
+            entity.HasIndex(p => p.FamilyMemberId)
+                .HasDatabaseName("IX_CalendarEventExceptionParticipants_FamilyMemberId");
+
+            entity.HasOne(p => p.CalendarEventException)
+                .WithMany(ex => ex.Participants)
+                .HasForeignKey(p => p.CalendarEventExceptionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(p => p.FamilyMember)
+                .WithMany()
+                .HasForeignKey(p => p.FamilyMemberId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // PushSubscriptionEntity
@@ -382,6 +424,34 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => new { e.IsActive, e.SortOrder })
                 .HasDatabaseName("IX_FamilyMembers_IsActive_SortOrder");
+        });
+
+        // RecipeRating
+        modelBuilder.Entity<RecipeRating>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Stars).IsRequired();
+
+            entity.ToTable(t => t.HasCheckConstraint(
+                "CK_RecipeRatings_Stars",
+                $"Stars >= {RecipeRating.MinStars} AND Stars <= {RecipeRating.MaxStars}"));
+
+            entity.HasIndex(e => new { e.RecipeId, e.FamilyMemberId })
+                .IsUnique()
+                .HasDatabaseName("IX_RecipeRatings_RecipeId_FamilyMemberId");
+
+            entity.HasIndex(e => e.FamilyMemberId)
+                .HasDatabaseName("IX_RecipeRatings_FamilyMemberId");
+
+            entity.HasOne(e => e.Recipe)
+                .WithMany(r => r.Ratings)
+                .HasForeignKey(e => e.RecipeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.FamilyMember)
+                .WithMany()
+                .HasForeignKey(e => e.FamilyMemberId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

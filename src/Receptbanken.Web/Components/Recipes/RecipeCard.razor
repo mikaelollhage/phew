@@ -59,6 +59,17 @@
                 <FluentIcon Value="@(new Icons.Regular.Size16.People())" Color="Color.Neutral" />
                 <span>@Recipe.Servings @Recipe.ServingsUnit</span>
             </div>
+            @{
+                var ratingSummary = RecipeRatingSummary.FromRatings(Recipe.Ratings);
+            }
+            @if (ratingSummary.HasRatings)
+            {
+                <div class="meta-item recipe-card-rating-meta"
+                     title="@($"Betyg {ratingSummary.FormatAverageSwedish()} av 5 ({ratingSummary.FormatVoteCountSwedish()})")">
+                    <span class="recipe-card-rating-star" aria-hidden="true">★</span>
+                    <span>@ratingSummary.FormatAverageSwedish() (@ratingSummary.FormatVoteCountSwedish())</span>
+                </div>
+            }
         </div>
     </div>
 </div>

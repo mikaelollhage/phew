@@ -59,7 +59,9 @@ public class CalendarPageAndHomeTests : TestContext
     {
         public required TestDbContextFactory DbFactory { get; init; }
         public required CalendarNotifier Notifier { get; init; }
+        public required FamilyMemberNotifier FamilyMemberNotifier { get; init; }
         public required CalendarService CalendarService { get; init; }
+        public required FamilyMemberService FamilyMemberService { get; init; }
         public required WeeklyMenuService WeeklyMenuService { get; init; }
         public required RecipeService RecipeService { get; init; }
         public required FixedLocalDateProvider DateProvider { get; init; }
@@ -77,7 +79,9 @@ public class CalendarPageAndHomeTests : TestContext
         }
 
         var notifier = sharedNotifier ?? new CalendarNotifier();
+        var familyMemberNotifier = new FamilyMemberNotifier();
         var calendarService = new CalendarService(dbFactory, notifier, NullLogger<CalendarService>.Instance);
+        var familyMemberService = new FamilyMemberService(dbFactory, familyMemberNotifier, calendarNotifier: notifier);
         var imageStorage = new MockImageStorageService();
         var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
         var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
@@ -92,7 +96,9 @@ public class CalendarPageAndHomeTests : TestContext
         Services.AddSingleton<IImageStorageService>(imageStorage);
         Services.AddSingleton<ILocalDateProvider>(dateProvider);
         Services.AddSingleton(notifier);
+        Services.AddSingleton(familyMemberNotifier);
         Services.AddSingleton(calendarService);
+        Services.AddSingleton(familyMemberService);
         Services.AddSingleton(recipeService);
         Services.AddSingleton(categoryService);
         Services.AddSingleton(weeklyMenuService);
@@ -105,7 +111,9 @@ public class CalendarPageAndHomeTests : TestContext
         {
             DbFactory = dbFactory,
             Notifier = notifier,
+            FamilyMemberNotifier = familyMemberNotifier,
             CalendarService = calendarService,
+            FamilyMemberService = familyMemberService,
             WeeklyMenuService = weeklyMenuService,
             RecipeService = recipeService,
             DateProvider = dateProvider
@@ -154,6 +162,9 @@ public class CalendarPageAndHomeTests : TestContext
         var today = new DateOnly(2026, 11, 9); // Monday, Week 46
         using var bundle = SetupServices(today);
 
+        var erik = await bundle.FamilyMemberService.CreateAsync("Erik");
+        var anna = await bundle.FamilyMemberService.CreateAsync("Anna");
+
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
         {
             Title = "Kvällsträning",
@@ -162,7 +173,7 @@ public class CalendarPageAndHomeTests : TestContext
             StartTime = new TimeOnly(18, 0),
             EndTime = new TimeOnly(19, 30),
             Location = "Hallen",
-            FamilyMembers = ["Erik", "Anna"],
+            ParticipantMemberIds = [erik.Id, anna.Id],
             ReminderMinutesBefore = CalendarReminderOptions.Minutes30
         });
 
@@ -218,10 +229,11 @@ public class CalendarPageAndHomeTests : TestContext
     }
 
     [Fact]
-    public void CalendarPage_CreateEditDeleteOneTimeEvent_AndFormValidation()
+    public async Task CalendarPage_CreateEditDeleteOneTimeEvent_AndFormValidation()
     {
         var today = new DateOnly(2026, 11, 10); // Tuesday, Week 46
         using var bundle = SetupServices(today);
+        var lisa = await bundle.FamilyMemberService.CreateAsync("Lisa");
 
         var cut = RenderComponent<CalendarPage>();
         cut.WaitForAssertion(() => cut.FindAll(".calendar-day-card").Should().HaveCount(7));
@@ -235,12 +247,11 @@ public class CalendarPageAndHomeTests : TestContext
         cut.WaitForAssertion(() =>
             cut.Find(".calendar-form-error").TextContent.Should().Contain("Rubrik måste anges."));
 
-        // Fill valid event with new family member and all-day reminder
+        // Fill valid event with registered family member and all-day reminder
         cut.Find("#calendar-event-title").Change("Utflykt");
         cut.Find("#calendar-event-allday").Change(true);
         cut.Find("#calendar-event-location").Change("Skogen");
-        cut.Find("#calendar-event-member-input").Input("Lisa");
-        cut.Find(".calendar-member-add-btn").Click();
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{lisa.Id}']").Click();
         cut.Find("#calendar-event-reminder").Change(CalendarReminderOptions.AllDaySameDay0900.ToString());
         cut.Find("form.calendar-form-body").Submit();
 
@@ -293,6 +304,8 @@ public class CalendarPageAndHomeTests : TestContext
         var monday = new DateOnly(2026, 11, 9);
         using var bundle = SetupServices(monday);
 
+        var maya = await bundle.FamilyMemberService.CreateAsync("Maya");
+
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
         {
             Title = "Pianolektion",
@@ -300,7 +313,7 @@ public class CalendarPageAndHomeTests : TestContext
             IsAllDay = false,
             StartTime = new TimeOnly(16, 0),
             EndTime = new TimeOnly(16, 45),
-            FamilyMembers = ["Maya"],
+            ParticipantMemberIds = [maya.Id],
             RecurrenceIntervalWeeks = 1,
             RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday | IsoWeekdayMask.Wednesday
         });
@@ -507,6 +520,10 @@ public class CalendarPageAndHomeTests : TestContext
             Notes = "Glöm inte klubba"
         });
 
+        var leo = await bundle.FamilyMemberService.CreateAsync("Leo");
+        var maya = await bundle.FamilyMemberService.CreateAsync("Maya");
+        var erik = await bundle.FamilyMemberService.CreateAsync("Erik");
+
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
         {
             Title = "Simträning",
@@ -515,7 +532,7 @@ public class CalendarPageAndHomeTests : TestContext
             StartTime = new TimeOnly(18, 30),
             EndTime = new TimeOnly(19, 30),
             Location = "Badhuset",
-            FamilyMembers = ["Leo"]
+            ParticipantMemberIds = [leo.Id]
         });
 
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
@@ -524,7 +541,7 @@ public class CalendarPageAndHomeTests : TestContext
             StartDate = monday,
             IsAllDay = false,
             StartTime = new TimeOnly(19, 45),
-            FamilyMembers = ["Leo", "Maya", "Erik"],
+            ParticipantMemberIds = [leo.Id, maya.Id, erik.Id],
             RecurrenceIntervalWeeks = 1,
             RecurrenceDaysOfWeekMask = IsoWeekdayMask.Monday | IsoWeekdayMask.Wednesday
         });
@@ -609,6 +626,9 @@ public class CalendarPageAndHomeTests : TestContext
         var monday = new DateOnly(2026, 11, 9);
         using var bundle = SetupServices(monday);
 
+        var leo = await bundle.FamilyMemberService.CreateAsync("Leo");
+        var maya = await bundle.FamilyMemberService.CreateAsync("Maya");
+
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
         {
             Title = "Simträning",
@@ -616,7 +636,7 @@ public class CalendarPageAndHomeTests : TestContext
             IsAllDay = false,
             StartTime = new TimeOnly(17, 0),
             Location = "Badhuset",
-            FamilyMembers = ["Leo"]
+            ParticipantMemberIds = [leo.Id]
         });
 
         await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
@@ -625,7 +645,7 @@ public class CalendarPageAndHomeTests : TestContext
             StartDate = monday,
             IsAllDay = false,
             StartTime = new TimeOnly(18, 30),
-            FamilyMembers = ["Maya"]
+            ParticipantMemberIds = [maya.Id]
         });
 
         var cut = RenderComponent<CalendarPage>();
@@ -658,6 +678,121 @@ public class CalendarPageAndHomeTests : TestContext
             secondDetails.TextContent.Should().NotContain("Maya");
             secondDetails.QuerySelector(".calendar-event-edit-btn").Should().NotBeNull();
             secondDetails.QuerySelector(".calendar-event-delete-btn").Should().NotBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task CalendarPage_EventModal_ShouldListAllActiveMembersUnselectedByDefault_AndPersistEditRemoval()
+    {
+        var monday = new DateOnly(2026, 11, 9);
+        using var bundle = SetupServices(monday);
+        var anna = await bundle.FamilyMemberService.CreateAsync("Anna");
+        var erik = await bundle.FamilyMemberService.CreateAsync("Erik");
+
+        var cut = RenderComponent<CalendarPage>();
+        cut.WaitForAssertion(() => cut.Find(".calendar-new-event-btn").Should().NotBeNull());
+
+        // Open New Event modal
+        cut.Find(".calendar-new-event-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".calendar-form-dialog").Should().NotBeNull());
+
+        // No free-text member input; all active members appear unselected by default
+        cut.FindAll("#calendar-event-member-input").Should().BeEmpty();
+        var chips = cut.FindAll(".calendar-member-toggle-chip").ToList();
+        chips.Should().HaveCount(2);
+        chips.Should().OnlyContain(c => c.GetAttribute("aria-pressed") == "false");
+        chips.Should().OnlyContain(c => c.QuerySelector(".calendar-member-toggle-indicator")!.TextContent.Trim() == "+");
+
+        // Select Anna and Erik, submit
+        cut.Find("#calendar-event-title").Change("Familjeutflykt");
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{anna.Id}']").Click();
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{erik.Id}']").Click();
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{anna.Id}'] .calendar-member-toggle-indicator")
+            .TextContent.Trim().Should().Be("✓");
+        cut.Find("form.calendar-form-body").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            var badge = cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-person-badge.is-count");
+            badge.TextContent.Trim().Should().Be("2");
+        });
+
+        // Edit event: saved participants are selected, remove Erik, save
+        cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").Click();
+        cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-edit-btn").Click();
+        cut.WaitForAssertion(() => cut.Find(".calendar-form-dialog").Should().NotBeNull());
+
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{anna.Id}']").GetAttribute("aria-pressed").Should().Be("true");
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{erik.Id}']").GetAttribute("aria-pressed").Should().Be("true");
+
+        cut.Find($".calendar-member-toggle-chip[data-member-id='{erik.Id}']").Click();
+        cut.Find("form.calendar-form-body").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            var badge = cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-person-badge");
+            badge.TextContent.Trim().Should().Be("Anna");
+        });
+    }
+
+    [Fact]
+    public void CalendarPage_WhenNoFamilyMembersRegistered_ShouldShowEmptyStateWithSettingsLink()
+    {
+        var monday = new DateOnly(2026, 11, 9);
+        using var bundle = SetupServices(monday);
+
+        var cut = RenderComponent<CalendarPage>();
+        cut.WaitForAssertion(() => cut.Find(".calendar-new-event-btn").Should().NotBeNull());
+        cut.Find(".calendar-new-event-btn").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var empty = cut.Find(".calendar-participants-empty");
+            empty.TextContent.Should().Contain("Inga familjemedlemmar registrerade ännu.");
+            empty.QuerySelector("a[href='/installningar']").Should().NotBeNull();
+        });
+    }
+
+    [Fact]
+    public async Task CalendarPage_And_Home_WhenMemberRenamedOrDeleted_ShouldLiveRefreshDisplayedNames()
+    {
+        var monday = new DateOnly(2026, 11, 9);
+        using var bundle = SetupServices(monday);
+        var anna = await bundle.FamilyMemberService.CreateAsync("Anna");
+        var erik = await bundle.FamilyMemberService.CreateAsync("Erik");
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Middag",
+            StartDate = monday,
+            IsAllDay = true,
+            ParticipantMemberIds = [anna.Id, erik.Id]
+        });
+
+        var calCut = RenderComponent<CalendarPage>();
+        var homeCut = RenderComponent<Home>();
+
+        calCut.WaitForAssertion(() =>
+            calCut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-person-badge.is-count")
+                .GetAttribute("title").Should().Be("Anna, Erik"));
+        homeCut.WaitForAssertion(() => homeCut.Markup.Should().Contain("Anna, Erik"));
+
+        // Rename Anna -> Annika
+        await bundle.FamilyMemberService.RenameAsync(anna.Id, "Annika");
+        calCut.WaitForAssertion(() =>
+            calCut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-person-badge.is-count")
+                .GetAttribute("title").Should().Be("Annika, Erik"));
+        homeCut.WaitForAssertion(() => homeCut.Markup.Should().Contain("Annika, Erik"));
+
+        // Permanently delete Erik -> event stays, only Annika remains
+        await bundle.FamilyMemberService.DeleteAsync(erik.Id);
+        calCut.WaitForAssertion(() =>
+            calCut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-person-badge")
+                .TextContent.Trim().Should().Be("Annika"));
+        homeCut.WaitForAssertion(() =>
+        {
+            homeCut.Markup.Should().Contain("Annika");
+            homeCut.Markup.Should().NotContain("Erik");
         });
     }
 }

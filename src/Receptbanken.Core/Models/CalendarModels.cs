@@ -19,6 +19,7 @@ public sealed record CalendarOccurrenceDto
     public string? Location { get; init; }
     public string? Notes { get; init; }
     public IReadOnlyList<string> FamilyMembers { get; init; } = [];
+    public IReadOnlyList<int> ParticipantMemberIds { get; init; } = [];
     public int? ReminderMinutesBefore { get; init; }
     public int RecurrenceIntervalWeeks { get; init; }
     public IsoWeekdayMask RecurrenceDaysOfWeekMask { get; init; }
@@ -38,6 +39,7 @@ public sealed class CalendarEventInput
     public string? Location { get; set; }
     public string? Notes { get; set; }
     public IReadOnlyList<string>? FamilyMembers { get; set; }
+    public IReadOnlyList<int>? ParticipantMemberIds { get; set; }
     public int? ReminderMinutesBefore { get; set; }
     public int RecurrenceIntervalWeeks { get; set; }
     public IsoWeekdayMask RecurrenceDaysOfWeekMask { get; set; }
@@ -57,6 +59,7 @@ public sealed class CalendarOccurrenceOverrideInput
     public string? Location { get; set; }
     public string? Notes { get; set; }
     public IReadOnlyList<string>? FamilyMembers { get; set; }
+    public IReadOnlyList<int>? ParticipantMemberIds { get; set; }
     public int? ReminderMinutesBefore { get; set; }
 }
 

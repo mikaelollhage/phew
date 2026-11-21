@@ -15,15 +15,21 @@ public class FamilyMemberService
 
     private readonly IDbContextFactory<AppDbContext> _dbFactory;
     private readonly FamilyMemberNotifier _notifier;
+    private readonly CalendarNotifier? _calendarNotifier;
+    private readonly RecipeRatingNotifier? _recipeRatingNotifier;
     private readonly TimeProvider _timeProvider;
 
     public FamilyMemberService(
         IDbContextFactory<AppDbContext> dbFactory,
         FamilyMemberNotifier? notifier = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        CalendarNotifier? calendarNotifier = null,
+        RecipeRatingNotifier? recipeRatingNotifier = null)
     {
         _dbFactory = dbFactory;
         _notifier = notifier ?? new FamilyMemberNotifier();
+        _calendarNotifier = calendarNotifier;
+        _recipeRatingNotifier = recipeRatingNotifier;
         _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
@@ -151,6 +157,7 @@ public class FamilyMemberService
 
             await SaveWithUniqueConstraintTranslationAsync(db, normalizedName, cancellationToken);
             _notifier.NotifyChanged();
+            _calendarNotifier?.NotifyChanged();
             return member;
         }
         finally
@@ -301,14 +308,25 @@ public class FamilyMemberService
             var member = await db.FamilyMembers.FirstOrDefaultAsync(m => m.Id == id, cancellationToken)
                 ?? throw new KeyNotFoundException($"Familjemedlem med ID {id} hittades inte.");
 
-            // Future FAM-1C and RATE-1B: delete explicit calendar member associations and
-            // individual recipe ratings for `member.Id` here within the same transaction,
-            // leaving calendar events (including free-text CSV) and recipes intact.
+            await db.CalendarEventParticipants
+                .Where(p => p.FamilyMemberId == id)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await db.CalendarEventExceptionParticipants
+                .Where(p => p.FamilyMemberId == id)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            await db.RecipeRatings
+                .Where(r => r.FamilyMemberId == id)
+                .ExecuteDeleteAsync(cancellationToken);
+
             db.FamilyMembers.Remove(member);
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
 
             _notifier.NotifyChanged();
+            _calendarNotifier?.NotifyChanged();
+            _recipeRatingNotifier?.NotifyChanged();
             return member;
         }
         finally

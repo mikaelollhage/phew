@@ -169,6 +169,7 @@ public static class CalendarRecurrenceExpander
 
         if (exception == null)
         {
+            var (seriesNames, seriesIds) = ResolveSeriesParticipants(ev);
             return new CalendarOccurrenceDto
             {
                 CalendarEventId = ev.Id,
@@ -183,7 +184,8 @@ public static class CalendarRecurrenceExpander
                 EndTime = ev.IsAllDay ? null : ev.EndTime,
                 Location = ev.Location,
                 Notes = ev.Notes,
-                FamilyMembers = ev.FamilyMembers,
+                FamilyMembers = seriesNames,
+                ParticipantMemberIds = seriesIds,
                 ReminderMinutesBefore = ev.ReminderMinutesBefore,
                 RecurrenceIntervalWeeks = ev.RecurrenceIntervalWeeks,
                 RecurrenceDaysOfWeekMask = (IsoWeekdayMask)ev.RecurrenceDaysOfWeekMask,
@@ -219,9 +221,7 @@ public static class CalendarRecurrenceExpander
             ? (string.IsNullOrWhiteSpace(exception.OverrideNotes) ? null : exception.OverrideNotes)
             : ev.Notes;
 
-        var familyMembers = exception.OverrideFamilyMembersCsv != null
-            ? CalendarFamilyMemberHelper.ParseCsv(exception.OverrideFamilyMembersCsv)
-            : ev.FamilyMembers;
+        var (familyMembers, participantMemberIds) = ResolveExceptionParticipants(ev, exception);
 
         int? reminderMinutesBefore;
         if (exception.OverrideReminderCleared)
@@ -256,11 +256,63 @@ public static class CalendarRecurrenceExpander
             Location = location,
             Notes = notes,
             FamilyMembers = familyMembers,
+            ParticipantMemberIds = participantMemberIds,
             ReminderMinutesBefore = reminderMinutesBefore,
             RecurrenceIntervalWeeks = ev.RecurrenceIntervalWeeks,
             RecurrenceDaysOfWeekMask = (IsoWeekdayMask)ev.RecurrenceDaysOfWeekMask,
             RecurrenceEndDate = ev.RecurrenceEndDate
         };
+    }
+
+    private static (IReadOnlyList<string> Names, IReadOnlyList<int> MemberIds) ResolveSeriesParticipants(CalendarEvent ev)
+    {
+        if (ev.Participants.Count > 0)
+        {
+            var ordered = ev.Participants
+                .Where(p => p.FamilyMember != null)
+                .OrderBy(p => !p.FamilyMember!.IsActive)
+                .ThenBy(p => p.FamilyMember!.SortOrder)
+                .ThenBy(p => p.FamilyMember!.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.FamilyMemberId)
+                .ToList();
+
+            if (ordered.Count > 0)
+            {
+                return (
+                    ordered.Select(p => p.FamilyMember!.Name).ToList(),
+                    ordered.Select(p => p.FamilyMemberId).ToList());
+            }
+        }
+
+        // Preserve any unexpected legacy CSV participants read-only if no relational participants exist.
+        return (ev.FamilyMembers, []);
+    }
+
+    private static (IReadOnlyList<string> Names, IReadOnlyList<int> MemberIds) ResolveExceptionParticipants(
+        CalendarEvent ev,
+        CalendarEventException exception)
+    {
+        if (exception.OverrideParticipants)
+        {
+            var ordered = exception.Participants
+                .Where(p => p.FamilyMember != null)
+                .OrderBy(p => !p.FamilyMember!.IsActive)
+                .ThenBy(p => p.FamilyMember!.SortOrder)
+                .ThenBy(p => p.FamilyMember!.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(p => p.FamilyMemberId)
+                .ToList();
+
+            return (
+                ordered.Select(p => p.FamilyMember!.Name).ToList(),
+                ordered.Select(p => p.FamilyMemberId).ToList());
+        }
+
+        if (exception.OverrideFamilyMembersCsv != null)
+        {
+            return (CalendarFamilyMemberHelper.ParseCsv(exception.OverrideFamilyMembersCsv), []);
+        }
+
+        return ResolveSeriesParticipants(ev);
     }
 
     private static IReadOnlyList<CalendarOccurrenceDto> SortOccurrences(List<CalendarOccurrenceDto> occurrences) =>

@@ -52,7 +52,12 @@ public class CalendarService
 
         var events = await db.CalendarEvents
             .AsNoTracking()
+            .AsSplitQuery()
+            .Include(e => e.Participants)
+                .ThenInclude(p => p.FamilyMember)
             .Include(e => e.Exceptions)
+                .ThenInclude(ex => ex.Participants)
+                    .ThenInclude(p => p.FamilyMember)
             .Where(e =>
                 (e.StartDate <= rangeEnd && (e.RecurrenceEndDate == null || e.RecurrenceEndDate >= rangeStart)) ||
                 e.Exceptions.Any(ex =>
@@ -72,7 +77,12 @@ public class CalendarService
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         return await db.CalendarEvents
             .AsNoTracking()
+            .AsSplitQuery()
+            .Include(e => e.Participants)
+                .ThenInclude(p => p.FamilyMember)
             .Include(e => e.Exceptions.OrderBy(ex => ex.OriginalDate))
+                .ThenInclude(ex => ex.Participants)
+                    .ThenInclude(p => p.FamilyMember)
             .FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken);
     }
 
@@ -104,6 +114,7 @@ public class CalendarService
     {
         ArgumentNullException.ThrowIfNull(input);
         var normalized = ValidateAndNormalizeEventInput(input);
+        var participantMemberIds = NormalizeParticipantIds(input.ParticipantMemberIds);
 
         var now = _timeProvider.GetUtcNow();
         var entity = new CalendarEvent
@@ -115,7 +126,6 @@ public class CalendarService
             EndTime = input.IsAllDay ? null : input.EndTime,
             Location = normalized.Location,
             Notes = normalized.Notes,
-            FamilyMembersCsv = normalized.FamilyMembersCsv,
             ReminderMinutesBefore = input.ReminderMinutesBefore,
             RecurrenceIntervalWeeks = input.RecurrenceIntervalWeeks,
             RecurrenceDaysOfWeekMask = (int)input.RecurrenceDaysOfWeekMask,
@@ -126,6 +136,15 @@ public class CalendarService
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+        await ValidateParticipantMemberIdsAsync(db, participantMemberIds, cancellationToken);
+        foreach (var memberId in participantMemberIds)
+        {
+            entity.Participants.Add(new CalendarEventParticipant
+            {
+                FamilyMemberId = memberId
+            });
+        }
 
         db.CalendarEvents.Add(entity);
 
@@ -144,12 +163,18 @@ public class CalendarService
     {
         ArgumentNullException.ThrowIfNull(input);
         var normalized = ValidateAndNormalizeEventInput(input);
+        var participantMemberIds = NormalizeParticipantIds(input.ParticipantMemberIds);
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
+        await ValidateParticipantMemberIdsAsync(db, participantMemberIds, cancellationToken);
+
         var entity = await db.CalendarEvents
+            .AsSplitQuery()
+            .Include(e => e.Participants)
             .Include(e => e.Exceptions)
+                .ThenInclude(ex => ex.Participants)
             .FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken)
             ?? throw new KeyNotFoundException($"Kalenderhändelse med ID {eventId} hittades inte.");
 
@@ -161,12 +186,13 @@ public class CalendarService
         entity.EndTime = input.IsAllDay ? null : input.EndTime;
         entity.Location = normalized.Location;
         entity.Notes = normalized.Notes;
-        entity.FamilyMembersCsv = normalized.FamilyMembersCsv;
         entity.ReminderMinutesBefore = input.ReminderMinutesBefore;
         entity.RecurrenceIntervalWeeks = input.RecurrenceIntervalWeeks;
         entity.RecurrenceDaysOfWeekMask = (int)input.RecurrenceDaysOfWeekMask;
         entity.RecurrenceEndDate = input.RecurrenceIntervalWeeks > 0 ? input.RecurrenceEndDate : null;
         entity.UpdatedAt = now;
+
+        SyncEventParticipants(db, entity, participantMemberIds);
 
         // Remove exceptions whose OriginalDate is no longer a valid occurrence of the updated series.
         if (entity.Exceptions.Count > 0)
@@ -242,12 +268,17 @@ public class CalendarService
             input.Notes,
             input.FamilyMembers,
             input.ReminderMinutesBefore);
+        var participantMemberIds = NormalizeParticipantIds(input.ParticipantMemberIds);
 
         await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
+        await ValidateParticipantMemberIdsAsync(db, participantMemberIds, cancellationToken);
+
         var ev = await db.CalendarEvents
+            .AsSplitQuery()
             .Include(e => e.Exceptions)
+                .ThenInclude(ex => ex.Participants)
             .FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken)
             ?? throw new KeyNotFoundException($"Kalenderhändelse med ID {eventId} hittades inte.");
 
@@ -279,10 +310,12 @@ public class CalendarService
         exception.OverrideEndTime = input.IsAllDay ? null : input.EndTime;
         exception.OverrideLocation = normalized.Location ?? string.Empty;
         exception.OverrideNotes = normalized.Notes ?? string.Empty;
-        exception.OverrideFamilyMembersCsv = normalized.FamilyMembersCsv ?? string.Empty;
+        exception.OverrideParticipants = true;
         exception.OverrideReminderMinutesBefore = input.ReminderMinutesBefore;
         exception.OverrideReminderCleared = !input.ReminderMinutesBefore.HasValue;
         exception.UpdatedAt = now;
+
+        SyncExceptionParticipants(db, exception, participantMemberIds);
 
         await CancelStaleDeliveriesForOccurrenceAsync(
             db,
@@ -312,7 +345,9 @@ public class CalendarService
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
         var ev = await db.CalendarEvents
+            .AsSplitQuery()
             .Include(e => e.Exceptions)
+                .ThenInclude(ex => ex.Participants)
             .FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken)
             ?? throw new KeyNotFoundException($"Kalenderhändelse med ID {eventId} hittades inte.");
 
@@ -345,9 +380,16 @@ public class CalendarService
         exception.OverrideLocation = null;
         exception.OverrideNotes = null;
         exception.OverrideFamilyMembersCsv = null;
+        exception.OverrideParticipants = false;
         exception.OverrideReminderMinutesBefore = null;
         exception.OverrideReminderCleared = false;
         exception.UpdatedAt = now;
+
+        if (exception.Participants.Count > 0)
+        {
+            db.CalendarEventExceptionParticipants.RemoveRange(exception.Participants);
+            exception.Participants.Clear();
+        }
 
         await CancelPendingDeliveriesForOccurrenceAsync(db, eventId, originalDate, now, cancellationToken);
 
@@ -579,6 +621,101 @@ public class CalendarService
         }
 
         return new NormalizedCommonFields(trimmedTitle, trimmedLocation, trimmedNotes, familyMembersCsv);
+    }
+
+    private static List<int> NormalizeParticipantIds(IReadOnlyList<int>? participantMemberIds)
+    {
+        if (participantMemberIds == null || participantMemberIds.Count == 0)
+            return [];
+
+        return participantMemberIds.Distinct().ToList();
+    }
+
+    private static async Task ValidateParticipantMemberIdsAsync(
+        AppDbContext db,
+        IReadOnlyList<int> memberIds,
+        CancellationToken cancellationToken)
+    {
+        if (memberIds.Count == 0)
+            return;
+
+        if (memberIds.Any(id => id <= 0))
+            throw new ArgumentException("Ogiltigt familjemedlems-ID angavs.", nameof(memberIds));
+
+        var existingIds = await db.FamilyMembers
+            .AsNoTracking()
+            .Where(m => memberIds.Contains(m.Id))
+            .Select(m => m.Id)
+            .ToListAsync(cancellationToken);
+
+        if (existingIds.Count != memberIds.Count)
+            throw new ArgumentException("En eller flera valda familjemedlemmar hittades inte.", nameof(memberIds));
+    }
+
+    private static void SyncEventParticipants(
+        AppDbContext db,
+        CalendarEvent entity,
+        IReadOnlyList<int> targetMemberIds)
+    {
+        var targetSet = targetMemberIds.ToHashSet();
+        var toRemove = entity.Participants
+            .Where(p => !targetSet.Contains(p.FamilyMemberId))
+            .ToList();
+
+        if (toRemove.Count > 0)
+        {
+            db.CalendarEventParticipants.RemoveRange(toRemove);
+            foreach (var r in toRemove)
+            {
+                entity.Participants.Remove(r);
+            }
+        }
+
+        var existingSet = entity.Participants.Select(p => p.FamilyMemberId).ToHashSet();
+        foreach (var memberId in targetMemberIds)
+        {
+            if (!existingSet.Contains(memberId))
+            {
+                entity.Participants.Add(new CalendarEventParticipant
+                {
+                    CalendarEventId = entity.Id,
+                    FamilyMemberId = memberId
+                });
+            }
+        }
+    }
+
+    private static void SyncExceptionParticipants(
+        AppDbContext db,
+        CalendarEventException exception,
+        IReadOnlyList<int> targetMemberIds)
+    {
+        var targetSet = targetMemberIds.ToHashSet();
+        var toRemove = exception.Participants
+            .Where(p => !targetSet.Contains(p.FamilyMemberId))
+            .ToList();
+
+        if (toRemove.Count > 0)
+        {
+            db.CalendarEventExceptionParticipants.RemoveRange(toRemove);
+            foreach (var r in toRemove)
+            {
+                exception.Participants.Remove(r);
+            }
+        }
+
+        var existingSet = exception.Participants.Select(p => p.FamilyMemberId).ToHashSet();
+        foreach (var memberId in targetMemberIds)
+        {
+            if (!existingSet.Contains(memberId))
+            {
+                exception.Participants.Add(new CalendarEventExceptionParticipant
+                {
+                    CalendarEventExceptionId = exception.Id,
+                    FamilyMemberId = memberId
+                });
+            }
+        }
     }
 
     private sealed record NormalizedCommonFields(

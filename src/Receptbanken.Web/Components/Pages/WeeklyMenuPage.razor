@@ -1,9 +1,11 @@
 @page "/veckomeny"
 @implements IAsyncDisposable
+@using Receptbanken.Core.Services
 @inject WeeklyMenuService WeeklyMenuService
 @inject RecipeService RecipeService
 @inject CategoryService CategoryService
 @inject ILocalDateProvider LocalDateProvider
+@inject IServiceProvider ServiceProvider
 @inject NavigationManager Navigation
 @inject IJSRuntime JSRuntime
 @inject ILogger<WeeklyMenuPage> Logger
@@ -248,6 +250,7 @@ else
                                AllRecipes="allRecipes"
                                IsToday="@(day.Date == localToday)"
                                IsReorderMenuOpen="@(activeReorderDayIndex == day.DayIndex)"
+                               RatingSummary="@GetRatingSummary(day.Recipe)"
                                OnToggleReorderMenu="HandleToggleReorderMenu"
                                OnMoveUp="HandleMoveUp"
                                OnMoveDown="HandleMoveDown"
@@ -408,9 +411,24 @@ else
     private int? _pendingScrollDayIndex;
     private bool _isDisposed;
     private DotNetObjectReference<WeeklyMenuPage>? _dotNetRef;
+    private RecipeRatingNotifier? _ratingNotifier;
+    private FamilyMemberNotifier? _familyMemberNotifier;
+    private Dictionary<int, RecipeRatingSummary>? _ratingSummariesByRecipeId;
 
     protected override async Task OnInitializedAsync()
     {
+        _ratingNotifier = ServiceProvider.GetService<RecipeRatingNotifier>();
+        if (_ratingNotifier != null)
+        {
+            _ratingNotifier.OnChanged += HandleRatingsChanged;
+        }
+
+        _familyMemberNotifier = ServiceProvider.GetService<FamilyMemberNotifier>();
+        if (_familyMemberNotifier != null)
+        {
+            _familyMemberNotifier.OnChanged += HandleRatingsChanged;
+        }
+
         localToday = LocalDateProvider.GetLocalToday();
         var initialDate = ParseQueryDateOrDefault(DateQuery, localToday);
         currentWeek = CalendarWeek.FromDate(initialDate);
@@ -547,6 +565,7 @@ else
         draggedSourceDayIndex = null;
         draggedDayHadReorderOpen = false;
         activeReorderDayIndex = null;
+        _ratingSummariesByRecipeId = null;
 
         currentWeek = CalendarWeek.FromDate(dateInWeek);
 
@@ -1244,12 +1263,81 @@ else
         });
     }
 
+    private RecipeRatingSummary? GetRatingSummary(Recipe? recipe)
+    {
+        if (recipe == null)
+        {
+            return null;
+        }
+
+        if (_ratingSummariesByRecipeId != null &&
+            _ratingSummariesByRecipeId.TryGetValue(recipe.Id, out var summary))
+        {
+            return summary;
+        }
+
+        return RecipeRatingSummary.FromRatings(recipe.Ratings);
+    }
+
+    private void HandleRatingsChanged(long _version)
+    {
+        if (_isDisposed || currentMenu == null)
+        {
+            return;
+        }
+
+        var ratingService = ServiceProvider.GetService<RecipeRatingService>();
+        if (ratingService == null)
+        {
+            return;
+        }
+
+        var recipeIds = currentMenu.Days
+            .Where(d => d.RecipeId.HasValue)
+            .Select(d => d.RecipeId!.Value)
+            .Distinct()
+            .ToList();
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            try
+            {
+                var updated = await ratingService.GetSummariesAsync(recipeIds);
+                foreach (var recipeId in recipeIds)
+                {
+                    updated.TryAdd(recipeId, RecipeRatingSummary.Empty);
+                }
+
+                _ratingSummariesByRecipeId = updated;
+                StateHasChanged();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+        });
+    }
+
     public async ValueTask DisposeAsync()
     {
         if (_isDisposed)
             return;
 
         _isDisposed = true;
+
+        if (_ratingNotifier != null)
+        {
+            _ratingNotifier.OnChanged -= HandleRatingsChanged;
+        }
+
+        if (_familyMemberNotifier != null)
+        {
+            _familyMemberNotifier.OnChanged -= HandleRatingsChanged;
+        }
 
         if (_dotNetRef != null)
         {
