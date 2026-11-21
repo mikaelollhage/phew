@@ -3,7 +3,7 @@
 @if (Ingredient != null)
 {
     <div class="ingredient-editor-row @(DragHandle != null || RowActions != null ? "has-drag-handle" : "")">
-        <FluentTextField @bind-Value="QuantityDisplay" Placeholder="Mängd" Title="Mängd" Style="width: 100%;" />
+        <FluentTextField Id="@FirstInputId" @bind-Value="QuantityDisplay" Placeholder="Mängd" Title="Mängd" Style="width: 100%;" />
         <FluentTextField @bind-Value="Ingredient.Unit" Placeholder="Enhet" Title="Enhet" Style="width: 100%;" />
         <FluentTextField @bind-Value="Ingredient.Name" Placeholder="Råvara *" Title="Råvara" Style="width: 100%;" />
         <FluentTextField @bind-Value="Ingredient.Comment" Placeholder="Kommentar (t.ex. à 200 g)" Title="Kommentar" Style="width: 100%;" />
@@ -15,7 +15,7 @@
             }
             <button type="button" class="btn-danger-custom ingredient-remove-btn"
                     @onclick="HandleRemove" title="Ta bort rad" aria-label="Ta bort rad">
-                ✕
+                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
             </button>
             @if (DragHandle != null)
             {
@@ -28,6 +28,9 @@
 @code {
     [Parameter]
     public Ingredient? Ingredient { get; set; }
+
+    [Parameter]
+    public string? FirstInputId { get; set; }
 
     [Parameter]
     public RenderFragment? RowActions { get; set; }

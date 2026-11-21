@@ -531,4 +531,36 @@ public class IngredientSectionReorderingTests : TestContext
         cut.Find(".ingredient-row-menu-anchor.is-open").KeyDown(new KeyboardEventArgs { Key = "Escape" });
         cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
     }
+
+    [Fact]
+    public void RecipeIngredientEditor_AddButtons_ShouldRenderBelowList_AndFocusNewItemInputs()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "mjöl" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // Actions must not be in header; they must appear after the ingredient list
+        cut.Find(".ingredient-editor-header").QuerySelector(".ingredient-editor-actions").Should().BeNull();
+        var listElement = cut.Find(".ingredient-editor-list");
+        listElement.NextElementSibling.Should().NotBeNull();
+        listElement.NextElementSibling!.ClassList.Should().Contain("ingredient-editor-actions");
+
+        // Add ingredient -> focuses first input of newly appended row
+        cut.Find(".ingredient-add-btn").Click();
+        ingredients.Should().HaveCount(2);
+        var addedIngredientId = cut.FindAll(".ingredient-editor-item").Last().GetAttribute("data-editor-item-id");
+        JSInterop.VerifyInvoke("receptbanken.focusElement")
+            .Arguments.Should().Contain($"ingredient-qty-input-{addedIngredientId}");
+
+        // Add section -> focuses section title input
+        cut.Find(".ingredient-add-section-btn").Click();
+        var addedSectionId = cut.FindAll(".ingredient-editor-item").Last().GetAttribute("data-editor-item-id");
+        JSInterop.VerifyInvoke("receptbanken.focusElement", 2)
+            .Last().Arguments.Should().Contain($"ingredient-section-input-{addedSectionId}");
+    }
 }

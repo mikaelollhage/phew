@@ -150,8 +150,9 @@ public class RecipeReusableComponentsTests : TestContext
 
         // Remove button
         var removeBtn = cut.Find(".ingredient-remove-btn");
-        removeBtn.TextContent.Trim().Should().Be("✕");
+        removeBtn.QuerySelector("svg").Should().NotBeNull();
         removeBtn.GetAttribute("title").Should().Be("Ta bort rad");
+        removeBtn.GetAttribute("aria-label").Should().Be("Ta bort rad");
     }
 
     [Fact]
@@ -223,7 +224,7 @@ public class RecipeReusableComponentsTests : TestContext
         cut.FindAll(".ingredient-editor-row").Should().HaveCount(1);
 
         // Click Add
-        var addBtn = cut.Find("button.btn-secondary-custom");
+        var addBtn = cut.Find(".ingredient-add-btn");
         addBtn.Click();
 
         ingredients.Should().HaveCount(2);
@@ -253,7 +254,7 @@ public class RecipeReusableComponentsTests : TestContext
 
         cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade ingredienser (1)");
 
-        cut.Find("button.btn-secondary-custom").Click();
+        cut.Find(".ingredient-add-btn").Click();
         cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade ingredienser (2)");
     }
 
@@ -364,20 +365,23 @@ public class RecipeReusableComponentsTests : TestContext
         cut.FindAll(".instruction-editor-row").Should().HaveCount(2);
         cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2");
 
-        // Click Add
-        cut.Find("button.btn-secondary-custom").Click();
+        // Add step via compact add row
+        cut.Find(".instruction-add-input").Input("Steg tre");
+        cut.Find(".instruction-add-btn").Click();
         instructions.Should().HaveCount(3);
+        instructions[2].InstructionText.Should().Be("Steg tre");
         cut.FindAll(".instruction-editor-row").Should().HaveCount(3);
         cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2", "3");
 
-        // Remove the first step (index 0)
-        var removeBtns = cut.FindAll(".instruction-remove-btn");
-        removeBtns.ElementAt(0).Click();
+        // Remove the first step (index 0) via row contextual menu
+        cut.FindAll(".instruction-row-menu-btn").ElementAt(0).Click();
+        cut.Find(".instruction-remove-btn").Click();
 
         instructions.Should().HaveCount(2);
         instructions[0].InstructionText.Should().Be("Steg två");
+        instructions[1].InstructionText.Should().Be("Steg tre");
         cut.FindAll(".instruction-editor-row").Should().HaveCount(2);
-        // The remaining step should now be numbered 1
+        // The remaining steps should now be numbered 1, 2
         cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2");
     }
 
@@ -396,7 +400,8 @@ public class RecipeReusableComponentsTests : TestContext
 
         cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade instruktionssteg (1)");
 
-        cut.Find("button.btn-secondary-custom").Click();
+        cut.Find(".instruction-add-input").Input("Lägg i pasta");
+        cut.Find(".instruction-add-btn").Click();
         cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade instruktionssteg (2)");
     }
 

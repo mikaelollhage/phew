@@ -2,16 +2,33 @@
 
 @if (Step != null)
 {
-    <div class="instruction-editor-row">
+    <div class="instruction-editor-row" data-step-number="@StepNumber">
         <div class="step-number">@StepNumber</div>
-        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px;">
-            <FluentTextField @bind-Value="Step.GroupHeader" Placeholder="Sektionsrubrik (valfritt)" Style="width: 100%;" />
-            <FluentTextArea @bind-Value="Step.InstructionText" Placeholder="Beskriv vad som ska göras i detta steg..." Style="width: 100%;" Rows="2" />
+        <div class="instruction-editor-fields">
+            <FluentTextField @bind-Value="Step.GroupHeader"
+                             Placeholder="Sektionsrubrik (valfritt)"
+                             AriaLabel="@($"Sektionsrubrik för steg {StepNumber}")"
+                             Style="width: 100%;" />
+            <FluentTextArea Id="@TextAreaId"
+                            @bind-Value="Step.InstructionText"
+                            Placeholder="Beskriv vad som ska göras i detta steg..."
+                            AriaLabel="@($"Instruktion för steg {StepNumber}")"
+                            Style="width: 100%;"
+                            Rows="2" />
         </div>
-        <button type="button" class="btn-danger-custom instruction-remove-btn"
-                @onclick="HandleRemove" title="Ta bort steg">
-            ✕
-        </button>
+        <div class="instruction-row-actions">
+            @if (RowActions != null)
+            {
+                @RowActions
+            }
+            else
+            {
+                <button type="button" class="btn-danger-custom instruction-remove-btn"
+                        @onclick="HandleRemove" title="Ta bort steg" aria-label="@($"Ta bort steg {StepNumber}")">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                </button>
+            }
+        </div>
     </div>
 }
 
@@ -21,6 +38,12 @@
 
     [Parameter]
     public int StepNumber { get; set; }
+
+    [Parameter]
+    public string? TextAreaId { get; set; }
+
+    [Parameter]
+    public RenderFragment? RowActions { get; set; }
 
     [Parameter]
     public EventCallback OnRemove { get; set; }

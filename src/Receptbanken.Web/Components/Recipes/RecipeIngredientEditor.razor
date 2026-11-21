@@ -12,24 +12,6 @@
         {
             <h2 class="form-section-title" style="margin-bottom: 0;">@HeadingText</h2>
         }
-
-        <div class="ingredient-editor-actions">
-            <button type="button" class="btn-secondary-custom" @onclick="AddIngredient">
-                @if (ShowAddIcon)
-                {
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
-                }
-                @AddButtonText
-            </button>
-
-            <button type="button" class="btn-secondary-custom ingredient-add-section-btn" @onclick="AddSection">
-                @if (ShowAddIcon)
-                {
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
-                }
-                Lägg till sektion
-            </button>
-        </div>
     </div>
 
     @if (!string.IsNullOrWhiteSpace(HelpText))
@@ -108,7 +90,7 @@
                                     title="Ta bort sektion (ingredienser behålls)"
                                     aria-label="@($"Ta bort {sectionLabel} utan att radera ingredienser")"
                                     @onclick="@(() => RemoveSection(itemKey))">
-                                ✕
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
                             </button>
 
                             @RenderDragHandle(itemKey, sectionLabel)
@@ -119,7 +101,9 @@
                 {
                     var ingLabel = string.IsNullOrWhiteSpace(item.Ingredient.Name) ? "ingrediens" : item.Ingredient.Name;
 
-                    <RecipeIngredientRow Ingredient="item.Ingredient" OnRemove="@(() => RemoveIngredient(itemKey))">
+                    <RecipeIngredientRow Ingredient="item.Ingredient"
+                                         FirstInputId="@($"ingredient-qty-input-{itemKey}")"
+                                         OnRemove="@(() => RemoveIngredient(itemKey))">
                         <RowActions>
                             @RenderRowMenu(itemKey, isSection: false, ingLabel)
                         </RowActions>
@@ -130,6 +114,24 @@
                 }
             </div>
         }
+    </div>
+
+    <div class="ingredient-editor-actions">
+        <button type="button" class="btn-secondary-custom ingredient-add-btn" @onclick="AddIngredient">
+            @if (ShowAddIcon)
+            {
+                <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
+            }
+            @AddButtonText
+        </button>
+
+        <button type="button" class="btn-secondary-custom ingredient-add-section-btn" @onclick="AddSection">
+            @if (ShowAddIcon)
+            {
+                <FluentIcon Value="@(new Icons.Regular.Size16.Add())" Color="Color.Neutral" />
+            }
+            Lägg till sektion
+        </button>
     </div>
 </div>
 
@@ -169,7 +171,7 @@
     private int? draggedItemKey;
     private int? dragOverItemKey;
     private int? openMenuKey;
-    private int? _pendingFocusSectionInputKey;
+    private string? _pendingFocusElementId;
 
     private string HeadingText => TitleFormatter != null
         ? TitleFormatter(_sectionList.IngredientCount)
@@ -204,13 +206,13 @@
             }
         }
 
-        if (_pendingFocusSectionInputKey.HasValue)
+        if (!string.IsNullOrEmpty(_pendingFocusElementId))
         {
-            var keyToFocus = _pendingFocusSectionInputKey.Value;
-            _pendingFocusSectionInputKey = null;
+            var elementId = _pendingFocusElementId;
+            _pendingFocusElementId = null;
             try
             {
-                await JSRuntime.InvokeVoidAsync("receptbanken.focusElement", $"ingredient-section-input-{keyToFocus}");
+                await JSRuntime.InvokeVoidAsync("receptbanken.focusElement", elementId);
             }
             catch
             {
@@ -222,7 +224,8 @@
     private async Task AddIngredient()
     {
         var newIng = new Ingredient { Name = string.Empty };
-        _sectionList.AddIngredient(newIng, Ingredients);
+        var addedItem = _sectionList.AddIngredient(newIng, Ingredients);
+        _pendingFocusElementId = $"ingredient-qty-input-{addedItem.Key}";
         if (OnIngredientAdded.HasDelegate)
         {
             await OnIngredientAdded.InvokeAsync(newIng);
@@ -232,7 +235,7 @@
     private void AddSection()
     {
         var section = _sectionList.AddSection(string.Empty, Ingredients);
-        _pendingFocusSectionInputKey = section.Key;
+        _pendingFocusElementId = $"ingredient-section-input-{section.Key}";
     }
 
     private void RenameSection(int sectionKey, string newTitle)
