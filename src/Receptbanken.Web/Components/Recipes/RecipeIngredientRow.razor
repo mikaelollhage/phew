@@ -11,10 +11,10 @@
         }
         <div class="ingredient-editor-fields">
             <FluentTextField Id="@FirstInputId" @bind-Value="QuantityDisplay" Placeholder="Mängd" Title="Mängd" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Unit" Placeholder="Enhet" Title="Enhet" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Name" Placeholder="Råvara *" Title="Råvara" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Comment" Placeholder="Kommentar (t.ex. à 200 g)" Title="Kommentar" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Preparation" Placeholder="Beredning (t.ex. hackad)" Title="Beredning" Style="width: 100%;" />
+            <FluentTextField @bind-Value="Ingredient.Unit" Immediate="true" ImmediateDelay="250" Placeholder="Enhet" Title="Enhet" Style="width: 100%;" />
+            <FluentTextField @bind-Value="Ingredient.Name" Immediate="true" ImmediateDelay="250" Placeholder="Råvara *" Title="Råvara" Style="width: 100%;" />
+            <FluentTextField @bind-Value="Ingredient.Comment" Immediate="true" ImmediateDelay="250" Placeholder="Kommentar (t.ex. à 200 g)" Title="Kommentar" Style="width: 100%;" />
+            <FluentTextField @bind-Value="Ingredient.Preparation" Immediate="true" ImmediateDelay="250" Placeholder="Beredning (t.ex. hackad)" Title="Beredning" Style="width: 100%;" />
         </div>
         @if (RowActions != null)
         {

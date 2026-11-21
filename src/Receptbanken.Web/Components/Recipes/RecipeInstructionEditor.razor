@@ -1,4 +1,5 @@
 @namespace Receptbanken.Web.Components.Recipes
+@implements IAsyncDisposable
 @inject IJSRuntime JSRuntime
 
 <div class="form-section">
@@ -63,7 +64,7 @@
                 aria-label="Lägg till steg"
                 disabled="@string.IsNullOrWhiteSpace(newStepText)"
                 @onclick="AddInstructionFromInput">
-            <FluentIcon Value="@(new Icons.Regular.Size20.Add())" Color="Color.Custom" CustomColor="currentColor" />
+            <FluentIcon Value="@(new Icons.Regular.Size20.Add())" Color="Color.Custom" />
         </button>
     </div>
 </div>
@@ -105,6 +106,8 @@
     private InstructionStep? openMenuStep;
     private string newStepText = string.Empty;
     private string? _pendingFocusElementId;
+    private DotNetObjectReference<RecipeInstructionEditor>? _dotNetRef;
+    private bool _isDisposed;
 
     public RecipeInstructionEditor()
     {
@@ -125,6 +128,19 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            try
+            {
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JSRuntime.InvokeVoidAsync("receptbanken.registerRowMenuHost", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore when JS runtime is unavailable (e.g. unit tests)
+            }
+        }
+
         if (!string.IsNullOrEmpty(_pendingFocusElementId))
         {
             var elementId = _pendingFocusElementId;
@@ -224,14 +240,45 @@
         </div>
     };
 
-    private void ToggleRowMenu(InstructionStep step)
+    private async Task ToggleRowMenu(InstructionStep step)
     {
         openMenuStep = ReferenceEquals(openMenuStep, step) ? null : step;
+        if (openMenuStep != null && _dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("receptbanken.closeOtherRowMenus", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore when JS runtime is unavailable (e.g. unit tests)
+            }
+        }
     }
 
     private void CloseRowMenu()
     {
         openMenuStep = null;
+    }
+
+    [JSInvokable]
+    public Task CloseRowMenuAsync()
+    {
+        if (_isDisposed || openMenuStep == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            openMenuStep = null;
+            StateHasChanged();
+        });
     }
 
     private void HandleMenuKeyDown(KeyboardEventArgs e, int stepKey)
@@ -343,6 +390,25 @@
         for (int i = 0; i < Instructions.Count; i++)
         {
             Instructions[i].StepNumber = i + 1;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _isDisposed = true;
+        if (_dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("receptbanken.unregisterRowMenuHost", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore during prerender/teardown
+            }
+
+            _dotNetRef.Dispose();
+            _dotNetRef = null;
         }
     }
 }

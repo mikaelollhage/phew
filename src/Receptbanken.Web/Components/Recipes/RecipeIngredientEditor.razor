@@ -222,6 +222,7 @@
 
     private async Task AddIngredient()
     {
+        openMenuKey = null;
         var newIng = new Ingredient { Name = string.Empty };
         var addedItem = _sectionList.AddIngredient(newIng, Ingredients);
         _pendingFocusElementId = $"ingredient-qty-input-{addedItem.Key}";
@@ -233,6 +234,7 @@
 
     private void AddSection()
     {
+        openMenuKey = null;
         var section = _sectionList.AddSection(string.Empty, Ingredients);
         _pendingFocusElementId = $"ingredient-section-input-{section.Key}";
     }
@@ -336,10 +338,7 @@
 
     private void RemoveSection(int sectionKey)
     {
-        if (openMenuKey == sectionKey)
-        {
-            openMenuKey = null;
-        }
+        openMenuKey = null;
         _sectionList.RemoveSection(sectionKey, Ingredients);
     }
 
@@ -348,10 +347,7 @@
         var item = _sectionList.Items.FirstOrDefault(i => i.Key == ingredientKey && i.IsIngredient);
         int ingredientIndex = item?.Ingredient != null ? Ingredients.IndexOf(item.Ingredient) : -1;
 
-        if (openMenuKey == ingredientKey)
-        {
-            openMenuKey = null;
-        }
+        openMenuKey = null;
 
         if (_sectionList.RemoveIngredient(ingredientKey, Ingredients) &&
             ingredientIndex >= 0 &&
@@ -363,20 +359,14 @@
 
     private void ConvertIngredientToSection(int ingredientKey)
     {
-        if (openMenuKey == ingredientKey)
-        {
-            openMenuKey = null;
-        }
+        openMenuKey = null;
 
         _sectionList.ConvertIngredientToSection(ingredientKey, Ingredients);
     }
 
     private void ConvertSectionToIngredient(int sectionKey)
     {
-        if (openMenuKey == sectionKey)
-        {
-            openMenuKey = null;
-        }
+        openMenuKey = null;
 
         _sectionList.ConvertSectionToIngredient(sectionKey, Ingredients);
     }
@@ -432,9 +422,20 @@
         dragOverItemKey = null;
     }
 
-    private void ToggleRowMenu(int itemKey)
+    private async Task ToggleRowMenu(int itemKey)
     {
         openMenuKey = openMenuKey == itemKey ? null : itemKey;
+        if (openMenuKey.HasValue && _dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("receptbanken.closeOtherRowMenus", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore when JS runtime is unavailable (e.g. unit tests)
+            }
+        }
     }
 
     private void CloseRowMenu()

@@ -6,11 +6,15 @@
         <div class="step-number">@StepNumber</div>
         <div class="instruction-editor-fields">
             <FluentTextField @bind-Value="Step.GroupHeader"
+                             Immediate="true"
+                             ImmediateDelay="250"
                              Placeholder="Sektionsrubrik (valfritt)"
                              AriaLabel="@($"Sektionsrubrik för steg {StepNumber}")"
                              Style="width: 100%;" />
             <FluentTextArea Id="@TextAreaId"
                             @bind-Value="Step.InstructionText"
+                            Immediate="true"
+                            ImmediateDelay="250"
                             Placeholder="Beskriv vad som ska göras i detta steg..."
                             AriaLabel="@($"Instruktion för steg {StepNumber}")"
                             Style="width: 100%;"

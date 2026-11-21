@@ -419,6 +419,7 @@ window.receptbanken = {
         };
 
         const cleanupTouchGesture = (notifyBlazorCancel) => {
+            isTouchActive = false;
             const wasDragging = touchState.mode === 'dragging';
             if (touchState.timer) {
                 clearTimeout(touchState.timer);
@@ -863,6 +864,7 @@ window.receptbanken = {
         };
 
         const cleanupTouchGesture = (notifyBlazorCancel) => {
+            isTouchActive = false;
             const wasDragging = touchState.mode === 'dragging';
             if (touchState.timer) {
                 clearTimeout(touchState.timer);
@@ -1056,9 +1058,72 @@ window.receptbanken = {
         }
     },
 
+    _rowMenuHosts: [],
+    _rowMenuKeyDownHandler: null,
+
+    _isSameDotNetRef: function (a, b) {
+        if (!a || !b) return false;
+        if (typeof a._id !== 'undefined' && typeof b._id !== 'undefined') {
+            return a._id === b._id;
+        }
+        return a === b;
+    },
+
+    registerRowMenuHost: function (dotNetRef) {
+        if (!dotNetRef) return;
+        try {
+            if (!this._rowMenuHosts.some(h => this._isSameDotNetRef(h, dotNetRef))) {
+                this._rowMenuHosts.push(dotNetRef);
+            }
+            if (!this._rowMenuKeyDownHandler) {
+                this._rowMenuKeyDownHandler = (e) => {
+                    if (e && e.key === 'Escape' && document.querySelector('.ingredient-row-menu-popover')) {
+                        this._rowMenuHosts.forEach(host => {
+                            try {
+                                host.invokeMethodAsync('CloseRowMenuAsync');
+                            } catch (_) {}
+                        });
+                    }
+                };
+                document.addEventListener('keydown', this._rowMenuKeyDownHandler, false);
+            }
+        } catch (err) {
+            console.debug('registerRowMenuHost misslyckades:', err);
+        }
+    },
+
+    unregisterRowMenuHost: function (dotNetRef) {
+        if (!dotNetRef) return;
+        try {
+            this._rowMenuHosts = this._rowMenuHosts.filter(h => !this._isSameDotNetRef(h, dotNetRef));
+            if (this._rowMenuHosts.length === 0 && this._rowMenuKeyDownHandler) {
+                document.removeEventListener('keydown', this._rowMenuKeyDownHandler, false);
+                this._rowMenuKeyDownHandler = null;
+            }
+        } catch (err) {
+            console.debug('unregisterRowMenuHost misslyckades:', err);
+        }
+    },
+
+    closeOtherRowMenus: function (activeDotNetRef) {
+        try {
+            this._rowMenuHosts.forEach(host => {
+                if (!this._isSameDotNetRef(host, activeDotNetRef)) {
+                    try {
+                        host.invokeMethodAsync('CloseRowMenuAsync');
+                    } catch (_) {}
+                }
+            });
+        } catch (err) {
+            console.debug('closeOtherRowMenus misslyckades:', err);
+        }
+    },
+
     registerIngredientEditorTouchDrag: function (dotNetRef) {
         try {
             this.unregisterIngredientEditorTouchDrag();
+            this._ingredientMenuDotNetRef = dotNetRef;
+            this.registerRowMenuHost(dotNetRef);
             this._initIngredientEditorTouchDrag(dotNetRef);
         } catch (err) {
             console.debug('registerIngredientEditorTouchDrag misslyckades:', err);
@@ -1067,6 +1132,10 @@ window.receptbanken = {
 
     unregisterIngredientEditorTouchDrag: function () {
         try {
+            if (this._ingredientMenuDotNetRef) {
+                this.unregisterRowMenuHost(this._ingredientMenuDotNetRef);
+                this._ingredientMenuDotNetRef = null;
+            }
             if (this._ingredientTouchStart) {
                 document.removeEventListener('touchstart', this._ingredientTouchStart);
                 this._ingredientTouchStart = null;
@@ -1147,6 +1216,7 @@ window.receptbanken = {
         };
 
         const cleanupTouchGesture = (notifyBlazorCancel) => {
+            isTouchActive = false;
             const wasDragging = touchState.mode === 'dragging';
             if (touchState.timer) {
                 clearTimeout(touchState.timer);
@@ -1397,12 +1467,6 @@ window.receptbanken = {
         };
 
         const onKeyDownCapture = (e) => {
-            if (e && e.key === 'Escape' && document.querySelector('.ingredient-row-menu-popover')) {
-                try {
-                    dotNetRef.invokeMethodAsync('CloseRowMenuAsync');
-                } catch (_) {}
-                return;
-            }
             if (this._isActiveReorderHandleKeyDown(e)) {
                 e.preventDefault();
             }

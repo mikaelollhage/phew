@@ -235,4 +235,56 @@ public class RecipeInstructionEditorTests : TestContext
         reloaded.Instructions[2].InstructionText.Should().Be(legacyText);
         reloaded.Instructions[2].GroupHeader.Should().Be("Sås");
     }
+
+    [Fact]
+    public async Task SwitchingMenus_ShouldClosePreviousAndOpenTarget_AndCloseViaJsEscape()
+    {
+        var instructions = new List<InstructionStep>
+        {
+            new() { StepNumber = 1, InstructionText = "Steg 1" },
+            new() { StepNumber = 2, InstructionText = "Steg 2" }
+        };
+
+        var cut = RenderComponent<RecipeInstructionEditor>(parameters => parameters
+            .Add(p => p.Instructions, instructions));
+
+        // Open step 1 menu
+        cut.FindAll(".instruction-row-menu-btn").ElementAt(0).Click();
+        cut.FindAll(".instruction-row-menu-popover").Should().ContainSingle();
+        cut.Find(".instruction-row-menu-popover").Closest(".instruction-editor-row")!
+            .GetAttribute("data-step-number").Should().Be("1");
+
+        // Switch directly to step 2 menu
+        cut.FindAll(".instruction-row-menu-btn").ElementAt(1).Click();
+        cut.FindAll(".instruction-row-menu-popover").Should().ContainSingle();
+        cut.Find(".instruction-row-menu-popover").Closest(".instruction-editor-row")!
+            .GetAttribute("data-step-number").Should().Be("2");
+
+        // Close via JSInvokable CloseRowMenuAsync (global Escape)
+        await cut.InvokeAsync(() => cut.Instance.CloseRowMenuAsync());
+        cut.FindAll(".instruction-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".instruction-row-menu-backdrop").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecipeInstructionRow_ImmediateInput_ShouldUpdateModelWithoutBlur_AndPreserveMultilineText()
+    {
+        var step = new InstructionStep
+        {
+            StepNumber = 1,
+            GroupHeader = "Del 1",
+            InstructionText = "Ursprunglig text"
+        };
+
+        var cut = RenderComponent<RecipeInstructionRow>(parameters => parameters
+            .Add(p => p.Step, step)
+            .Add(p => p.StepNumber, 1));
+
+        cut.Find("fluent-text-field").Input("Sås");
+        cut.WaitForAssertion(() => step.GroupHeader.Should().Be("Sås"));
+
+        var multiline = "Rad 1\nRad 2\n  Indrag";
+        cut.Find("fluent-text-area").Input(multiline);
+        cut.WaitForAssertion(() => step.InstructionText.Should().Be(multiline));
+    }
 }

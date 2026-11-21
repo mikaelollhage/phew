@@ -652,4 +652,157 @@ public class IngredientSectionReorderingTests : TestContext
         ingredients.Select(i => (i.Name, i.OrderIndex))
             .Should().Equal(("grädde", 1), ("smör", 2));
     }
+
+    [Fact]
+    public async Task RecipeIngredientEditor_SwitchingMenus_Backdrop_AndJsEscape_ShouldBehavePredictably()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "mjöl" },
+            new() { OrderIndex = 2, Name = "socker" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        var items = cut.FindAll(".ingredient-editor-item");
+        var firstKey = items.ElementAt(0).GetAttribute("data-editor-item-id");
+        var secondKey = items.ElementAt(1).GetAttribute("data-editor-item-id");
+
+        // Open first menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+            .GetAttribute("data-editor-item-id").Should().Be(firstKey);
+
+        // Switch directly to second menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+            .GetAttribute("data-editor-item-id").Should().Be(secondKey);
+
+        // Backdrop closes menu
+        cut.Find(".ingredient-row-menu-backdrop").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".ingredient-row-menu-backdrop").Should().BeEmpty();
+
+        // Re-open and close via JSInvokable CloseRowMenuAsync (global Escape)
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        await cut.InvokeAsync(() => cut.Instance.CloseRowMenuAsync());
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_AddAndConvertMutations_ShouldCloseOpenMenu()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "Dressing" },
+            new() { OrderIndex = 2, Name = "olivolja" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // AddIngredient closes open menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-add-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".ingredient-row-menu-backdrop").Should().BeEmpty();
+
+        // AddSection closes open menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().ContainSingle();
+        cut.Find(".ingredient-add-section-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".ingredient-row-menu-backdrop").Should().BeEmpty();
+
+        // ConvertIngredientToSection closes open menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.Find(".ingredient-to-section-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".ingredient-row-menu-backdrop").Should().BeEmpty();
+
+        // ConvertSectionToIngredient closes open menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        cut.Find(".section-to-ingredient-btn").Click();
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        cut.FindAll(".ingredient-row-menu-backdrop").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_RepeatedMoveUpAndDown_ShouldKeepMenuOpenOnSameLogicalItem()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Name = "ägg" },
+            new() { OrderIndex = 2, Name = "mjöl" },
+            new() { OrderIndex = 3, Name = "mjölk" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        var targetKey = cut.FindAll(".ingredient-editor-item").ElementAt(1).GetAttribute("data-editor-item-id");
+
+        // Open menu on "mjöl" (index 1)
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        cut.Find(".ingredient-move-up-btn").Click();
+        cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+            .GetAttribute("data-editor-item-id").Should().Be(targetKey);
+        cut.Find(".ingredient-move-up-btn").HasAttribute("disabled").Should().BeTrue();
+
+        // Move down twice
+        cut.Find(".ingredient-move-down-btn").Click();
+        cut.Find(".ingredient-move-down-btn").Click();
+        cut.Find(".ingredient-row-menu-popover").Closest(".ingredient-editor-item")!
+            .GetAttribute("data-editor-item-id").Should().Be(targetKey);
+        cut.Find(".ingredient-move-down-btn").HasAttribute("disabled").Should().BeTrue();
+
+        ingredients.Select(i => i.Name).Should().Equal("ägg", "mjölk", "mjöl");
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_QuantityInputDeferredAndPartialSafe_WhileTextInputsAreImmediate()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 1m,
+            Unit = "dl",
+            Name = "mjöl"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        var fields = cut.FindAll("fluent-text-field");
+        var qtyField = fields.ElementAt(0);
+        var nameField = fields.ElementAt(2);
+
+        // Partial input on quantity does not prematurely overwrite model on oninput
+        qtyField.Input("0,");
+        ingredient.Quantity.Should().Be(1m);
+
+        qtyField.Input("1-");
+        ingredient.Quantity.Should().Be(1m);
+        ingredient.QuantityMax.Should().BeNull();
+
+        // Committing formatted decimal and range works as expected
+        qtyField.Change("0,5");
+        ingredient.Quantity.Should().Be(0.5m);
+        ingredient.QuantityMax.Should().BeNull();
+
+        qtyField.Change("1–2");
+        ingredient.Quantity.Should().Be(1m);
+        ingredient.QuantityMax.Should().Be(2m);
+
+        // Text field (Name) updates immediately (after debounce) on Input without requiring blur
+        nameField.Input("dinkelmjöl");
+        cut.WaitForAssertion(() => ingredient.Name.Should().Be("dinkelmjöl"));
+    }
 }

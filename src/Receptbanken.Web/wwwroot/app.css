@@ -1419,6 +1419,7 @@ fluent-number-field::part(control) {
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
+  z-index: 95;
 }
 
 .ingredient-row-menu-anchor.is-open {
