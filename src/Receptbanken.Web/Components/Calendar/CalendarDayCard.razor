@@ -146,15 +146,19 @@
                             <div class="calendar-event-details-actions">
                                 <button type="button"
                                         class="btn-secondary-custom btn-sm calendar-event-edit-btn"
+                                        aria-label="Redigera"
+                                        title="Redigera"
                                         @onclick="@(() => HandleEditClicked(occurrence))">
                                     <FluentIcon Value="@(new Icons.Regular.Size16.Edit())" Color="Color.Custom" CustomColor="currentColor" />
-                                    <span>Redigera</span>
+                                    <span class="calendar-event-action-label">Redigera</span>
                                 </button>
                                 <button type="button"
                                         class="btn-secondary-custom btn-sm calendar-event-delete-btn"
+                                        aria-label="Radera"
+                                        title="Radera"
                                         @onclick="@(() => HandleDeleteClicked(occurrence))">
                                     <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
-                                    <span>Radera</span>
+                                    <span class="calendar-event-action-label">Radera</span>
                                 </button>
                             </div>
                         </div>
