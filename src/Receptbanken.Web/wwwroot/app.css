@@ -2061,6 +2061,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .instruction-add-btn svg {
   width: 20px;
   height: 20px;
+  flex-shrink: 0;
   fill: currentColor;
 }
 
@@ -6144,6 +6145,10 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   min-width: 0;
 }
 
+.calendar-event-detail-row > :not(.calendar-event-detail-icon) {
+  min-width: 0;
+}
+
 .calendar-event-detail-icon {
   display: inline-flex;
   align-items: center;
@@ -6168,12 +6173,14 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  max-width: 100%;
   padding: 1px 7px;
   border-radius: 999px;
   background-color: var(--rb-bg-elevated);
   border: 1px solid var(--rb-border);
   font-size: 11px;
   color: var(--rb-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .calendar-event-notes {
@@ -6723,20 +6730,24 @@ fluent-dialog.recipe-picker-dialog::part(control) {
 
 @media (max-width: 520px) {
   .calendar-event-details {
-    flex-direction: column;
-    align-items: stretch;
     gap: 8px;
   }
 
   .calendar-event-details-actions {
-    width: 100%;
-    justify-content: flex-end;
-    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .calendar-event-details-actions:only-child {
+    flex-direction: row;
+    align-items: center;
   }
 
   .calendar-event-edit-btn,
   .calendar-event-delete-btn {
-    min-height: 36px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 6px 10px;
   }
 }
 
