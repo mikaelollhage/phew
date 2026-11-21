@@ -456,6 +456,40 @@ public class RecipeReusableComponentsTests : TestContext
     }
 
     [Fact]
+    public void RecipeCategorySelector_RendersWithoutCheckmarkAndPreservesDotColors()
+    {
+        var categories = new List<CategoryWithCountDto>
+        {
+            new() { Id = 1, Name = "Vardag", ColorHex = "#e07a5f" },
+            new() { Id = 2, Name = "Fest", ColorHex = "#10b981" }
+        };
+        var selected = new HashSet<int> { 1 };
+
+        var cut = RenderComponent<RecipeCategorySelector>(parameters => parameters
+            .Add(p => p.Categories, categories)
+            .Add(p => p.SelectedCategoryIds, selected));
+
+        cut.FindAll(".recipe-category-selector").Should().HaveCount(1);
+
+        var badges = cut.FindAll("button.category-badge");
+        badges.Should().HaveCount(2);
+
+        // Selected badge has no checkmark/icon, keeps active class + aria-pressed, and preserves dot color
+        var selectedBadge = badges.ElementAt(0);
+        selectedBadge.ClassList.Should().Contain("active");
+        selectedBadge.GetAttribute("aria-pressed").Should().Be("true");
+        selectedBadge.QuerySelectorAll("svg").Should().BeEmpty();
+        selectedBadge.QuerySelector(".category-dot")?.GetAttribute("style").Should().Contain("#e07a5f");
+
+        // Unselected badge has no checkmark/icon and preserves dot color
+        var unselectedBadge = badges.ElementAt(1);
+        unselectedBadge.ClassList.Should().NotContain("active");
+        unselectedBadge.GetAttribute("aria-pressed").Should().Be("false");
+        unselectedBadge.QuerySelectorAll("svg").Should().BeEmpty();
+        unselectedBadge.QuerySelector(".category-dot")?.GetAttribute("style").Should().Contain("#10b981");
+    }
+
+    [Fact]
     public async Task RecipeEdit_SaveRecipe_PreservesCategoriesSelectedViaCategorySelector()
     {
         using var dbFactory = new TestDbContextFactory();

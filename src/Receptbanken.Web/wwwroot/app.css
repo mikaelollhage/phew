@@ -737,6 +737,28 @@ button.category-badge {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.recipe-category-selector .category-badge {
+  background-color: var(--rb-bg-elevated);
+  border-color: var(--rb-border);
+  color: var(--rb-text-primary);
+}
+
+.recipe-category-selector .category-badge:hover {
+  border-color: var(--rb-accent);
+}
+
+.recipe-category-selector .category-badge.active {
+  background-color: var(--rb-bg-elevated);
+  border-color: var(--rb-accent-gold);
+  color: var(--rb-text-primary);
+}
+
+.recipe-category-selector .category-badge.active:hover {
+  border-color: var(--rb-accent-gold);
+  box-shadow: 0 0 0 1px rgba(242, 166, 90, 0.45);
 }
 
 .category-color-swatch {
