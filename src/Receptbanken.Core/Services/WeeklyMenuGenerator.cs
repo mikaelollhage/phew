@@ -50,6 +50,22 @@ public sealed class WeeklyMenuGenerationWeights
     /// Minimum weight floor so no qualified recipe is ever permanently excluded solely due to history.
     /// </summary>
     public double MinimumWeight { get; init; } = 5.0;
+
+    /// <summary>
+    /// Prior mean (neutral midpoint on the 1–5 star scale) used for Bayesian shrinkage of recipe ratings.
+    /// </summary>
+    public double RatingPriorMean { get; init; } = 3.0;
+
+    /// <summary>
+    /// Prior pseudo-vote count controlling how strongly ratings are dampened when few votes exist.
+    /// </summary>
+    public double RatingPriorWeight { get; init; } = 2.0;
+
+    /// <summary>
+    /// Maximum multiplier delta per star above or below <see cref="RatingPriorMean"/>.
+    /// With a 1–5 scale around 3.0, 0.125 yields a theoretical multiplier range of [0.75, 1.25].
+    /// </summary>
+    public double MaxRatingInfluencePerStar { get; init; } = 0.125;
 }
 
 /// <summary>
@@ -221,7 +237,10 @@ public class WeeklyMenuGenerator
             weight *= frequencyDampening;
         }
 
-        // 5. Recent week penalties
+        // 5. Bayesian-dampened rating multiplier (active family members only)
+        weight *= CalculateRatingMultiplier(recipe);
+
+        // 6. Recent week penalties
         if (plannedPrevWeek || weeksSinceLast == 1)
         {
             weight *= _weights.PreviousWeekPenaltyMultiplier;
@@ -231,8 +250,60 @@ public class WeeklyMenuGenerator
             weight *= _weights.TwoWeeksAgoPenaltyMultiplier;
         }
 
-        // 6. Enforce minimum floor so no recipe is ever permanently excluded
+        // 7. Enforce minimum floor so no recipe is ever permanently excluded
         return Math.Max(_weights.MinimumWeight, weight);
+    }
+
+    /// <summary>
+    /// Computes the Bayesian-dampened selection weight multiplier for a recipe using valid ratings
+    /// from active family members only. Returns <c>1.0</c> when no active valid ratings exist.
+    /// </summary>
+    public double CalculateRatingMultiplier(Recipe recipe)
+    {
+        ArgumentNullException.ThrowIfNull(recipe);
+
+        if (recipe.Ratings is null || recipe.Ratings.Count == 0)
+        {
+            return 1.0;
+        }
+
+        int count = 0;
+        long sum = 0;
+        foreach (var rating in recipe.Ratings)
+        {
+            if (rating is not null &&
+                rating.FamilyMember is { IsActive: true } &&
+                rating.Stars >= RecipeRating.MinStars &&
+                rating.Stars <= RecipeRating.MaxStars)
+            {
+                sum += rating.Stars;
+                count++;
+            }
+        }
+
+        if (count == 0)
+        {
+            return 1.0;
+        }
+
+        double denominator = count + _weights.RatingPriorWeight;
+        if (denominator <= 0.0)
+        {
+            return 1.0;
+        }
+
+        double average = (double)sum / count;
+        double adjustedDelta = (count / denominator) * (average - _weights.RatingPriorMean);
+        double multiplier = 1.0 + (_weights.MaxRatingInfluencePerStar * adjustedDelta);
+
+        if (double.IsNaN(multiplier) || double.IsInfinity(multiplier))
+        {
+            return 1.0;
+        }
+
+        // [0.75, 1.25] is a fixed safety bound for the intended 1-5-star scale and default weighting
+        // configuration (RatingPriorMean = 3.0, RatingPriorWeight = 2.0, MaxRatingInfluencePerStar = 0.125).
+        return Math.Clamp(multiplier, 0.75, 1.25);
     }
 
     /// <summary>

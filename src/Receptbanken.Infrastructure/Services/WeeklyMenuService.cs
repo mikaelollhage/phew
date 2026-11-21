@@ -713,6 +713,7 @@ public class WeeklyMenuService
                 .ThenInclude(rc => rc.Category)
             .Include(r => r.Ingredients)
             .Include(r => r.Ratings)
+                .ThenInclude(rt => rt.FamilyMember)
             .OrderBy(r => r.Id)
             .ToListAsync(cancellationToken);
     }

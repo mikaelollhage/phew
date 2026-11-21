@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
+using Receptbanken.Core.Interfaces;
 using Receptbanken.Core.Models;
 using Receptbanken.Core.Services;
 using Receptbanken.Infrastructure.Data;
@@ -202,6 +203,76 @@ public class WeeklyMenuServiceTests : IDisposable
         var wednesdayDinner = await _weeklyMenuService.GetTodaysDinnerAsync(new DateOnly(2026, 11, 4));
         wednesdayDinner.HasConfirmedMenu.Should().BeTrue();
         wednesdayDinner.Recipe.Should().BeNull();
+    }
+
+    private sealed class FixedRandomProvider(double value) : IRandomProvider
+    {
+        public double NextDouble() => value;
+    }
+
+    [Fact]
+    public async Task GenerateWeekProposalAsync_And_RerollDayProposalAsync_ShouldLoadRatingsAndRespectFamilyMemberActiveState()
+    {
+        var (vardag, _, pasta) = await SeedCategoriesAsync();
+
+        var rLow = await _recipeService.CreateRecipeAsync(new Recipe { Title = "Recept Låg" }, [vardag.Id]);
+        var rHigh = await _recipeService.CreateRecipeAsync(new Recipe { Title = "Recept Hög" }, [vardag.Id]);
+        var rOther = await _recipeService.CreateRecipeAsync(new Recipe { Title = "Recept Annan" }, [vardag.Id]);
+
+        var member1 = new FamilyMember { Name = "Aktiv", IsActive = true, SortOrder = 1 };
+        var member2 = new FamilyMember { Name = "Inaktiv", IsActive = false, SortOrder = 2 };
+
+        await using (var db = _factory.CreateDbContext())
+        {
+            db.FamilyMembers.AddRange(member1, member2);
+            await db.SaveChangesAsync();
+
+            // member1 (active): rLow=1, rHigh=5
+            // member2 (inactive): rLow=5, rHigh=1
+            db.RecipeRatings.AddRange(
+                new RecipeRating { RecipeId = rLow.Id, FamilyMemberId = member1.Id, Stars = 1 },
+                new RecipeRating { RecipeId = rHigh.Id, FamilyMemberId = member1.Id, Stars = 5 },
+                new RecipeRating { RecipeId = rLow.Id, FamilyMemberId = member2.Id, Stars = 5 },
+                new RecipeRating { RecipeId = rHigh.Id, FamilyMemberId = member2.Id, Stars = 1 });
+            await db.SaveChangesAsync();
+        }
+
+        var pantryMatcher = new PantryIngredientMatcher();
+        var midpointGenerator = new WeeklyMenuGenerator(new FixedRandomProvider(0.5), pantryMatcher);
+        var service = new WeeklyMenuService(_factory, midpointGenerator, pantryMatcher, NullLogger<WeeklyMenuService>.Instance);
+
+        var menu = await service.GetOrCreateWeekMenuAsync(new DateOnly(2026, 11, 2));
+        // Restrict Days 1..6 to Pasta (0 recipes) so Day 0 chooses between rLow, rHigh, rOther
+        for (int i = 1; i < 7; i++)
+        {
+            menu.Days[i].SelectedCategories = [new WeeklyMenuDayCategory { CategoryId = pasta.Id }];
+        }
+
+        // Only rLow and rHigh are rated; let's remove rOther from the DB for clean 2-candidate comparison first,
+        // or keep rOther for reroll: with 3 candidates [rLow(0.9167), rHigh(1.0833), rOther(1.0)],
+        // cumulative at rLow is 0.9167/3.0 = 0.3056, at rHigh is (0.9167+1.0833)/3.0 = 0.6667 > 0.5 -> rHigh is picked!
+        await service.GenerateWeekProposalAsync(menu);
+        menu.Days[0].RecipeId.Should().Be(rHigh.Id, "aktiv 5-stjärnig röst på rHigh ger högre vikt än rLow och rOther");
+
+        // Now flip active state: member1 becomes inactive, member2 becomes active!
+        // Now rLow has 5 stars (active) and rHigh has 1 star (active).
+        await using (var db = _factory.CreateDbContext())
+        {
+            var m1 = await db.FamilyMembers.FirstAsync(m => m.Id == member1.Id);
+            var m2 = await db.FamilyMembers.FirstAsync(m => m.Id == member2.Id);
+            m1.IsActive = false;
+            m2.IsActive = true;
+            await db.SaveChangesAsync();
+        }
+
+        // Set Day 0 to rOther so reroll candidates are [rLow(1.0833), rHigh(0.9167)]
+        // Cumulative at rLow is 1.0833/2.0 = 0.5417 > 0.5 -> rLow is picked!
+        menu.Days[0].RecipeId = rOther.Id;
+        menu.Days[0].Recipe = rOther;
+
+        var reroll = await service.RerollDayProposalAsync(menu, dayIndex: 0);
+        reroll.Changed.Should().BeTrue();
+        reroll.NewRecipeId.Should().Be(rLow.Id, "återaktiverad medlems 5-stjärniga röst på rLow blir effektiv vid slumpa nytt");
     }
 }
 

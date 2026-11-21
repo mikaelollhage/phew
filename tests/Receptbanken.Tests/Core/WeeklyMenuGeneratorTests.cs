@@ -495,5 +495,315 @@ public class WeeklyMenuGeneratorTests
         menu.Days[1].RecipeId.Should().Be(4, "Dag 1 ska välja Laxfilé för att tillgodose Lax");
         menu.Days[2].RecipeId.Should().Be(5);
     }
+
+    private static RecipeRating CreateRating(int stars, bool isActive = true, int memberId = 1) =>
+        new()
+        {
+            FamilyMemberId = memberId,
+            Stars = stars,
+            FamilyMember = new FamilyMember
+            {
+                Id = memberId,
+                Name = $"Medlem {memberId}",
+                IsActive = isActive
+            }
+        };
+
+    [Theory]
+    [InlineData(new int[0], 1.0)]
+    [InlineData(new[] { 5 }, 1.0833333333333333)]
+    [InlineData(new[] { 1 }, 0.9166666666666666)]
+    [InlineData(new[] { 5, 5, 5, 5 }, 1.1666666666666667)]
+    [InlineData(new[] { 1, 1, 1, 1 }, 0.8333333333333334)]
+    [InlineData(new[] { 3, 3, 3, 3 }, 1.0)]
+    public void CalculateRatingMultiplier_ShouldMatchBayesianFormula(int[] stars, double expectedMultiplier)
+    {
+        var generator = new WeeklyMenuGenerator();
+        var recipe = CreateRecipe(1, "Testrecept");
+        recipe.Ratings = stars
+            .Select((s, idx) => CreateRating(s, isActive: true, memberId: idx + 1))
+            .ToList();
+
+        double multiplier = generator.CalculateRatingMultiplier(recipe);
+
+        multiplier.Should().BeApproximately(expectedMultiplier, 1e-5);
+        if (stars.Length == 0 || stars.All(s => s == 3))
+        {
+            multiplier.Should().Be(1.0);
+        }
+    }
+
+    [Fact]
+    public void CalculateRatingMultiplier_ShouldExcludeInactiveMembers_AndRestoreWhenReactivated()
+    {
+        var generator = new WeeklyMenuGenerator();
+        var recipe = CreateRecipe(1, "Familjerecept");
+        var activeMember = new FamilyMember { Id = 1, Name = "Aktiv", IsActive = true };
+        var inactiveMember1 = new FamilyMember { Id = 2, Name = "Inaktiv 1", IsActive = false };
+        var inactiveMember2 = new FamilyMember { Id = 3, Name = "Inaktiv 2", IsActive = false };
+
+        recipe.Ratings =
+        [
+            new RecipeRating { FamilyMemberId = 1, Stars = 5, FamilyMember = activeMember },
+            new RecipeRating { FamilyMemberId = 2, Stars = 1, FamilyMember = inactiveMember1 },
+            new RecipeRating { FamilyMemberId = 3, Stars = 1, FamilyMember = inactiveMember2 }
+        ];
+
+        // Only activeMember (one 5-star vote) counts -> 1.08333
+        generator.CalculateRatingMultiplier(recipe).Should().BeApproximately(1.0 + (1.0 / 12.0), 1e-5);
+
+        // Deactivate activeMember too -> no active votes -> 1.0
+        activeMember.IsActive = false;
+        generator.CalculateRatingMultiplier(recipe).Should().Be(1.0);
+
+        // Reactivate activeMember and inactiveMember1 -> one 5-star and one 1-star -> avg 3.0 -> 1.0
+        activeMember.IsActive = true;
+        inactiveMember1.IsActive = true;
+        generator.CalculateRatingMultiplier(recipe).Should().Be(1.0);
+
+        // Reactivate inactiveMember2 -> one 5-star and two 1-star -> avg 7/3, n=3 -> 1 + 0.125 * (3/5) * (7/3 - 3) = 0.95
+        inactiveMember2.IsActive = true;
+        generator.CalculateRatingMultiplier(recipe).Should().BeApproximately(0.95, 1e-5);
+    }
+
+    [Fact]
+    public void CalculateRatingMultiplier_ShouldStayWithinBounds_AndHandleInvalidRatingsSafely()
+    {
+        var generator = new WeeklyMenuGenerator();
+
+        var manyFiveStars = CreateRecipe(1, "Topprätt");
+        manyFiveStars.Ratings = Enumerable.Range(1, 100)
+            .Select(i => CreateRating(5, isActive: true, memberId: i))
+            .ToList();
+
+        var manyOneStars = CreateRecipe(2, "Bottenrätt");
+        manyOneStars.Ratings = Enumerable.Range(1, 100)
+            .Select(i => CreateRating(1, isActive: true, memberId: i))
+            .ToList();
+
+        var invalidRatings = CreateRecipe(3, "Ogiltiga betyg");
+        invalidRatings.Ratings =
+        [
+            CreateRating(0, isActive: true, memberId: 1),
+            CreateRating(6, isActive: true, memberId: 2),
+            new RecipeRating { FamilyMemberId = 3, Stars = 5, FamilyMember = null! }
+        ];
+
+        double highMult = generator.CalculateRatingMultiplier(manyFiveStars);
+        double lowMult = generator.CalculateRatingMultiplier(manyOneStars);
+        double invalidMult = generator.CalculateRatingMultiplier(invalidRatings);
+
+        highMult.Should().BeInRange(0.75, 1.25);
+        highMult.Should().BeGreaterThan(1.20);
+        lowMult.Should().BeInRange(0.75, 1.25);
+        lowMult.Should().BeLessThan(0.80);
+        invalidMult.Should().Be(1.0);
+        double.IsNaN(invalidMult).Should().BeFalse();
+    }
+
+    [Fact]
+    public void CalculateRecipeWeight_ShouldApplyRatingInfluence_WhilePreservingRecencyPantryAndFloor()
+    {
+        var generator = new WeeklyMenuGenerator();
+        var unrated = CreateRecipe(1, "Ograderad", categoryIds: [1], ingredientNames: ["lax"]);
+        var highRated = CreateRecipe(2, "Högst betyg", categoryIds: [1], ingredientNames: ["lax"]);
+        var lowRated = CreateRecipe(3, "Lägst betyg", categoryIds: [1], ingredientNames: ["lax"]);
+
+        highRated.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, true, i)).ToList();
+        lowRated.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, true, i)).ToList();
+
+        double wUnrated = generator.CalculateRecipeWeight(unrated, history: null);
+        double wHigh = generator.CalculateRecipeWeight(highRated, history: null);
+        double wLow = generator.CalculateRecipeWeight(lowRated, history: null);
+
+        wHigh.Should().BeApproximately(wUnrated * (1.0 + (1.0 / 6.0)), 1e-6);
+        wLow.Should().BeApproximately(wUnrated * (1.0 - (1.0 / 6.0)), 1e-6);
+        wHigh.Should().BeGreaterThan(wUnrated);
+        wLow.Should().BeLessThan(wUnrated);
+        wLow.Should().BeGreaterThanOrEqualTo(generator.Weights.MinimumWeight);
+
+        // Recency penalty still strongly discourages a high-rated recipe planned last week
+        var prevWeekStats = new RecipeHistoryStats(
+            RecipeId: highRated.Id,
+            TotalConfirmedOccurrences: 1,
+            LastPlannedWeekStartDate: new DateOnly(2026, 10, 26),
+            WeeksSinceLastPlanned: 1,
+            WasPlannedPreviousWeek: true);
+
+        double wHighLastWeek = generator.CalculateRecipeWeight(highRated, prevWeekStats);
+        double wLowLastWeek = generator.CalculateRecipeWeight(lowRated, prevWeekStats with { RecipeId = lowRated.Id });
+
+        wHighLastWeek.Should().BeLessThan(wLow);
+        wHighLastWeek.Should().BeLessThan(wUnrated * 0.25);
+        wLowLastWeek.Should().BeGreaterThanOrEqualTo(generator.Weights.MinimumWeight);
+
+        // Pantry bonus remains effective
+        double wUnratedPantry = generator.CalculateRecipeWeight(unrated, history: null, pantryIngredients: ["lax"]);
+        double wHighPantry = generator.CalculateRecipeWeight(highRated, history: null, pantryIngredients: ["lax"]);
+        wUnratedPantry.Should().BeGreaterThan(wUnrated);
+        wHighPantry.Should().BeGreaterThan(wUnratedPantry);
+    }
+
+    [Fact]
+    public void GenerateWeek_And_RerollDay_WithRatings_ShouldPreserveMatchingPantryAndUseRatingWeights()
+    {
+        // 1. Bipartite matching safeguard still prevents starving constrained Day 1 even if r1 is 5-star rated
+        var matchingGenerator = new WeeklyMenuGenerator(new FixedSequenceRandomProvider(0.0));
+        var r1 = CreateRecipe(1, "Lyxpasta", categoryIds: [1, 2]);
+        r1.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, true, i)).ToList();
+        var r2 = CreateRecipe(2, "Köttbullar", categoryIds: [1]);
+        r2.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, true, i)).ToList();
+
+        var menu = CreateEmptyMenuForWeek(new DateOnly(2026, 11, 2));
+        menu.Days[0].SelectedCategories.Add(new WeeklyMenuDayCategory { CategoryId = 1 });
+        menu.Days[1].SelectedCategories.Add(new WeeklyMenuDayCategory { CategoryId = 2 });
+        for (int i = 2; i < 7; i++)
+        {
+            menu.Days[i].SelectedCategories.Add(new WeeklyMenuDayCategory { CategoryId = 99 });
+        }
+
+        matchingGenerator.GenerateWeek(menu, [r1, r2]);
+        menu.Days[0].RecipeId.Should().Be(2);
+        menu.Days[1].RecipeId.Should().Be(1);
+
+        // 2. Midpoint random sample (0.5) favors higher-rated recipe in both GenerateWeek and RerollDay
+        var midpointGenerator = new WeeklyMenuGenerator(new FixedSequenceRandomProvider(0.5));
+        var lowChoice = CreateRecipe(10, "Lågt betyg", categoryIds: [1]);
+        lowChoice.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, true, i)).ToList();
+        var highChoice = CreateRecipe(11, "Högt betyg", categoryIds: [1]);
+        highChoice.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, true, i)).ToList();
+
+        var genMenu = CreateEmptyMenuForWeek(new DateOnly(2026, 11, 2));
+        genMenu.Days[0].SelectedCategories.Add(new WeeklyMenuDayCategory { CategoryId = 1 });
+        for (int i = 1; i < 7; i++)
+        {
+            genMenu.Days[i].SelectedCategories.Add(new WeeklyMenuDayCategory { CategoryId = 99 });
+        }
+
+        midpointGenerator.GenerateWeek(genMenu, [lowChoice, highChoice]);
+        genMenu.Days[0].RecipeId.Should().Be(11, "0.5 ligger över låg-betygets viktsgräns (< 0.5) och väljer högre rankade receptet");
+
+        // RerollDay: Day 0 currently has another recipe (id 12), candidates are lowChoice (10) and highChoice (11)
+        var current = CreateRecipe(12, "Nuvarande", categoryIds: [1]);
+        genMenu.Days[0].RecipeId = current.Id;
+        genMenu.Days[0].Recipe = current;
+
+        var reroll = midpointGenerator.RerollDay(genMenu, 0, [lowChoice, highChoice, current]);
+        reroll.Changed.Should().BeTrue();
+        reroll.NewRecipeId.Should().Be(11);
+    }
+
+    private static IReadOnlyList<double> NormalizeProbabilities(params double[] weights)
+    {
+        double total = weights.Sum();
+        return weights.Select(w => w / total).ToList();
+    }
+
+    [Fact]
+    public void CalculateRecipeWeight_DeterministicProbability_RatingOnlyComparison()
+    {
+        var generator = new WeeklyMenuGenerator();
+
+        // Both recipes have no planning history and no pantry matches:
+        // base-before-rating = 100 (Base) + 60 (NeverPlanned) + 40 (LowFreq) = 200.0
+        var recipeA = CreateRecipe(1, "Recept A (4x5 stjärnor)", categoryIds: [1]);
+        recipeA.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, isActive: true, memberId: i)).ToList();
+
+        var recipeB = CreateRecipe(2, "Recept B (4x1 stjärna)", categoryIds: [1]);
+        recipeB.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, isActive: true, memberId: i)).ToList();
+
+        double multA = generator.CalculateRatingMultiplier(recipeA);
+        double multB = generator.CalculateRatingMultiplier(recipeB);
+        multA.Should().BeApproximately(1.1666667, 1e-6);
+        multB.Should().BeApproximately(0.8333333, 1e-6);
+
+        double weightA = generator.CalculateRecipeWeight(recipeA, history: null);
+        double weightB = generator.CalculateRecipeWeight(recipeB, history: null);
+        weightA.Should().BeGreaterThan(weightB);
+
+        // Conditional selection probabilities over the fixed 2-recipe candidate pool [A, B]:
+        // P(A) = (200 * 7/6) / (200 * 7/6 + 200 * 5/6) = 7/12 ≈ 0.5833333
+        // P(B) = (200 * 5/6) / (200 * 7/6 + 200 * 5/6) = 5/12 ≈ 0.4166667
+        var probs = NormalizeProbabilities(weightA, weightB);
+        probs[0].Should().BeApproximately(0.5833333, 1e-6);
+        probs[1].Should().BeApproximately(0.4166667, 1e-6);
+        probs.Sum().Should().BeApproximately(1.0, 1e-9);
+    }
+
+    [Fact]
+    public void CalculateRecipeWeight_DeterministicProbability_UnratedRemainsCompetitive()
+    {
+        var generator = new WeeklyMenuGenerator();
+
+        var highRated = CreateRecipe(1, "Högst betyg", categoryIds: [1]);
+        highRated.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, isActive: true, memberId: i)).ToList();
+
+        var unrated = CreateRecipe(2, "Ograderad", categoryIds: [1]);
+
+        var lowRated = CreateRecipe(3, "Lägst betyg", categoryIds: [1]);
+        lowRated.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, isActive: true, memberId: i)).ToList();
+
+        generator.CalculateRatingMultiplier(unrated).Should().Be(1.0);
+
+        double wHigh = generator.CalculateRecipeWeight(highRated, history: null);
+        double wUnrated = generator.CalculateRecipeWeight(unrated, history: null);
+        double wLow = generator.CalculateRecipeWeight(lowRated, history: null);
+
+        // Conditional probabilities over the fixed 3-recipe candidate pool:
+        // P(high) = 7/18 ≈ 0.3888889, P(unrated) = 6/18 ≈ 0.3333333, P(low) = 5/18 ≈ 0.2777778
+        var probs = NormalizeProbabilities(wHigh, wUnrated, wLow);
+        probs[0].Should().BeGreaterThan(probs[1]);
+        probs[1].Should().BeGreaterThan(probs[2]);
+        probs.Should().AllSatisfy(p => p.Should().BeGreaterThan(0.0));
+        probs.Sum().Should().BeApproximately(1.0, 1e-9);
+    }
+
+    [Fact]
+    public void CalculateRecipeWeight_DeterministicProbability_CombinedRelevanceFactors()
+    {
+        var generator = new WeeklyMenuGenerator();
+        var pantry = new[] { "lax" };
+        var prevWeekMonday = new DateOnly(2026, 10, 26);
+
+        // 1. Unrated, never planned, no pantry match:
+        //    100 (Base) + 60 (NeverPlanned) + 40 (LowFreq) = 200.0; rating mult = 1.0 -> 200.0
+        var unratedNeverPlanned = CreateRecipe(1, "Ograderad utan skafferi", categoryIds: [1], ingredientNames: ["torsk"]);
+
+        // 2. Low-rated (4x1 star -> mult 5/6), never planned, substantial pantry match (400 g lax -> relevance 1.2):
+        //    (100 + 60 + 40 + 55*1.2) * (5/6) = 266.0 * (5/6) ≈ 221.6666667
+        var lowRatedWithPantry = CreateRecipe(2, "Låg-betyg med lax", categoryIds: [1], ingredientNames: ["lax"]);
+        lowRatedWithPantry.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(1, isActive: true, memberId: i)).ToList();
+
+        // 3. High-rated (4x5 stars -> mult 7/6), planned 1 time last week, no pantry match:
+        //    (100 + 10 (1*10 recency) + 20 (40/2 low-freq)) * (7/6) * 0.12 (prev-week penalty) = 130 * (7/6) * 0.12 = 18.2
+        var highRatedPlannedLastWeek = CreateRecipe(3, "5-stjärnig från förra veckan", categoryIds: [1], ingredientNames: ["kyckling"]);
+        highRatedPlannedLastWeek.Ratings = Enumerable.Range(1, 4).Select(i => CreateRating(5, isActive: true, memberId: i)).ToList();
+        var prevWeekStats = new RecipeHistoryStats(
+            RecipeId: highRatedPlannedLastWeek.Id,
+            TotalConfirmedOccurrences: 1,
+            LastPlannedWeekStartDate: prevWeekMonday,
+            WeeksSinceLastPlanned: 1,
+            WasPlannedPreviousWeek: true);
+
+        double wUnrated = generator.CalculateRecipeWeight(unratedNeverPlanned, history: null, pantryIngredients: pantry);
+        double wLowPantry = generator.CalculateRecipeWeight(lowRatedWithPantry, history: null, pantryIngredients: pantry);
+        double wHighPrevWeek = generator.CalculateRecipeWeight(highRatedPlannedLastWeek, history: prevWeekStats, pantryIngredients: pantry);
+
+        wUnrated.Should().BeApproximately(200.0, 1e-6);
+        wLowPantry.Should().BeApproximately(266.0 * (5.0 / 6.0), 1e-6);
+        wHighPrevWeek.Should().BeApproximately(18.2, 1e-6);
+
+        // Conditional probabilities over this fixed 3-recipe candidate pool:
+        // Total = 200.0 + 221.6666667 + 18.2 = 439.8666667
+        // P(lowRatedWithPantry) ≈ 0.5039405 > P(unratedNeverPlanned) ≈ 0.4546832 > P(highRatedPlannedLastWeek) ≈ 0.0413762
+        var probs = NormalizeProbabilities(wLowPantry, wUnrated, wHighPrevWeek);
+        probs[0].Should().BeApproximately(221.6666667 / 439.8666667, 1e-5);
+        probs[1].Should().BeApproximately(200.0 / 439.8666667, 1e-5);
+        probs[2].Should().BeApproximately(18.2 / 439.8666667, 1e-5);
+
+        probs[0].Should().BeGreaterThan(probs[1], "skafferirelevans kan väga tyngre än en måttlig negativ betygsmultiplikator");
+        probs[1].Should().BeGreaterThan(probs[2], "ett nyligen planerat 5-stjärnigt recept är fortfarande mindre sannolikt än ett ograderat recept som inte planerats nyligen");
+        probs.Sum().Should().BeApproximately(1.0, 1e-9);
+    }
 }
 
