@@ -148,11 +148,9 @@ public class RecipeReusableComponentsTests : TestContext
         cut.Markup.Should().Contain("placeholder=\"Beredning (t.ex. hackad)\"");
         cut.Markup.Should().NotContain("placeholder=\"Grupp (valfritt)\"");
 
-        // Remove button
-        var removeBtn = cut.Find(".ingredient-remove-btn");
-        removeBtn.QuerySelector("svg").Should().NotBeNull();
-        removeBtn.GetAttribute("title").Should().Be("Ta bort rad");
-        removeBtn.GetAttribute("aria-label").Should().Be("Ta bort rad");
+        // Standalone remove button must not be rendered on ingredient rows
+        cut.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+        cut.FindAll(".ingredient-editor-fields").Should().ContainSingle();
     }
 
     [Fact]
@@ -229,11 +227,17 @@ public class RecipeReusableComponentsTests : TestContext
 
         ingredients.Should().HaveCount(2);
         cut.FindAll(".ingredient-editor-row").Should().HaveCount(2);
+        cut.FindAll(".ingredient-remove-btn").Should().BeEmpty();
 
-        // Click Remove on second row
-        var removeBtns = cut.FindAll(".ingredient-remove-btn");
-        removeBtns.ElementAt(1).Click();
+        // Open contextual menu on second row and delete via menu item
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        var menuDeleteBtn = cut.Find(".ingredient-menu-remove-btn");
+        menuDeleteBtn.ClassList.Should().Contain("is-danger");
+        menuDeleteBtn.TextContent.Trim().Should().Be("Ta bort ingrediens");
+        menuDeleteBtn.QuerySelector("svg").Should().NotBeNull();
+        menuDeleteBtn.Click();
 
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
         ingredients.Should().HaveCount(1);
         cut.FindAll(".ingredient-editor-row").Should().HaveCount(1);
         ingredients[0].Name.Should().Be("Mjölk");
@@ -276,9 +280,12 @@ public class RecipeReusableComponentsTests : TestContext
         cut.WaitForAssertion(() =>
         {
             cut.FindComponent<RecipeBasicInfoFields>().Should().NotBeNull();
-            cut.FindComponent<RecipeIngredientEditor>().Should().NotBeNull();
-            cut.FindAll(".ingredient-editor-row").Should().ContainSingle();
-            cut.FindAll(".ingredient-remove-btn").Should().ContainSingle();
+            var ingredientEditor = cut.FindComponent<RecipeIngredientEditor>();
+            ingredientEditor.Should().NotBeNull();
+            ingredientEditor.FindAll(".ingredient-editor-row").Should().ContainSingle();
+            ingredientEditor.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+            ingredientEditor.FindAll(".ingredient-drag-handle").Should().ContainSingle();
+            ingredientEditor.FindAll(".ingredient-row-menu-btn").Should().ContainSingle();
         });
     }
 

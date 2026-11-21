@@ -426,15 +426,26 @@ public class IngredientSectionReorderingTests : TestContext
         // Conversion buttons and old reorder bar should not be permanently visible
         cut.FindAll(".ingredient-to-section-btn, .section-to-ingredient-btn, .ingredient-reorder-bar").Should().BeEmpty();
 
-        // Row controls on the right should be in order: ⋯, ✕, drag handle
+        // Ingredient row layout: [Drag handle] [Ingredient fields] [⋯ menu]
+        cut.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+        var firstRowChildClasses = cut.FindAll(".ingredient-editor-item").First()
+            .QuerySelectorAll(".ingredient-editor-row > *")
+            .Select(el => el.ClassName ?? string.Empty)
+            .ToList();
+        firstRowChildClasses.Should().HaveCount(3);
+        firstRowChildClasses[0].Should().Contain("ingredient-row-drag");
+        firstRowChildClasses[1].Should().Contain("ingredient-editor-fields");
+        firstRowChildClasses[2].Should().Contain("ingredient-row-actions");
+
+        var firstRowDragHandle = cut.FindAll(".ingredient-editor-item").First().QuerySelector(".ingredient-row-drag .ingredient-drag-handle");
+        firstRowDragHandle.Should().NotBeNull();
+
         var firstRowActionClasses = cut.FindAll(".ingredient-editor-item").First()
             .QuerySelectorAll(".ingredient-row-actions > *")
             .Select(el => el.ClassName ?? string.Empty)
             .ToList();
-        firstRowActionClasses.Should().HaveCount(3);
+        firstRowActionClasses.Should().ContainSingle();
         firstRowActionClasses[0].Should().Contain("ingredient-row-menu-anchor");
-        firstRowActionClasses[1].Should().Contain("ingredient-remove-btn");
-        firstRowActionClasses[2].Should().Contain("ingredient-drag-handle");
 
         // Open menu on first ingredient and convert to section -> closes menu
         cut.FindAll(".ingredient-row-menu-btn").First().Click();
@@ -562,5 +573,83 @@ public class IngredientSectionReorderingTests : TestContext
         var addedSectionId = cut.FindAll(".ingredient-editor-item").Last().GetAttribute("data-editor-item-id");
         JSInterop.VerifyInvoke("receptbanken.focusElement", 2)
             .Last().Arguments.Should().Contain($"ingredient-section-input-{addedSectionId}");
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_DragAndDrop_ShouldReorderAcrossSections_AndPreserveIngredientValues()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Quantity = 2.5m, Unit = "dl", Name = "mjöl", Comment = "ekologiskt", Preparation = "siktat", GroupHeader = "Deg" },
+            new() { OrderIndex = 2, Quantity = 100m, Unit = "g", Name = "smör", Comment = "kallt", Preparation = "tärnat", GroupHeader = "Deg" },
+            new() { OrderIndex = 3, Quantity = 3m, QuantityMax = 4m, Unit = "st", Name = "äpple", Comment = "svenska", Preparation = "skivade", GroupHeader = "Fyllning" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // Only the drag handle is draggable, never the row itself
+        foreach (var item in cut.FindAll(".ingredient-editor-item"))
+        {
+            item.HasAttribute("draggable").Should().BeFalse();
+        }
+        foreach (var row in cut.FindAll(".ingredient-editor-row"))
+        {
+            row.HasAttribute("draggable").Should().BeFalse();
+        }
+        foreach (var handle in cut.FindAll(".ingredient-drag-handle"))
+        {
+            handle.GetAttribute("draggable").Should().Be("true");
+        }
+
+        // Items: [Deg](0), mjöl(1), smör(2), [Fyllning](3), äpple(4)
+        cut.FindAll(".ingredient-editor-item").ElementAt(1).QuerySelector(".ingredient-drag-handle")!.DragStart();
+        cut.FindAll(".ingredient-editor-item").ElementAt(4).DragOver();
+        cut.FindAll(".ingredient-editor-item").ElementAt(4).Drop();
+        cut.FindAll(".ingredient-editor-item").ElementAt(4).QuerySelector(".ingredient-drag-handle")!.DragEnd();
+
+        ingredients.Select(i => (i.Name, i.Quantity, i.QuantityMax, i.Unit, i.Comment, i.Preparation, i.GroupHeader, i.OrderIndex))
+            .Should().Equal(
+                ("smör", 100m, (decimal?)null, "g", "kallt", "tärnat", "Deg", 1),
+                ("äpple", 3m, 4m, "st", "svenska", "skivade", "Fyllning", 2),
+                ("mjöl", 2.5m, (decimal?)null, "dl", "ekologiskt", "siktat", "Fyllning", 3));
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_MenuDelete_ShouldRemoveIngredient_CloseMenu_AndInvokeCallback()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Quantity = 2m, Unit = "dl", Name = "grädde" },
+            new() { OrderIndex = 2, Quantity = 1m, Unit = "tsk", Name = "salt" },
+            new() { OrderIndex = 3, Quantity = 3m, Unit = "msk", Name = "smör" }
+        };
+        int? removedIndex = null;
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser")
+            .Add(p => p.OnIngredientRemoved, idx => { removedIndex = idx; }));
+
+        // Open menu on "salt" (index 1)
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        var popover = cut.Find(".ingredient-row-menu-popover");
+
+        // Delete action is at the bottom, separated by a divider, and styled as destructive
+        var menuChildren = popover.Children.ToList();
+        menuChildren.Last().ClassList.Should().Contain("ingredient-menu-remove-btn");
+        menuChildren.Last().ClassList.Should().Contain("is-danger");
+        menuChildren[^2].GetAttribute("role").Should().Be("separator");
+        menuChildren.Last().TextContent.Trim().Should().Be("Ta bort ingrediens");
+        menuChildren.Last().QuerySelector("svg").Should().NotBeNull();
+
+        // Click delete -> removes "salt", closes menu, invokes OnIngredientRemoved(1)
+        menuChildren.Last().Click();
+
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        removedIndex.Should().Be(1);
+        ingredients.Select(i => (i.Name, i.OrderIndex))
+            .Should().Equal(("grädde", 1), ("smör", 2));
     }
 }

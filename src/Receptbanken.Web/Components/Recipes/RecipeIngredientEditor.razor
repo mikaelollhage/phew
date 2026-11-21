@@ -102,14 +102,13 @@
                     var ingLabel = string.IsNullOrWhiteSpace(item.Ingredient.Name) ? "ingrediens" : item.Ingredient.Name;
 
                     <RecipeIngredientRow Ingredient="item.Ingredient"
-                                         FirstInputId="@($"ingredient-qty-input-{itemKey}")"
-                                         OnRemove="@(() => RemoveIngredient(itemKey))">
-                        <RowActions>
-                            @RenderRowMenu(itemKey, isSection: false, ingLabel)
-                        </RowActions>
+                                         FirstInputId="@($"ingredient-qty-input-{itemKey}")">
                         <DragHandle>
                             @RenderDragHandle(itemKey, ingLabel)
                         </DragHandle>
+                        <RowActions>
+                            @RenderRowMenu(itemKey, isSection: false, ingLabel)
+                        </RowActions>
                     </RecipeIngredientRow>
                 }
             </div>
@@ -305,6 +304,16 @@
                                 <FluentIcon Value="@(new Icons.Regular.Size16.Bookmark())" Color="Color.Custom" CustomColor="currentColor" />
                             </span>
                             <span>Gör till sektion</span>
+                        </button>
+                        <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item ingredient-menu-remove-btn is-danger"
+                                @onclick="@(() => RemoveIngredient(itemKey))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Ta bort ingrediens</span>
                         </button>
                     }
                 </div>
