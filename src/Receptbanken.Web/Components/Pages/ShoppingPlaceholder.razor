@@ -208,6 +208,13 @@
             }
         </div>
 
+        @if (openMenuItemId.HasValue)
+        {
+            <div class="ingredient-row-menu-backdrop shopping-row-menu-backdrop"
+                 @onclick="CloseRowMenu"
+                 @onclick:stopPropagation="true"></div>
+        }
+
         <ContextualFeedback State="listFeedback" CssClass="shopping-list-feedback" />
         <ContextualFeedback State="undoCheckFeedback"
                             CssClass="shopping-undo-feedback"
@@ -263,61 +270,33 @@
                                                placeholder="Mängd"
                                                aria-label="Mängd"
                                                @bind="editQuantityText"
+                                               @bind:event="oninput"
                                                @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
                                         <input type="text"
                                                class="form-input-custom shopping-edit-unit"
                                                placeholder="Enhet"
                                                aria-label="Enhet"
                                                @bind="editUnit"
+                                               @bind:event="oninput"
                                                @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
                                         <input type="text"
                                                class="form-input-custom shopping-edit-name"
                                                placeholder="Vara"
                                                aria-label="Varans namn"
                                                @bind="editName"
+                                               @bind:event="oninput"
                                                @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
-                                        <input type="text"
-                                               class="form-input-custom shopping-edit-comment"
-                                               placeholder="Kommentar (valfritt)"
-                                               aria-label="Kommentar"
-                                               @bind="editComment"
-                                               @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
-                                    </div>
-                                    <div class="shopping-edit-reorder-row">
-                                        <button type="button"
-                                                class="btn-secondary-custom shopping-move-up-btn"
-                                                disabled="@(itemIndex == 0)"
-                                                aria-label="@($"Flytta {item.Name} uppåt")"
-                                                @onclick="@(() => MoveItemByOffsetAsync(item.Id, -1))">
-                                            ↑ Flytta upp
-                                        </button>
-                                        <button type="button"
-                                                class="btn-secondary-custom shopping-move-down-btn"
-                                                disabled="@(itemIndex >= uncheckedItems.Count - 1)"
-                                                aria-label="@($"Flytta {item.Name} nedåt")"
-                                                @onclick="@(() => MoveItemByOffsetAsync(item.Id, 1))">
-                                            ↓ Flytta ned
-                                        </button>
                                     </div>
                                     <div class="shopping-edit-actions">
-                                        <div class="shopping-edit-actions-left">
-                                            <button type="button"
-                                                    class="btn-primary-custom shopping-save-edit-btn"
-                                                    @onclick="@(() => SaveEdit(item.Id))">
-                                                Spara
-                                            </button>
-                                            <button type="button"
-                                                    class="btn-secondary-custom shopping-cancel-edit-btn"
-                                                    @onclick="CancelEdit">
-                                                Avbryt
-                                            </button>
-                                        </div>
                                         <button type="button"
-                                                class="btn-danger-custom shopping-delete-in-edit-btn"
-                                                title="@($"Ta bort {item.Name}")"
-                                                aria-label="@($"Ta bort {item.Name}")"
-                                                @onclick="@(() => DeleteItem(item.Id))">
-                                            🗑 Ta bort
+                                                class="btn-primary-custom shopping-save-edit-btn"
+                                                @onclick="@(() => SaveEdit(item.Id))">
+                                            Spara
+                                        </button>
+                                        <button type="button"
+                                                class="btn-secondary-custom shopping-cancel-edit-btn"
+                                                @onclick="CancelEdit">
+                                            Avbryt
                                         </button>
                                     </div>
                                 </div>
@@ -325,6 +304,20 @@
                             else
                             {
                                 <div class="shopping-row-main-line">
+                                    <div class="shopping-row-drag">
+                                        <button type="button"
+                                                class="shopping-drag-handle @(reorderMenuOpenItemId == item.Id ? "is-reorder-active" : "")"
+                                                draggable="true"
+                                                title="@($"Dra för att flytta {item.Name}")"
+                                                aria-label="@($"Dra för att flytta {item.Name}")"
+                                                @ondragstart="@(() => HandleDragStartItem(item.Id))"
+                                                @ondragend="HandleDragEndAsync"
+                                                @onclick="@(() => ToggleReorderMenu(item.Id))"
+                                                @onclick:stopPropagation="true"
+                                                @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, item.Id))">
+                                            ⠿
+                                        </button>
+                                    </div>
                                     <div class="shopping-row-check-target"
                                          role="checkbox"
                                          aria-checked="false"
@@ -344,59 +337,12 @@
                                                 }
                                                 <span class="shopping-item-name">@item.Name</span>
                                             </div>
-                                            @if (!string.IsNullOrWhiteSpace(item.Comment))
-                                            {
-                                                <div class="shopping-item-comment">@item.Comment</div>
-                                            }
                                         </div>
                                     </div>
                                     <div class="shopping-row-actions">
-                                        @if (!isShoppingMode)
-                                        {
-                                            <button type="button"
-                                                    class="btn-secondary-custom shopping-edit-btn"
-                                                    title="@($"Redigera {item.Name}")"
-                                                    aria-label="@($"Redigera {item.Name}")"
-                                                    @onclick="@(() => StartEdit(item))"
-                                                    @onclick:stopPropagation="true">
-                                                ✏️
-                                            </button>
-                                        }
-                                        <button type="button"
-                                                class="shopping-drag-handle @(reorderMenuOpenItemId == item.Id ? "is-reorder-active" : "")"
-                                                draggable="true"
-                                                title="@($"Dra för att flytta {item.Name}, eller tryck för flyttval")"
-                                                aria-label="@($"Ändra ordning för {item.Name}")"
-                                                aria-expanded="@(reorderMenuOpenItemId == item.Id ? "true" : "false")"
-                                                @ondragstart="@(() => HandleDragStartItem(item.Id))"
-                                                @ondragend="HandleDragEndAsync"
-                                                @onclick="@(() => ToggleReorderMenu(item.Id))"
-                                                @onclick:stopPropagation="true"
-                                                @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, item.Id))">
-                                            ⠿
-                                        </button>
+                                        @RenderUncheckedRowMenu(item, itemIndex, uncheckedItems.Count)
                                     </div>
                                 </div>
-
-                                @if (reorderMenuOpenItemId == item.Id)
-                                {
-                                    <div class="shopping-item-reorder-bar" role="group" aria-label="@($"Flytta {item.Name}")">
-                                        <button type="button"
-                                                class="btn-secondary-custom shopping-move-up-btn"
-                                                disabled="@(itemIndex == 0)"
-                                                aria-label="@($"Flytta {item.Name} uppåt")"
-                                                @onclick="@(() => MoveItemByOffsetAsync(item.Id, -1))">
-                                            ↑ Flytta upp
-                                        </button>
-                                        <button type="button"
-                                                class="btn-secondary-custom shopping-move-down-btn"
-                                                disabled="@(itemIndex >= uncheckedItems.Count - 1)"
-                                                aria-label="@($"Flytta {item.Name} nedåt")"
-                                                @onclick="@(() => MoveItemByOffsetAsync(item.Id, 1))">
-                                            ↓ Flytta ned
-                                        </button>
-                                    </div>
-                                }
                             }
                         </li>
                     }
@@ -435,23 +381,12 @@
                                      @onkeydown="@(e => HandleRowKeyDown(e, item, false))">
                                     <div class="shopping-item-body">
                                         <span class="shopping-checked-text">@item.RawText</span>
-                                        @if (!string.IsNullOrWhiteSpace(item.Comment))
-                                        {
-                                            <div class="shopping-checked-comment">@item.Comment</div>
-                                        }
                                     </div>
                                 </div>
                                 @if (!isShoppingMode)
                                 {
                                     <div class="shopping-row-actions">
-                                        <button type="button"
-                                                class="btn-danger-custom shopping-delete-btn"
-                                                title="@($"Ta bort {item.RawText}")"
-                                                aria-label="@($"Ta bort {item.RawText}")"
-                                                @onclick="@(() => DeleteItem(item.Id))"
-                                                @onclick:stopPropagation="true">
-                                            ✕
-                                        </button>
+                                        @RenderCheckedRowMenu(item)
                                     </div>
                                 }
                             </li>
@@ -512,8 +447,10 @@
     private int? dragOverItemId;
     private bool _draggedItemHadReorderOpen;
     private int? reorderMenuOpenItemId;
+    private int? openMenuItemId;
     private int? _pendingFocusItemId;
     private int? _pendingScrollItemId;
+    private string? _pendingMenuButtonFocusId;
 
     private readonly FeedbackState manualAddFeedback = new();
     private readonly FeedbackState recipeAddFeedback = new();
@@ -534,6 +471,21 @@
             {
                 _dotNetRef = DotNetObjectReference.Create(this);
                 await JSRuntime.InvokeVoidAsync("receptbanken.registerShoppingSyncListeners", _dotNetRef);
+                await JSRuntime.InvokeVoidAsync("receptbanken.registerRowMenuHost", _dotNetRef);
+            }
+            catch
+            {
+                // Ignored when running in test host or if circuit disconnects before JS interop completes.
+            }
+        }
+
+        if (!string.IsNullOrEmpty(_pendingMenuButtonFocusId) && !_isDisposed)
+        {
+            var focusElementId = _pendingMenuButtonFocusId;
+            _pendingMenuButtonFocusId = null;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("receptbanken.focusElement", focusElementId);
             }
             catch
             {
@@ -621,6 +573,13 @@
             reorderMenuOpenItemId = null;
         }
 
+        if (openMenuItemId.HasValue &&
+            (items.All(x => x.Id != openMenuItemId.Value) ||
+             (isShoppingMode && items.Any(x => x.Id == openMenuItemId.Value && x.IsChecked))))
+        {
+            openMenuItemId = null;
+        }
+
         if (undoCheckedItemId.HasValue)
         {
             var undoTarget = items.FirstOrDefault(x => x.Id == undoCheckedItemId.Value);
@@ -673,6 +632,7 @@
     {
         isShoppingMode = true;
         editingItemId = null;
+        openMenuItemId = null;
         showRecipePicker = false;
         showRecipePreview = false;
         selectedRecipe = null;
@@ -730,6 +690,7 @@
 
     private void HandleDragStartItem(int itemId)
     {
+        openMenuItemId = null;
         _isDragging = true;
         draggedItemId = itemId;
         dragOverItemId = null;
@@ -791,6 +752,7 @@
         if (_isDisposed)
             return Task.CompletedTask;
 
+        openMenuItemId = null;
         _isDragging = true;
         draggedItemId = itemId;
         dragOverItemId = null;
@@ -860,8 +822,173 @@
         await ExecuteMoveItemAsync(sourceItemId, targetIndex, expectedVersion, hadReorderOpen);
     }
 
+    private static string GetMenuButtonId(int itemId) => $"shopping-row-menu-btn-{itemId}";
+
+    private RenderFragment RenderUncheckedRowMenu(ShoppingListItem item, int itemIndex, int uncheckedCount) => __builder =>
+    {
+        var isMenuOpen = openMenuItemId == item.Id;
+        var itemLabel = string.IsNullOrWhiteSpace(item.Name) ? "vara" : item.Name;
+
+        <div class="ingredient-row-menu-anchor shopping-row-menu-anchor @(isMenuOpen ? "is-open" : "")"
+             @onkeydown="@(e => HandleMenuKeyDown(e, item.Id))"
+             @onclick:stopPropagation="true">
+            <button type="button"
+                    id="@GetMenuButtonId(item.Id)"
+                    class="btn-secondary-custom ingredient-row-menu-btn shopping-row-menu-btn @(isMenuOpen ? "is-active" : "")"
+                    title="Radåtgärder"
+                    aria-label="@($"Åtgärder för {itemLabel}")"
+                    aria-haspopup="menu"
+                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                    @onclick="@(() => ToggleRowMenu(item.Id))"
+                    @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+
+            @if (isMenuOpen)
+            {
+                <div class="ingredient-row-menu-popover shopping-row-menu-popover"
+                     role="menu"
+                     aria-label="@($"Åtgärder för {itemLabel}")"
+                     @onclick:stopPropagation="true">
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-move-up-btn"
+                            disabled="@(itemIndex == 0)"
+                            aria-label="@($"Flytta {itemLabel} uppåt")"
+                            @onclick="@(() => MoveItemByOffsetAsync(item.Id, -1, fromMenu: true))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↑</span>
+                        <span>Flytta upp</span>
+                    </button>
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-move-down-btn"
+                            disabled="@(itemIndex >= uncheckedCount - 1)"
+                            aria-label="@($"Flytta {itemLabel} nedåt")"
+                            @onclick="@(() => MoveItemByOffsetAsync(item.Id, 1, fromMenu: true))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↓</span>
+                        <span>Flytta ned</span>
+                    </button>
+                    @if (!isShoppingMode)
+                    {
+                        <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item shopping-menu-edit-btn"
+                                @onclick="@(() => StartEdit(item))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Edit())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Redigera</span>
+                        </button>
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item shopping-menu-delete-btn is-danger"
+                                @onclick="@(() => DeleteItem(item.Id))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Ta bort</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderCheckedRowMenu(ShoppingListItem item) => __builder =>
+    {
+        var isMenuOpen = openMenuItemId == item.Id;
+        var itemLabel = string.IsNullOrWhiteSpace(item.RawText) ? item.Name : item.RawText;
+
+        <div class="ingredient-row-menu-anchor shopping-row-menu-anchor @(isMenuOpen ? "is-open" : "")"
+             @onkeydown="@(e => HandleMenuKeyDown(e, item.Id))"
+             @onclick:stopPropagation="true">
+            <button type="button"
+                    id="@GetMenuButtonId(item.Id)"
+                    class="btn-secondary-custom ingredient-row-menu-btn shopping-row-menu-btn @(isMenuOpen ? "is-active" : "")"
+                    title="Radåtgärder"
+                    aria-label="@($"Åtgärder för {itemLabel}")"
+                    aria-haspopup="menu"
+                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                    @onclick="@(() => ToggleRowMenu(item.Id))"
+                    @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+
+            @if (isMenuOpen)
+            {
+                <div class="ingredient-row-menu-popover shopping-row-menu-popover"
+                     role="menu"
+                     aria-label="@($"Åtgärder för {itemLabel}")"
+                     @onclick:stopPropagation="true">
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-menu-delete-btn is-danger"
+                            @onclick="@(() => DeleteItem(item.Id))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
+                        <span>Ta bort</span>
+                    </button>
+                </div>
+            }
+        </div>
+    };
+
+    private async Task ToggleRowMenu(int itemId)
+    {
+        reorderMenuOpenItemId = null;
+        openMenuItemId = openMenuItemId == itemId ? null : itemId;
+        if (openMenuItemId.HasValue && _dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("receptbanken.closeOtherRowMenus", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore when JS runtime is unavailable (e.g. unit tests).
+            }
+        }
+    }
+
+    private void CloseRowMenu()
+    {
+        openMenuItemId = null;
+    }
+
+    [JSInvokable]
+    public Task CloseRowMenuAsync()
+    {
+        if (_isDisposed || !openMenuItemId.HasValue)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            openMenuItemId = null;
+            StateHasChanged();
+        });
+    }
+
+    private void HandleMenuKeyDown(KeyboardEventArgs e, int itemId)
+    {
+        if (e.Key == "Escape" && openMenuItemId == itemId)
+        {
+            openMenuItemId = null;
+            _pendingMenuButtonFocusId = GetMenuButtonId(itemId);
+        }
+    }
+
     private void ToggleReorderMenu(int itemId)
     {
+        openMenuItemId = null;
         reorderMenuOpenItemId = reorderMenuOpenItemId == itemId ? null : itemId;
     }
 
@@ -887,7 +1014,7 @@
         }
     }
 
-    private async Task MoveItemByOffsetAsync(int itemId, int offset, bool fromKeyboard = false)
+    private async Task MoveItemByOffsetAsync(int itemId, int offset, bool fromKeyboard = false, bool fromMenu = false)
     {
         var uncheckedList = items.Where(x => !x.IsChecked).ToList();
         var currentIndex = uncheckedList.FindIndex(x => x.Id == itemId);
@@ -898,8 +1025,12 @@
         if (targetIndex < 0 || targetIndex >= uncheckedList.Count)
             return;
 
-        bool preserveReorderOpen = editingItemId != itemId;
+        bool preserveReorderOpen = !fromMenu && editingItemId != itemId;
         bool moved = await ExecuteMoveItemAsync(itemId, targetIndex, _lastLoadedOrderingVersion, preserveReorderOpen);
+        if (!moved && fromMenu)
+        {
+            openMenuItemId = null;
+        }
         if (moved && preserveReorderOpen && reorderMenuOpenItemId == itemId)
         {
             if (fromKeyboard)
@@ -912,6 +1043,10 @@
                 _pendingFocusItemId = null;
                 _pendingScrollItemId = itemId;
             }
+        }
+        else if (moved && fromMenu)
+        {
+            _pendingScrollItemId = itemId;
         }
     }
 
@@ -984,6 +1119,7 @@
 
     private void OpenRecipePicker()
     {
+        openMenuItemId = null;
         recipeAddFeedback.Clear();
         showRecipePicker = true;
     }
@@ -1018,6 +1154,7 @@
 
     private void OpenWeeklyMenuPreview()
     {
+        openMenuItemId = null;
         recipeAddFeedback.Clear();
         listFeedback.Clear();
         weeklyMenuPreviewDate = GetReferenceToday();
@@ -1072,6 +1209,7 @@
         if (string.IsNullOrWhiteSpace(manualInput))
             return;
 
+        openMenuItemId = null;
         manualAddFeedback.Clear();
         listFeedback.Clear();
         try
@@ -1128,6 +1266,7 @@
 
     private async Task SetItemChecked(ShoppingListItem item, bool isChecked)
     {
+        openMenuItemId = null;
         listFeedback.Clear();
         try
         {
@@ -1224,6 +1363,7 @@
     {
         listFeedback.Clear();
         reorderMenuOpenItemId = null;
+        openMenuItemId = null;
         editingItemId = item.Id;
         editQuantityText = ServingCalculator.FormatQuantityRange(item.Quantity, item.QuantityMax);
         editUnit = item.Unit;
@@ -1233,12 +1373,14 @@
 
     private void CancelEdit()
     {
+        openMenuItemId = null;
         editingItemId = null;
         listFeedback.Clear();
     }
 
     private async Task SaveEdit(int id)
     {
+        openMenuItemId = null;
         if (string.IsNullOrWhiteSpace(editName))
         {
             listFeedback.ShowError("Ange ett namn på varan.");
@@ -1355,6 +1497,7 @@
             {
                 reorderMenuOpenItemId = null;
             }
+            openMenuItemId = null;
             if (undoCheckedItemId == id)
             {
                 undoCheckedItemId = null;
@@ -1380,6 +1523,7 @@
 
     private async Task ClearCheckedItems()
     {
+        openMenuItemId = null;
         listFeedback.Clear();
         undoCheckedItemId = null;
         undoDeletedItemSnapshot = null;
@@ -1401,6 +1545,7 @@
         showClearAllConfirm = false;
         editingItemId = null;
         reorderMenuOpenItemId = null;
+        openMenuItemId = null;
         undoCheckedItemId = null;
         undoDeletedItemSnapshot = null;
         undoCheckFeedback.Clear();
@@ -1446,6 +1591,7 @@
                 try
                 {
                     await JSRuntime.InvokeVoidAsync("receptbanken.unregisterShoppingSyncListeners");
+                    await JSRuntime.InvokeVoidAsync("receptbanken.unregisterRowMenuHost", dotNetRef);
                 }
                 catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
                 {

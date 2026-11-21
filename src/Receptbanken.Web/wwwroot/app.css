@@ -3311,14 +3311,15 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
+  min-width: 36px;
+  width: 36px;
   min-height: 44px;
-  padding: 6px 10px;
+  padding: 0;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--rb-radius-sm);
   color: var(--rb-text-secondary);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   cursor: grab;
   touch-action: pan-y;
@@ -3965,7 +3966,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  padding: 4px 6px 4px 12px;
+  padding: 4px 8px 4px 6px;
   min-height: 52px;
   background-color: var(--rb-bg-surface);
   border: 1px solid var(--rb-border-subtle);
@@ -3983,6 +3984,8 @@ body.weekly-touch-reordering .weekly-drag-handle {
   flex-direction: row;
   justify-content: space-between;
   align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 12px;
   text-decoration: none;
   color: var(--rb-text-primary);
 }
@@ -3991,8 +3994,15 @@ body.weekly-touch-reordering .weekly-drag-handle {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   width: 100%;
+  min-width: 0;
+}
+
+.shopping-row-drag {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .shopping-item-row:hover {
@@ -4023,7 +4033,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
 }
 
 .shopping-item-row.is-editing {
-  padding: 12px;
+  padding: 10px;
   background-color: var(--rb-bg-surface);
   border-color: var(--rb-accent);
   cursor: default;
@@ -4105,18 +4115,18 @@ body.weekly-touch-reordering .weekly-drag-handle {
 .shopping-row-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
   flex-shrink: 0;
-  padding-left: 8px;
-  border-left: 1px solid var(--rb-border-subtle);
 }
 
-.shopping-edit-btn,
-.shopping-delete-btn {
-  min-width: 42px;
-  min-height: 42px;
-  padding: 6px 10px;
-  justify-content: center;
+.btn-secondary-custom.ingredient-row-menu-btn.shopping-row-menu-btn {
+  width: 40px;
+  min-width: 40px;
+  height: 44px;
+  min-height: 44px;
+}
+
+.shopping-row-menu-popover {
+  max-width: calc(100vw - 32px);
 }
 
 body.shopping-touch-reordering {
@@ -4127,22 +4137,6 @@ body.shopping-touch-reordering {
 
 body.shopping-touch-reordering * {
   cursor: grabbing !important;
-}
-
-.shopping-item-reorder-bar,
-.shopping-edit-reorder-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px 4px 4px;
-  border-top: 1px dashed var(--rb-border-subtle);
-}
-
-.shopping-move-up-btn,
-.shopping-move-down-btn {
-  min-height: 38px;
-  padding: 6px 12px;
-  font-size: 13px;
 }
 
 /* Voluntary Distraction-Free Shopping Mode (Handlingsläge) */
@@ -4211,59 +4205,52 @@ body.shopping-touch-reordering * {
 .shopping-edit-panel {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .shopping-edit-fields {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   align-items: center;
+  width: 100%;
 }
 
 .shopping-edit-qty {
-  width: 90px;
+  flex: 0 1 86px;
+  width: auto;
+  min-width: 78px;
   font-size: 16px;
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .shopping-edit-unit {
-  width: 95px;
+  flex: 0 1 88px;
+  width: auto;
+  min-width: 64px;
   font-size: 16px;
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .shopping-edit-name {
-  flex: 1;
-  min-width: 160px;
+  flex: 1 1 160px;
+  width: auto;
+  min-width: 120px;
   font-size: 16px;
-  min-height: 42px;
-}
-
-.shopping-edit-comment {
-  flex: 1 1 100%;
-  font-size: 14px;
-  min-height: 38px;
+  min-height: 44px;
 }
 
 .shopping-edit-actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
 
-.shopping-edit-actions-left {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 .shopping-save-edit-btn,
-.shopping-cancel-edit-btn,
-.shopping-delete-in-edit-btn {
+.shopping-cancel-edit-btn {
   min-height: 40px;
   padding: 8px 14px;
 }
@@ -4364,14 +4351,26 @@ body.shopping-touch-reordering * {
     padding: 10px 14px;
   }
 
-  .shopping-edit-qty,
+  .shopping-item-row.is-editing {
+    padding: 8px 10px;
+  }
+
+  .shopping-edit-qty {
+    flex: 0 1 76px;
+    min-width: 74px;
+    padding: 8px;
+  }
+
   .shopping-edit-unit {
-    flex: 1 1 calc(50% - 4px);
-    width: auto;
+    flex: 0 1 62px;
+    min-width: 56px;
+    padding: 8px;
   }
 
   .shopping-edit-name {
-    flex: 1 1 100%;
+    flex: 1 1 112px;
+    min-width: 112px;
+    padding: 8px 10px;
   }
 }
 
