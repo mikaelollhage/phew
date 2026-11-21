@@ -73,7 +73,7 @@ public sealed class WeeklyMenuBarrierAndClearComponentTests : TestContext
     }
 
     [Fact]
-    public async Task WeeklyMenuPage_WhenMenuIsDraft_DisablesCreateShoppingListButtons_AndShowsHint()
+    public async Task WeeklyMenuPage_WhenMenuIsDraft_DisablesCreateShoppingListButton_WithoutInfoControlsOrHints()
     {
         var localToday = new DateOnly(2026, 11, 2);
         var (dbFactory, recipeService, _, weeklyMenuService) = await SetupServicesAsync(localToday);
@@ -90,17 +90,18 @@ public sealed class WeeklyMenuBarrierAndClearComponentTests : TestContext
         {
             var topBtn = cut.Find("button.create-shopping-list-btn");
             topBtn.HasAttribute("disabled").Should().BeTrue("Skapa inköpslista ska vara inaktiverad när menyn är utkast");
+            topBtn.HasAttribute("title").Should().BeFalse();
 
-            var bottomBtn = cut.Find("button.create-shopping-list-bottom-btn");
-            bottomBtn.HasAttribute("disabled").Should().BeTrue("Nedre knappen ska också vara inaktiverad");
-
-            var hints = cut.FindAll(".weekly-action-hint");
-            hints.Should().Contain(h => h.TextContent.Contains("Spika veckomenyn för att kunna skapa en inköpslista."));
+            cut.FindAll(".weekly-bottom-bar").Should().BeEmpty();
+            cut.FindAll("button.create-shopping-list-bottom-btn").Should().BeEmpty();
+            cut.FindAll(".weekly-action-hint").Should().BeEmpty();
+            cut.FindAll(".weekly-action-info-btn").Should().BeEmpty();
+            cut.FindAll(".weekly-toolbar-info-banner").Should().BeEmpty();
         });
     }
 
     [Fact]
-    public async Task WeeklyMenuPage_WhenMenuIsConfirmed_EnablesCreateShoppingListButtons()
+    public async Task WeeklyMenuPage_WhenMenuIsConfirmed_EnablesCreateShoppingListButton()
     {
         var localToday = new DateOnly(2026, 11, 2);
         var (dbFactory, recipeService, _, weeklyMenuService) = await SetupServicesAsync(localToday);
@@ -117,14 +118,12 @@ public sealed class WeeklyMenuBarrierAndClearComponentTests : TestContext
         {
             var topBtn = cut.Find("button.create-shopping-list-btn");
             topBtn.HasAttribute("disabled").Should().BeFalse("Skapa inköpslista ska vara aktiv när menyn är spikad");
-
-            var bottomBtn = cut.Find("button.create-shopping-list-bottom-btn");
-            bottomBtn.HasAttribute("disabled").Should().BeFalse();
+            cut.FindAll(".weekly-bottom-bar").Should().BeEmpty();
         });
     }
 
     [Fact]
-    public async Task WeeklyMenuPage_WhenMenuHasNoRecipes_DisablesConfirmButtons_AndShowsHint()
+    public async Task WeeklyMenuPage_WhenMenuHasNoRecipes_DisablesConfirmButton_WithoutInfoControlsOrHints()
     {
         var localToday = new DateOnly(2026, 11, 2);
         var (dbFactory, _, _, _) = await SetupServicesAsync(localToday);
@@ -136,12 +135,13 @@ public sealed class WeeklyMenuBarrierAndClearComponentTests : TestContext
         {
             var topConfirmBtn = cut.Find("button.confirm-week-btn");
             topConfirmBtn.HasAttribute("disabled").Should().BeTrue("En tom vecka ska inte kunna spikas");
+            topConfirmBtn.HasAttribute("title").Should().BeFalse();
 
-            var bottomConfirmBtn = cut.Find("button.confirm-week-bottom-btn");
-            bottomConfirmBtn.HasAttribute("disabled").Should().BeTrue();
-
-            var hints = cut.FindAll(".weekly-action-hint");
-            hints.Should().Contain(h => h.TextContent.Contains("Välj minst en maträtt för att spika veckomenyn."));
+            cut.FindAll(".weekly-bottom-bar").Should().BeEmpty();
+            cut.FindAll("button.confirm-week-bottom-btn").Should().BeEmpty();
+            cut.FindAll(".weekly-action-hint").Should().BeEmpty();
+            cut.FindAll(".weekly-action-info-btn").Should().BeEmpty();
+            cut.FindAll(".weekly-toolbar-info-banner").Should().BeEmpty();
         });
     }
 

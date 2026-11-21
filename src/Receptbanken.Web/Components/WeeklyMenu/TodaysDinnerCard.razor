@@ -34,23 +34,32 @@
             <span>👥 @servings @recipe.ServingsUnit</span>
             @if (recipe.RecipeCategories.Count > 0)
             {
-                <span class="todays-dinner-dot" aria-hidden="true">·</span>
-                <span>@string.Join(", ", recipe.RecipeCategories.Select(rc => rc.Category.Name))</span>
+                <span class="todays-dinner-dot todays-dinner-meta-category" aria-hidden="true">·</span>
+                <span class="todays-dinner-meta-category">@string.Join(", ", recipe.RecipeCategories.Select(rc => rc.Category.Name))</span>
             }
         </div>
 
         <div class="todays-dinner-actions">
-            <a href="@($"/recept/{recipe.Id}/laga?portioner={servings}")" class="btn-primary-custom todays-dinner-cook-btn">
-                👨‍🍳 Starta matlagningsläge
+            <a href="@($"/recept/{recipe.Id}/laga?portioner={servings}")"
+               class="btn-primary-custom todays-dinner-cook-btn"
+               aria-label="Starta matlagningsläge"
+               title="Starta matlagningsläge">
+                <span class="todays-dinner-label-desktop">👨‍🍳 Starta matlagningsläge</span>
+                <span class="todays-dinner-label-mobile">Laga!</span>
             </a>
-            <a href="@($"/recept/{recipe.Id}")" class="btn-secondary-custom todays-dinner-view-btn">
-                Visa recept
+            <a href="@($"/recept/{recipe.Id}")"
+               class="btn-secondary-custom todays-dinner-view-btn"
+               aria-label="Visa recept"
+               title="Visa recept">
+                <span class="todays-dinner-label-desktop">Visa recept</span>
+                <span class="todays-dinner-label-mobile">Recept</span>
             </a>
             @if (OnRateRecipe.HasDelegate)
             {
                 <RecipeRatingBadge Summary="@RatingSummary"
                                    RecipeTitle="@recipe.Title"
                                    CssClass="todays-dinner-rating-badge"
+                                   CompactUnratedText="Rösta"
                                    OnClick="@(() => OnRateRecipe.InvokeAsync(recipe))" />
             }
         </div>
@@ -74,7 +83,6 @@
         {
             <div class="todays-dinner-image-wrap">
                 <img src="@($"/{recipe.ImagePath}")" alt="@recipe.Title" class="todays-dinner-image" @onerror="() => imageLoadFailed = true" />
-                <div class="todays-dinner-image-gradient" aria-hidden="true"></div>
             </div>
         }
     </section>

@@ -315,7 +315,8 @@ public class RecipeRatingComponentTests : TestContext
         cut.WaitForAssertion(() => cut.Find(".todays-dinner-card").ClassList.Should().Contain("has-image"));
 
         var card = cut.Find(".todays-dinner-card");
-        card.QuerySelector(".todays-dinner-image-gradient").Should().NotBeNull();
+        card.QuerySelector(".todays-dinner-image-wrap").Should().NotBeNull();
+        card.QuerySelector(".todays-dinner-image-gradient").Should().BeNull();
         card.QuerySelector(".todays-dinner-title")!.TextContent.Trim().Should().Be(longTitle);
         card.QuerySelector(".todays-dinner-badge-row")!.TextContent.Should().Contain("DAGENS MIDDAG");
         card.QuerySelector(".todays-dinner-meta")!.TextContent.Should().Contain("90 minuter").And.Contain("4 portioner");

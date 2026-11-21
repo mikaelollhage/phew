@@ -14,7 +14,15 @@
     else
     {
         <span class="recipe-rating-badge-star is-empty" aria-hidden="true">☆</span>
-        <span class="recipe-rating-badge-cta">Betygsätt</span>
+        @if (!string.IsNullOrWhiteSpace(CompactUnratedText))
+        {
+            <span class="recipe-rating-badge-cta recipe-rating-badge-cta-full">Betygsätt</span>
+            <span class="recipe-rating-badge-cta recipe-rating-badge-cta-compact">@CompactUnratedText</span>
+        }
+        else
+        {
+            <span class="recipe-rating-badge-cta">Betygsätt</span>
+        }
     }
 </button>
 
@@ -23,6 +31,7 @@
     [Parameter] public string RecipeTitle { get; set; } = string.Empty;
     [Parameter] public EventCallback OnClick { get; set; }
     [Parameter] public string? CssClass { get; set; }
+    [Parameter] public string? CompactUnratedText { get; set; }
 
     private string AriaLabel => Summary.HasRatings
         ? $"Betyg {Summary.FormatAverageSwedish()} av 5 ({Summary.FormatVoteCountSwedish()}) för {RecipeTitle}. Klicka för att betygsätta."

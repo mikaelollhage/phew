@@ -1,9 +1,19 @@
 <div class="servings-adjuster">
-    <button type="button" class="servings-btn" @onclick="Decrement" disabled="@(CurrentServings <= 1)" title="Minska portioner">
-        -
+    <button type="button"
+            class="servings-btn"
+            @onclick="Decrement"
+            disabled="@(CurrentServings <= 1)"
+            aria-label="Minska portioner"
+            title="Minska portioner">
+        −
     </button>
-    <span class="servings-count">@CurrentServings @Unit</span>
-    <button type="button" class="servings-btn" @onclick="Increment" disabled="@(CurrentServings >= 50)" title="Öka portioner">
+    <span class="servings-count" aria-label="@($"{CurrentServings} {Unit}")">@CurrentServings&#32;<span class="servings-unit">@Unit</span></span>
+    <button type="button"
+            class="servings-btn"
+            @onclick="Increment"
+            disabled="@(CurrentServings >= 50)"
+            aria-label="Öka portioner"
+            title="Öka portioner">
         +
     </button>
 </div>

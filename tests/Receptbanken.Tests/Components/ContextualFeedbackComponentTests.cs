@@ -357,14 +357,14 @@ public class ContextualFeedbackComponentTests : TestContext
             notifService.HasNotification.Should().BeFalse();
         });
 
-        // 3. Click bottom "Spara ändringar" -> shows confirmation at the bottom save bar
-        cut.Find("button.confirm-week-bottom-btn").Click();
+        // 3. Click "Spara ändringar i spikad meny" in the single top toolbar -> shows confirmation banner
+        cut.Find("button.confirm-week-btn").Click();
         cut.WaitForAssertion(() =>
         {
             cut.FindAll(".weekly-feedback-banner").Should().ContainSingle();
-            var bottomBanner = cut.Find(".weekly-feedback-banner.weekly-feedback-bottom");
-            bottomBanner.ClassList.Should().Contain("rb-feedback-floating");
-            bottomBanner.TextContent.Should().Contain("Ändringarna i veckomenyn för vecka 45 har sparats!");
+            var banner = cut.Find(".weekly-feedback-banner");
+            banner.ClassList.Should().Contain("rb-feedback-floating");
+            banner.TextContent.Should().Contain("Ändringarna i veckomenyn för vecka 45 har sparats!");
             notifService.HasNotification.Should().BeFalse();
         });
     }

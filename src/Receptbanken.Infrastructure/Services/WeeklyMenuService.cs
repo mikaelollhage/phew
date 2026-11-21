@@ -91,29 +91,60 @@ public class WeeklyMenuService
 
         for (int dayIndex = 0; dayIndex < 7; dayIndex++)
         {
-            var defaultCategoryName = CalendarWeek.GetDefaultCategoryName(dayIndex);
-            var matchedCat = existingCategories.FirstOrDefault(
-                c => string.Equals(c.Name.Trim(), defaultCategoryName, StringComparison.OrdinalIgnoreCase));
-
-            var day = new WeeklyMenuDay
+            menu.Days.Add(new WeeklyMenuDay
             {
                 DayIndex = dayIndex,
                 Date = week.GetDateForDayIndex(dayIndex)
-            };
+            });
+        }
 
+        ApplyDefaultCategories(menu, existingCategories);
+        return menu;
+    }
+
+    /// <summary>
+    /// Resets each day's <see cref="WeeklyMenuDay.SelectedCategories"/> on <paramref name="menu"/> to the weekday-specific
+    /// default category (<c>Vardagsmat</c> Mon–Thu &amp; Sun, <c>Fest &amp; Helg</c> Fri–Sat) without altering recipes,
+    /// servings, pantry items, or status. Missing category definitions are handled safely without creating duplicates.
+    /// </summary>
+    /// <returns><c>true</c> if any day's category selection changed; otherwise <c>false</c>.</returns>
+    public static bool ApplyDefaultCategories(WeeklyMenu menu, IReadOnlyCollection<Category> existingCategories)
+    {
+        ArgumentNullException.ThrowIfNull(menu);
+        ArgumentNullException.ThrowIfNull(existingCategories);
+
+        WeeklyMenuGenerator.EnsureSevenDaysInitialized(menu);
+        bool changed = false;
+
+        foreach (var day in menu.Days.OrderBy(d => d.DayIndex))
+        {
+            var defaultCategoryName = CalendarWeek.GetDefaultCategoryName(day.DayIndex);
+            var matchedCat = existingCategories.FirstOrDefault(
+                c => string.Equals(c.Name.Trim(), defaultCategoryName, StringComparison.OrdinalIgnoreCase));
+
+            var targetIds = matchedCat != null ? new List<int> { matchedCat.Id } : new List<int>();
+            var currentIds = day.SelectedCategories.Select(sc => sc.CategoryId).OrderBy(id => id).ToList();
+
+            if (!currentIds.SequenceEqual(targetIds))
+            {
+                changed = true;
+            }
+
+            day.SelectedCategories.Clear();
             if (matchedCat != null)
             {
                 day.SelectedCategories.Add(new WeeklyMenuDayCategory
                 {
+                    WeeklyMenuDayId = day.Id,
                     CategoryId = matchedCat.Id,
                     Category = matchedCat
                 });
             }
 
-            menu.Days.Add(day);
+            day.StatusMessage = null;
         }
 
-        return menu;
+        return changed;
     }
 
     /// <summary>
@@ -129,13 +160,18 @@ public class WeeklyMenuService
         SaveMenuAsync(menu, WeeklyMenuStatus.Confirmed, cancellationToken);
 
     /// <summary>
-    /// Rensar en veckomeny: tömmer alla 7 dagar på planerade recept och portioner, sätter status till Draft,
-    /// nollställer ConfirmedAt och bevarar dagarnas grundstruktur, valda kategorier och bidragshistorik.
+    /// Rensar en veckomeny: tömmer alla 7 dagar på planerade recept och portioner, återställer dagarnas
+    /// kategorival till veckans standardkategorier, sätter status till Draft och nollställer ConfirmedAt.
+    /// Befintliga skafferi-ingredienser ("Ingredienser hemma") och bidragshistorik bevaras.
     /// </summary>
     public async Task<WeeklyMenu> ClearMenuAsync(DateOnly dateInWeek, CancellationToken cancellationToken = default)
     {
         var week = CalendarWeek.FromDate(dateInWeek);
         await using var context = await _contextFactory.CreateDbContextAsync(cancellationToken);
+
+        var categories = await context.Categories
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
 
         var existing = await context.WeeklyMenus
             .Include(m => m.PantryItems)
@@ -147,7 +183,6 @@ public class WeeklyMenuService
 
         if (existing == null)
         {
-            var categories = await context.Categories.AsNoTracking().ToListAsync(cancellationToken);
             return CreateDefaultDraftMenu(week, categories);
         }
 
@@ -156,12 +191,42 @@ public class WeeklyMenuService
         existing.ConfirmedAt = null;
         existing.UpdatedAt = now;
 
-        foreach (var day in existing.Days)
+        for (int dayIndex = 0; dayIndex < 7; dayIndex++)
         {
-            day.RecipeId = null;
-            day.Recipe = null;
-            day.Servings = null;
-            day.StatusMessage = null;
+            var day = existing.Days.FirstOrDefault(d => d.DayIndex == dayIndex);
+            if (day == null)
+            {
+                day = new WeeklyMenuDay
+                {
+                    WeeklyMenuId = existing.Id,
+                    DayIndex = dayIndex,
+                    Date = week.GetDateForDayIndex(dayIndex)
+                };
+                existing.Days.Add(day);
+            }
+            else
+            {
+                day.Date = week.GetDateForDayIndex(dayIndex);
+                day.RecipeId = null;
+                day.Recipe = null;
+                day.Servings = null;
+                day.StatusMessage = null;
+                context.WeeklyMenuDayCategories.RemoveRange(day.SelectedCategories);
+                day.SelectedCategories.Clear();
+            }
+
+            var defaultCategoryName = CalendarWeek.GetDefaultCategoryName(dayIndex);
+            var matchedCat = categories.FirstOrDefault(
+                c => string.Equals(c.Name.Trim(), defaultCategoryName, StringComparison.OrdinalIgnoreCase));
+
+            if (matchedCat != null)
+            {
+                day.SelectedCategories.Add(new WeeklyMenuDayCategory
+                {
+                    WeeklyMenuDayId = day.Id,
+                    CategoryId = matchedCat.Id
+                });
+            }
         }
 
         await context.SaveChangesAsync(cancellationToken);

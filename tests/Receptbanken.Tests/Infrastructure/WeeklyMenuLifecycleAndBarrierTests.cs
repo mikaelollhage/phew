@@ -483,4 +483,83 @@ public sealed class WeeklyMenuLifecycleAndBarrierTests : IDisposable
         var list = await _shoppingService.GetItemsAsync();
         list.Should().ContainSingle(i => i.Name == "köttfärs");
     }
+
+    [Fact]
+    public async Task ClearMenuAsync_ResetsCustomAndEmptyCategoriesToWeekdayDefaults_PreservesPantry_AndDoesNotDuplicateCategories()
+    {
+        var week1 = new DateOnly(2026, 11, 2);
+        var week2 = new DateOnly(2026, 11, 9);
+        var cats = await _categoryService.GetCategoriesAsync();
+        var vardag = cats.First(c => c.Name == "Vardagsmat");
+        var fest = cats.First(c => c.Name == "Fest & Helg");
+        var pasta = cats.First(c => c.Name == "Pasta");
+
+        var recipe = await _recipeService.CreateRecipeAsync(new Recipe { Title = "Lasagne", Servings = 4 }, [pasta.Id]);
+
+        var menu1 = await _weeklyMenuService.GetOrCreateWeekMenuAsync(week1);
+        menu1.PantryIngredients = ["Lök", "Vitlök"];
+        menu1.Days[0].RecipeId = recipe.Id;
+        menu1.Days[0].Servings = 6;
+        menu1.Days[0].SelectedCategories = [new WeeklyMenuDayCategory { CategoryId = pasta.Id }];
+        menu1.Days[4].SelectedCategories.Clear(); // Empty Friday
+        await _weeklyMenuService.ConfirmMenuAsync(menu1);
+
+        var menu2 = await _weeklyMenuService.GetOrCreateWeekMenuAsync(week2);
+        menu2.Days[0].RecipeId = recipe.Id;
+        menu2.Days[0].SelectedCategories = [new WeeklyMenuDayCategory { CategoryId = pasta.Id }];
+        await _weeklyMenuService.ConfirmMenuAsync(menu2);
+
+        int categoryCountBefore = (await _categoryService.GetCategoriesAsync()).Count;
+
+        var cleared = await _weeklyMenuService.ClearMenuAsync(week1);
+
+        cleared.Status.Should().Be(WeeklyMenuStatus.Draft);
+        cleared.ConfirmedAt.Should().BeNull();
+        cleared.Days.Should().OnlyContain(d => d.RecipeId == null && d.Servings == null);
+        cleared.PantryIngredients.Should().BeEquivalentTo(["Lök", "Vitlök"]);
+
+        for (int i = 0; i < 7; i++)
+        {
+            var expectedId = i is 4 or 5 ? fest.Id : vardag.Id;
+            cleared.Days[i].SelectedCategories.Should().ContainSingle(sc => sc.CategoryId == expectedId);
+        }
+
+        // No duplicate category records created
+        (await _categoryService.GetCategoriesAsync()).Count.Should().Be(categoryCountBefore);
+
+        // Week 2 is untouched
+        var reloaded2 = await _weeklyMenuService.GetSavedMenuForWeekAsync(week2);
+        reloaded2!.Status.Should().Be(WeeklyMenuStatus.Confirmed);
+        reloaded2.Days[0].RecipeId.Should().Be(recipe.Id);
+        reloaded2.Days[0].SelectedCategories.Should().ContainSingle(sc => sc.CategoryId == pasta.Id);
+    }
+
+    [Fact]
+    public async Task ClearMenuAsync_WhenDefaultCategoriesAreMissing_HandlesSafelyWithoutCreatingDuplicates()
+    {
+        var weekDate = new DateOnly(2026, 11, 2);
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            var defaults = db.Categories
+                .Where(c => c.Name == "Vardagsmat" || c.Name == "Fest & Helg")
+                .ToList();
+            db.Categories.RemoveRange(defaults);
+            await db.SaveChangesAsync();
+        }
+
+        var pasta = (await _categoryService.GetCategoriesAsync()).First(c => c.Name == "Pasta");
+        var recipe = await _recipeService.CreateRecipeAsync(new Recipe { Title = "Pasta", Servings = 4 }, [pasta.Id]);
+
+        var menu = await _weeklyMenuService.GetOrCreateWeekMenuAsync(weekDate);
+        menu.Days[0].RecipeId = recipe.Id;
+        menu.Days[0].SelectedCategories = [new WeeklyMenuDayCategory { CategoryId = pasta.Id }];
+        await _weeklyMenuService.ConfirmMenuAsync(menu);
+
+        var cleared = await _weeklyMenuService.ClearMenuAsync(weekDate);
+
+        cleared.Status.Should().Be(WeeklyMenuStatus.Draft);
+        cleared.Days.Should().OnlyContain(d => d.RecipeId == null && d.SelectedCategories.Count == 0);
+        var remainingCats = await _categoryService.GetCategoriesAsync();
+        remainingCats.Should().NotContain(c => c.Name == "Vardagsmat" || c.Name == "Fest & Helg");
+    }
 }

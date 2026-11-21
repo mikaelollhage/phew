@@ -84,8 +84,11 @@
 }
 
 <!-- Pantry Section: "Ingredienser hemma" -->
+@{
+    var pantryCount = currentMenu?.PantryItems.Count ?? 0;
+}
 <section class="weekly-pantry-card" aria-label="Ingredienser hemma">
-    <div class="weekly-pantry-header">
+    <div class="weekly-pantry-header weekly-pantry-desktop-header">
         <div>
             <h2 class="weekly-pantry-title">🥕 Ingredienser hemma</h2>
             <p class="weekly-pantry-subtitle">
@@ -94,92 +97,148 @@
         </div>
     </div>
 
-    <div class="weekly-pantry-tags">
-        @if (currentMenu != null && currentMenu.PantryItems.Count > 0)
-        {
-            @foreach (var item in currentMenu.PantryItems.OrderBy(p => p.OrderIndex))
+    <button type="button"
+            class="weekly-pantry-toggle"
+            aria-expanded="@(isPantryExpanded ? "true" : "false")"
+            aria-controls="weekly-pantry-body"
+            @onclick="TogglePantrySection">
+        <span class="weekly-pantry-toggle-title">
+            <span>🥕 Ingredienser hemma</span>
+            @if (pantryCount > 0)
             {
-                <span class="pantry-tag-chip" data-pantry-tag="@item.IngredientName">
-                    <span>@item.IngredientName</span>
-                    <button type="button"
-                            class="pantry-tag-remove-btn"
-                            title="@($"Ta bort {item.IngredientName}")"
-                            aria-label="@($"Ta bort {item.IngredientName}")"
-                            @onclick="@(() => RemovePantryIngredient(item.IngredientName))">
-                        ×
-                    </button>
-                </span>
+                <span class="weekly-pantry-count-badge" aria-label="@($"{pantryCount} angivna ingredienser")">(@pantryCount)</span>
             }
-        }
-        else
-        {
-            <span class="pantry-empty-hint">Inga ingredienser angivna för veckan.</span>
-        }
-    </div>
+        </span>
+        <span class="weekly-pantry-chevron" aria-hidden="true">@(isPantryExpanded ? "▾" : "▸")</span>
+    </button>
 
-    <div class="weekly-pantry-input-row">
-        <input type="text"
-               class="form-input-custom pantry-input"
-               placeholder="Lägg till ingrediens hemma (t.ex. Kycklingfilé, Köttfärs, Lax)..."
-               list="pantry-known-ingredients"
-               @bind="newPantryInput"
-               @bind:event="oninput"
-               @onkeydown="HandlePantryKeyDown" />
+    <div id="weekly-pantry-body" class="weekly-pantry-body @(isPantryExpanded ? "is-expanded" : "is-collapsed")">
+        <p class="weekly-pantry-subtitle weekly-pantry-mobile-subtitle">
+            Ange råvaror som du vill prioritera vid generering (t.ex. kycklingfilé, köttfärs, lax).
+        </p>
 
-        <datalist id="pantry-known-ingredients">
-            @foreach (var suggestion in knownIngredients)
+        <div class="weekly-pantry-tags">
+            @if (currentMenu != null && currentMenu.PantryItems.Count > 0)
             {
-                <option value="@suggestion"></option>
+                @foreach (var item in currentMenu.PantryItems.OrderBy(p => p.OrderIndex))
+                {
+                    <span class="pantry-tag-chip" data-pantry-tag="@item.IngredientName">
+                        <span>@item.IngredientName</span>
+                        <button type="button"
+                                class="pantry-tag-remove-btn"
+                                title="@($"Ta bort {item.IngredientName}")"
+                                aria-label="@($"Ta bort {item.IngredientName}")"
+                                @onclick="@(() => RemovePantryIngredient(item.IngredientName))">
+                            ×
+                        </button>
+                    </span>
+                }
             }
-        </datalist>
+            else
+            {
+                <span class="pantry-empty-hint">Inga ingredienser angivna för veckan.</span>
+            }
+        </div>
 
-        <button type="button"
-                class="btn-secondary-custom pantry-add-btn"
-                @onclick="AddPantryIngredientFromInput">
-            + Lägg till ingrediens
-        </button>
+        <div class="weekly-pantry-input-row">
+            <input type="text"
+                   class="form-input-custom pantry-input"
+                   placeholder="Lägg till ingrediens hemma (t.ex. Kycklingfilé, Köttfärs, Lax)..."
+                   list="pantry-known-ingredients"
+                   @bind="newPantryInput"
+                   @bind:event="oninput"
+                   @onkeydown="HandlePantryKeyDown" />
+
+            <datalist id="pantry-known-ingredients">
+                @foreach (var suggestion in knownIngredients)
+                {
+                    <option value="@suggestion"></option>
+                }
+            </datalist>
+
+            <button type="button"
+                    class="btn-secondary-custom pantry-add-btn"
+                    @onclick="AddPantryIngredientFromInput">
+                + Lägg till ingrediens
+            </button>
+        </div>
     </div>
 </section>
 
 <!-- Main Action Toolbar (Generera, Spara utkast, Spika) -->
+@{
+    var showRevertAction = hasUnsavedChanges && hasSavedVersionInDb;
+    var showResetCategoriesAction = currentMenu != null;
+    var showClearAction = currentMenu != null && (hasSavedVersionInDb || currentMenu.Days.Any(d => d.RecipeId.HasValue));
+    var hasMoreActions = showRevertAction || showResetCategoriesAction || showClearAction;
+}
 <div class="weekly-actions-bar">
     <div class="weekly-actions-left">
         <button type="button"
                 class="btn-secondary-custom generate-week-btn"
                 disabled="@(isLoading || isSaving)"
                 @onclick="HandleGenerateWeekClicked">
-            🎲 Generera veckomeny
+            <span class="weekly-toolbar-label-desktop">🎲 Generera veckomeny</span>
+            <span class="weekly-toolbar-label-mobile">🎲 Generera</span>
         </button>
 
         @if (currentMenu != null && currentMenu.Status == WeeklyMenuStatus.Draft)
         {
             <button type="button"
-                    class="btn-secondary-custom save-draft-btn"
+                    class="btn-secondary-custom save-draft-btn @(!hasUnsavedChanges ? "is-clean-draft" : "")"
                     disabled="@(isLoading || isSaving)"
                     @onclick="@(() => SaveDraftAsync(FeedbackPlacement.Top))">
                 💾 Spara utkast
             </button>
         }
 
-        @if (hasUnsavedChanges && hasSavedVersionInDb)
+        @if (hasMoreActions)
         {
-            <button type="button"
-                    class="btn-secondary-custom discard-changes-btn"
-                    disabled="@(isLoading || isSaving)"
-                    @onclick="RequestRevertUnsavedChanges">
-                Återställ sparad version
-            </button>
-        }
+            <div class="weekly-more-actions">
+                <button type="button"
+                        class="btn-secondary-custom weekly-more-actions-toggle"
+                        aria-expanded="@(showMoreActions ? "true" : "false")"
+                        aria-controls="weekly-more-actions-menu"
+                        disabled="@(isLoading || isSaving)"
+                        @onclick="ToggleMoreActions">
+                    <span>⋯ Fler åtgärder</span>
+                    <span aria-hidden="true">@(showMoreActions ? "▴" : "▾")</span>
+                </button>
 
-        @if (currentMenu != null && (hasSavedVersionInDb || currentMenu.Days.Any(d => d.RecipeId.HasValue)))
-        {
-            <button type="button"
-                    class="btn-danger-custom clear-menu-btn"
-                    disabled="@(isLoading || isSaving)"
-                    title="Rensa veckomeny och ta bort alla valda rätter"
-                    @onclick="RequestClearWeeklyMenu">
-                🗑️ Rensa veckomeny
-            </button>
+                <div id="weekly-more-actions-menu" class="weekly-more-actions-menu @(showMoreActions ? "is-open" : "")">
+                    @if (showRevertAction)
+                    {
+                        <button type="button"
+                                class="btn-secondary-custom discard-changes-btn"
+                                disabled="@(isLoading || isSaving)"
+                                @onclick="RequestRevertUnsavedChanges">
+                            Återställ sparad version
+                        </button>
+                    }
+
+                    @if (showResetCategoriesAction)
+                    {
+                        <button type="button"
+                                class="btn-secondary-custom reset-categories-btn"
+                                disabled="@(isLoading || isSaving)"
+                                title="Återställ alla sju dagars kategorival till standardkategorier"
+                                @onclick="RequestResetDefaultCategories">
+                            ↺ Återställ standardkategorier
+                        </button>
+                    }
+
+                    @if (showClearAction)
+                    {
+                        <button type="button"
+                                class="btn-danger-custom clear-menu-btn"
+                                disabled="@(isLoading || isSaving)"
+                                title="Rensa veckomeny, ta bort valda rätter och återställ standardkategorier"
+                                @onclick="RequestClearWeeklyMenu">
+                            🗑️ Rensa veckomeny
+                        </button>
+                    }
+                </div>
+            </div>
         }
     </div>
 
@@ -188,28 +247,22 @@
         {
             var hasAnyRecipe = currentMenu.Days.Any(d => d.RecipeId.HasValue);
             var isDraft = currentMenu.Status == WeeklyMenuStatus.Draft;
+            var isConfirmedClean = currentMenu.Status == WeeklyMenuStatus.Confirmed && !hasUnsavedChanges;
 
-            <div class="weekly-action-with-hint">
+            <div class="weekly-shopping-action-group">
                 <button type="button"
                         class="btn-secondary-custom create-shopping-list-btn"
                         disabled="@(isLoading || isSaving || isDraft)"
-                        aria-describedby="@(isDraft ? "shopping-list-draft-hint-top" : null)"
                         @onclick="HandleCreateShoppingListClickedAsync">
-                    🛒 Skapa inköpslista
+                    <span class="weekly-toolbar-label-desktop">🛒 Skapa inköpslista</span>
+                    <span class="weekly-toolbar-label-mobile">🛒 Inköpslista</span>
                 </button>
-                @if (isDraft)
-                {
-                    <span id="shopping-list-draft-hint-top" class="weekly-action-hint" role="status">
-                        Spika veckomenyn för att kunna skapa en inköpslista.
-                    </span>
-                }
             </div>
 
-            <div class="weekly-action-with-hint">
+            <div class="weekly-confirm-action-group @(isConfirmedClean ? "is-confirmed-clean" : "")">
                 <button type="button"
                         class="btn-primary-custom confirm-week-btn"
                         disabled="@(isLoading || isSaving || !hasAnyRecipe)"
-                        aria-describedby="@(!hasAnyRecipe ? "confirm-week-empty-hint-top" : null)"
                         @onclick="@(() => ConfirmWeeklyMenuAsync(FeedbackPlacement.Top))">
                     @if (currentMenu.Status == WeeklyMenuStatus.Confirmed)
                     {
@@ -220,12 +273,6 @@
                         <span>📌 Spika veckomenyn</span>
                     }
                 </button>
-                @if (!hasAnyRecipe)
-                {
-                    <span id="confirm-week-empty-hint-top" class="weekly-action-hint" role="status">
-                        Välj minst en maträtt för att spika veckomenyn.
-                    </span>
-                }
             </div>
         }
     </div>
@@ -266,58 +313,6 @@ else
                                OnDropOnDay="HandleDropOnDay" />
         }
     </div>
-
-    @if (feedbackPlacement == FeedbackPlacement.Bottom)
-    {
-        <ContextualFeedback State="feedback" Floating="@feedback.IsSuccess" CssClass="weekly-feedback-banner weekly-feedback-bottom" />
-    }
-
-    <div class="weekly-bottom-bar">
-        @{
-            var hasAnyRecipeBottom = currentMenu.Days.Any(d => d.RecipeId.HasValue);
-            var isDraftBottom = currentMenu.Status == WeeklyMenuStatus.Draft;
-        }
-        <div class="weekly-bottom-action-group">
-            <button type="button"
-                    class="btn-secondary-custom create-shopping-list-bottom-btn"
-                    disabled="@(isLoading || isSaving || isDraftBottom)"
-                    aria-describedby="@(isDraftBottom ? "shopping-list-draft-hint-bottom" : null)"
-                    @onclick="HandleCreateShoppingListClickedAsync">
-                🛒 Skapa inköpslista
-            </button>
-            @if (isDraftBottom)
-            {
-                <span id="shopping-list-draft-hint-bottom" class="weekly-action-hint" role="status">
-                    Spika veckomenyn för att kunna skapa en inköpslista.
-                </span>
-            }
-        </div>
-
-        @if (currentMenu.Status == WeeklyMenuStatus.Draft)
-        {
-            <button type="button"
-                    class="btn-secondary-custom save-draft-bottom-btn"
-                    disabled="@(isLoading || isSaving)"
-                    @onclick="@(() => SaveDraftAsync(FeedbackPlacement.Bottom))">
-                💾 Spara utkast
-            </button>
-        }
-        <div class="weekly-bottom-action-group">
-            <button type="button"
-                    class="btn-primary-custom confirm-week-bottom-btn"
-                    disabled="@(isLoading || isSaving || !hasAnyRecipeBottom)"
-                    aria-describedby="@(!hasAnyRecipeBottom ? "confirm-week-empty-hint-bottom" : null)"
-                    @onclick="@(() => ConfirmWeeklyMenuAsync(FeedbackPlacement.Bottom))">
-                @(currentMenu.Status == WeeklyMenuStatus.Confirmed ? "📌 Spara ändringar i spikad meny" : "📌 Spika veckomenyn")
-            </button>
-            @if (!hasAnyRecipeBottom)
-            {
-                <span id="confirm-week-empty-hint-bottom" class="weekly-action-hint" role="status">
-                    Välj minst en maträtt för att spika veckomenyn.
-                </span>
-            }
-        </div>
-    </div>
 }
 
 <!-- Confirmation Dialog before discarding unsaved edits via "Återställ sparad version" -->
@@ -351,12 +346,22 @@ else
 <!-- Confirmation Dialog before clearing weekly menu -->
 <ConfirmDialog IsVisible="showClearMenuConfirm"
                Title="@($"Rensa veckomeny för vecka {currentWeek.IsoWeek}?")"
-               Message="@($"Alla planerade rätter och portionsantal för vecka {currentWeek.IsoWeek} ({currentWeek.FormatDateRangeSwedish()}) tas bort. Veckomenyn blir ett utkast igen. Varor som redan finns i inköpslistan påverkas inte.")"
+               Message="@($"Alla planerade rätter och portionsantal för vecka {currentWeek.IsoWeek} ({currentWeek.FormatDateRangeSwedish()}) tas bort, och dagarnas kategorival återställs till standardkategorier. Veckomenyn blir ett utkast igen. Varor som redan finns i inköpslistan påverkas inte.")"
                ConfirmText="Rensa veckomeny"
                CancelText="Avbryt"
                Variant="ConfirmDialogVariant.Danger"
                OnConfirm="ConfirmClearWeeklyMenuAsync"
                OnCancel="@(() => showClearMenuConfirm = false)" />
+
+<!-- Confirmation Dialog before resetting default categories -->
+<ConfirmDialog IsVisible="showResetCategoriesConfirm"
+               Title="Återställ standardkategorier?"
+               Message="Nuvarande kategorival för alla sju dagar ersätts med veckans standardkategorier (Vardagsmat mån–tors & sön, Fest & Helg fre–lör). Valda recept, portioner och ingredienser hemma påverkas inte."
+               ConfirmText="Återställ standardkategorier"
+               CancelText="Avbryt"
+               Variant="ConfirmDialogVariant.Primary"
+               OnConfirm="ConfirmResetDefaultCategoriesAsync"
+               OnCancel="@(() => showResetCategoriesConfirm = false)" />
 
 <!-- Confirmation Dialog to save unsaved changes before generating shopping list preview -->
 <ConfirmDialog IsVisible="showSaveBeforeShoppingConfirm"
@@ -393,12 +398,15 @@ else
     private bool hasUnsavedChanges = false;
     private bool hasUserModifiedDraft = false;
     private bool hasSavedVersionInDb = false;
+    private bool isPantryExpanded = false;
+    private bool showMoreActions = false;
 
     private bool showRegenerateConfirm = false;
     private bool showUnsavedNavigationConfirm = false;
     private bool showSaveBeforeShoppingConfirm = false;
     private bool showRevertChangesConfirm = false;
     private bool showClearMenuConfirm = false;
+    private bool showResetCategoriesConfirm = false;
     private bool showShoppingPreview = false;
     private DateOnly? pendingWeekDate;
     private string? pendingInternalNavigationUrl;
@@ -565,6 +573,7 @@ else
         draggedSourceDayIndex = null;
         draggedDayHadReorderOpen = false;
         activeReorderDayIndex = null;
+        showMoreActions = false;
         _ratingSummariesByRecipeId = null;
 
         currentWeek = CalendarWeek.FromDate(dateInWeek);
@@ -656,6 +665,16 @@ else
         showUnsavedNavigationConfirm = false;
         pendingWeekDate = null;
         pendingInternalNavigationUrl = null;
+    }
+
+    private void TogglePantrySection()
+    {
+        isPantryExpanded = !isPantryExpanded;
+    }
+
+    private void ToggleMoreActions()
+    {
+        showMoreActions = !showMoreActions;
     }
 
     private async Task HandlePantryKeyDown(KeyboardEventArgs e)
@@ -1081,6 +1100,7 @@ else
 
     private void RequestClearWeeklyMenu()
     {
+        showMoreActions = false;
         showClearMenuConfirm = true;
     }
 
@@ -1095,7 +1115,7 @@ else
         {
             isSaving = true;
             currentMenu = await WeeklyMenuService.ClearMenuAsync(currentMenu.WeekStartDate);
-            hasSavedVersionInDb = true;
+            hasSavedVersionInDb = currentMenu.Id > 0;
             hasUnsavedChanges = false;
             hasUserModifiedDraft = false;
             feedback.ShowSuccess($"Veckomenyn för vecka {currentWeek.IsoWeek} har rensats och är nu ett tomt utkast.");
@@ -1111,8 +1131,32 @@ else
         }
     }
 
+    private void RequestResetDefaultCategories()
+    {
+        showMoreActions = false;
+        showResetCategoriesConfirm = true;
+    }
+
+    private Task ConfirmResetDefaultCategoriesAsync()
+    {
+        showResetCategoriesConfirm = false;
+        if (currentMenu == null || isSaving)
+            return Task.CompletedTask;
+
+        bool changed = WeeklyMenuService.ApplyDefaultCategories(currentMenu, allCategories);
+        if (changed)
+        {
+            MarkMenuEdited();
+        }
+
+        feedbackPlacement = FeedbackPlacement.Top;
+        feedback.ShowSuccess("Standardkategorier har återställts för alla sju dagar.");
+        return Task.CompletedTask;
+    }
+
     private void RequestRevertUnsavedChanges()
     {
+        showMoreActions = false;
         showRevertChangesConfirm = true;
     }
 

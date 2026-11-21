@@ -16,21 +16,36 @@
             }
         </div>
 
-        @if (Day.Recipe != null)
-        {
+        <div class="weekly-day-header-controls">
             <button type="button"
-                    class="weekly-drag-handle @(IsReorderMenuOpen ? "is-reorder-active" : "")"
-                    draggable="true"
-                    aria-label="@($"Ändra ordning för {CalendarWeek.GetSwedishDayName(Day.DayIndex)}")"
-                    aria-expanded="@(IsReorderMenuOpen ? "true" : "false")"
-                    title="Dra för att byta dag, eller klicka för att visa flyttknappar"
-                    @onclick="ToggleReorderMenu"
-                    @onkeydown="HandleHandleKeyDown"
-                    @ondragstart="HandleDragStart"
-                    @ondragend="HandleDragEnd">
-                ⠿
+                    class="weekly-day-category-toggle @(Day.SelectedCategories.Count > 0 ? "has-selected" : "")"
+                    aria-expanded="@(showCategoryPicker ? "true" : "false")"
+                    aria-label="@GetCategoryToggleAriaLabel()"
+                    title="Välj kategorier för dagen"
+                    @onclick="ToggleCategoryPicker">
+                <span aria-hidden="true">🏷️</span>
+                @if (Day.SelectedCategories.Count > 0)
+                {
+                    <span class="weekly-day-category-count">@Day.SelectedCategories.Count</span>
+                }
             </button>
-        }
+
+            @if (Day.Recipe != null)
+            {
+                <button type="button"
+                        class="weekly-drag-handle @(IsReorderMenuOpen ? "is-reorder-active" : "")"
+                        draggable="true"
+                        aria-label="@($"Ändra ordning för {CalendarWeek.GetSwedishDayName(Day.DayIndex)}")"
+                        aria-expanded="@(IsReorderMenuOpen ? "true" : "false")"
+                        title="Dra för att byta dag, eller klicka för att visa flyttknappar"
+                        @onclick="ToggleReorderMenu"
+                        @onkeydown="HandleHandleKeyDown"
+                        @ondragstart="HandleDragStart"
+                        @ondragend="HandleDragEnd">
+                    ⠿
+                </button>
+            }
+        </div>
     </div>
 
     @if (IsReorderMenuOpen && Day.Recipe != null)
@@ -54,7 +69,7 @@
     }
 
     <!-- Category Selection Row (Per Day) -->
-    <div class="weekly-day-categories-row">
+    <div class="weekly-day-categories-row @(Day.SelectedCategories.Count == 0 && !showCategoryPicker ? "is-empty-collapsed" : "")">
         <span class="weekly-day-categories-label">Kategorier:</span>
 
         <div class="weekly-day-categories-list">
@@ -106,10 +121,11 @@
                     <button type="button"
                             class="day-category-option @(isSelected ? "selected" : "")"
                             data-option-category-id="@cat.Id"
+                            aria-pressed="@(isSelected ? "true" : "false")"
+                            aria-label="@($"{cat.Name} för {CalendarWeek.GetSwedishDayName(Day.DayIndex)}")"
                             @onclick="@(() => ToggleCategory(cat))">
-                        <span class="category-dot" style="background-color: @(cat.ColorHex ?? "#e07a5f");"></span>
+                        <span class="category-dot" style="background-color: @(cat.ColorHex ?? "#e07a5f");" aria-hidden="true"></span>
                         <span>@cat.Name</span>
-                        <span>@(isSelected ? "✓" : "+")</span>
                     </button>
                 }
             }
@@ -146,24 +162,18 @@
                 <div class="weekly-day-meta">
                     @if (recipe.TotalTimeMinutes.HasValue)
                     {
-                        <span class="weekly-day-meta-item">@recipe.TotalTimeMinutes minuter</span>
+                        <span class="weekly-day-meta-item weekly-day-time">⏱️ @recipe.TotalTimeMinutes min</span>
                         <span class="weekly-day-meta-sep" aria-hidden="true">·</span>
                     }
-                    <div class="weekly-day-meta-item weekly-day-servings-control">
-                        <ServingAdjuster CurrentServings="servings"
-                                         Unit="@recipe.ServingsUnit"
-                                         OnServingsChanged="HandleServingsChanged" />
-                    </div>
                     @{
                         var effectiveRatingSummary = RatingSummary ?? RecipeRatingSummary.FromRatings(recipe.Ratings);
                     }
-                    <span class="weekly-day-meta-sep" aria-hidden="true">·</span>
                     @if (effectiveRatingSummary.HasRatings)
                     {
                         <span class="weekly-day-meta-item weekly-day-rating is-rated"
                               aria-label="@($"Betyg {effectiveRatingSummary.FormatAverageSwedish()} av 5 ({effectiveRatingSummary.FormatVoteCountSwedish()})")">
                             <span class="weekly-day-rating-star is-filled" aria-hidden="true">★</span>
-                            <span>@effectiveRatingSummary.FormatAverageSwedish() (@effectiveRatingSummary.FormatVoteCountSwedish())</span>
+                            <span>@effectiveRatingSummary.FormatAverageSwedish() (@effectiveRatingSummary.VoteCount<span class="weekly-day-rating-votes-unit">&#32;@(effectiveRatingSummary.VoteCount == 1 ? "röst" : "röster")</span>)</span>
                         </span>
                     }
                     else
@@ -174,6 +184,14 @@
                             <span>Inga betyg</span>
                         </span>
                     }
+                </div>
+
+                <div class="weekly-day-servings-row">
+                    <div class="weekly-day-servings-control">
+                        <ServingAdjuster CurrentServings="servings"
+                                         Unit="@recipe.ServingsUnit"
+                                         OnServingsChanged="HandleServingsChanged" />
+                    </div>
                 </div>
 
                 @if (!string.IsNullOrWhiteSpace(Day.StatusMessage))
@@ -193,22 +211,30 @@
         </div>
 
         <div class="weekly-day-actions">
-            <a href="@($"/recept/{recipe.Id}")" class="btn-secondary-custom weekly-day-view-link">
-                Visa recept
+            <a href="@($"/recept/{recipe.Id}")"
+               class="btn-secondary-custom weekly-day-view-link"
+               aria-label="Visa recept"
+               title="Visa recept">
+                <span class="weekly-action-label-desktop">Visa recept</span>
+                <span class="weekly-action-label-mobile">Recept</span>
             </a>
 
             <button type="button"
                     class="btn-secondary-custom weekly-day-reroll-btn"
+                    aria-label="Slumpa nytt recept"
+                    title="Slumpa nytt recept"
                     @onclick="HandleRerollClicked">
-                🎲 Slumpa nytt
+                🎲 Slumpa<span class="weekly-action-label-desktop-suffix"> nytt</span>
             </button>
 
             <button type="button"
                     @ref="changeRecipeButton"
                     class="btn-secondary-custom weekly-day-change-recipe-toggle"
                     aria-haspopup="dialog"
+                    aria-label="Byt recept"
+                    title="Byt recept"
                     @onclick="OpenRecipePicker">
-                Byt recept…
+                Byt<span class="weekly-action-label-desktop-suffix"> recept…</span>
             </button>
         </div>
     }
@@ -289,6 +315,18 @@
     private void ToggleCategoryPicker()
     {
         showCategoryPicker = !showCategoryPicker;
+    }
+
+    private string GetCategoryToggleAriaLabel()
+    {
+        var dayName = CalendarWeek.GetSwedishDayName(Day.DayIndex);
+        var count = Day.SelectedCategories.Count;
+        return count switch
+        {
+            0 => $"Välj kategorier för {dayName}, inga valda",
+            1 => $"Välj kategorier för {dayName}, 1 vald",
+            _ => $"Välj kategorier för {dayName}, {count} valda"
+        };
     }
 
     private async Task ToggleReorderMenu()
