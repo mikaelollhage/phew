@@ -169,4 +169,74 @@ public class FamilyMemberServiceTests : IDisposable
         receivedVersions.Should().Equal(1, 2, 3, 4);
         _notifier.Version.Should().Be(4);
     }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldPermanentlyRemoveActiveMember_AndAllowRecreatingName()
+    {
+        var member = await _service.CreateAsync("Anna");
+        var versionBefore = _notifier.Version;
+
+        var deleted = await _service.DeleteAsync(member.Id);
+
+        deleted.Id.Should().Be(member.Id);
+        deleted.Name.Should().Be("Anna");
+        _notifier.Version.Should().Be(versionBefore + 1);
+
+        var all = await _service.GetAllAsync(includeInactive: true);
+        all.Should().BeEmpty();
+
+        var recreated = await _service.CreateAsync("Anna");
+        recreated.Id.Should().NotBe(member.Id);
+        recreated.Name.Should().Be("Anna");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenMemberIsInactive_ShouldPermanentlyRemoveRecord()
+    {
+        var member = await _service.CreateAsync("Erik");
+        await _service.DeactivateAsync(member.Id);
+
+        var deleted = await _service.DeleteAsync(member.Id);
+
+        deleted.Id.Should().Be(member.Id);
+        deleted.IsActive.Should().BeFalse();
+        (await _service.GetAllAsync(includeInactive: true)).Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task DeleteAsync_WhenMemberDoesNotExist_ShouldThrowKeyNotFoundAndNotNotify()
+    {
+        var versionBefore = _notifier.Version;
+
+        var act = () => _service.DeleteAsync(9999);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        _notifier.Version.Should().Be(versionBefore);
+    }
+
+    [Fact]
+    public async Task DeleteAsync_ShouldLeaveCalendarEventsAndFreeTextNamesIntact()
+    {
+        var anna = await _service.CreateAsync("Anna");
+        await using (var db = _dbFactory.CreateDbContext())
+        {
+            db.CalendarEvents.Add(new CalendarEvent
+            {
+                Title = "Fotboll",
+                StartDate = new DateOnly(2026, 11, 21),
+                IsAllDay = true,
+                FamilyMembersCsv = "Anna, Erik",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await _service.DeleteAsync(anna.Id);
+
+        await using var verifyDb = _dbFactory.CreateDbContext();
+        var ev = await verifyDb.CalendarEvents.SingleAsync();
+        ev.Title.Should().Be("Fotboll");
+        ev.FamilyMembersCsv.Should().Be("Anna, Erik");
+    }
 }

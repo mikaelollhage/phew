@@ -284,6 +284,39 @@ public class FamilyMemberService
         }
     }
 
+    /// <summary>
+    /// Permanently deletes a family member (active or inactive).
+    /// Future FAM-1C (explicit calendar member associations) and RATE-1B (individual recipe ratings)
+    /// must remove those explicit associations and ratings inside this transaction without deleting
+    /// calendar events or recipes.
+    /// </summary>
+    public async Task<FamilyMember> DeleteAsync(int id, CancellationToken cancellationToken = default)
+    {
+        await WriteLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
+
+            var member = await db.FamilyMembers.FirstOrDefaultAsync(m => m.Id == id, cancellationToken)
+                ?? throw new KeyNotFoundException($"Familjemedlem med ID {id} hittades inte.");
+
+            // Future FAM-1C and RATE-1B: delete explicit calendar member associations and
+            // individual recipe ratings for `member.Id` here within the same transaction,
+            // leaving calendar events (including free-text CSV) and recipes intact.
+            db.FamilyMembers.Remove(member);
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            _notifier.NotifyChanged();
+            return member;
+        }
+        finally
+        {
+            WriteLock.Release();
+        }
+    }
+
     private static string NormalizeName(string? name)
     {
         var trimmed = (name ?? string.Empty).Trim();

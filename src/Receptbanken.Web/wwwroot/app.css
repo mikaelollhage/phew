@@ -325,6 +325,28 @@ a:hover {
   animation: rbFeedbackFadeIn 0.15s ease-out;
 }
 
+.rb-feedback-floating {
+  position: fixed;
+  top: max(16px, env(safe-area-inset-top));
+  right: 24px;
+  z-index: 950;
+  width: min(440px, calc(100vw - 300px));
+  margin: 0;
+  padding: 10px 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 768px) {
+  .rb-feedback-floating {
+    top: max(8px, env(safe-area-inset-top));
+    left: 12px;
+    right: 12px;
+    width: auto;
+    padding: 9px 12px;
+  }
+}
+
 .recipe-shopping-feedback,
 .image-upload-feedback,
 .backup-export-feedback,
@@ -6488,79 +6510,112 @@ fluent-dialog.recipe-picker-dialog::part(control) {
    ========================================================================== */
 
 .settings-page-container {
-  max-width: 960px;
+  max-width: 760px;
+}
+
+.settings-page-header {
+  margin-bottom: 16px;
 }
 
 .settings-sections-grid {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 24px;
+  gap: 16px;
   align-items: start;
 }
 
+.settings-card {
+  padding: 18px;
+}
+
 .settings-card-header {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .settings-card-header .detail-card-title {
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .settings-section-desc {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--rb-text-secondary);
-  margin: 0;
-  line-height: 1.5;
+  margin: 4px 0 0;
+  line-height: 1.4;
 }
 
 .settings-add-member-form {
   display: flex;
-  gap: 10px;
-  align-items: stretch;
-  margin-bottom: 12px;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
 }
 
 .settings-add-member-form .form-input-custom {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
+}
+
+.settings-icon-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.settings-family-feedback {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+
+.settings-inline-error {
+  margin-top: 8px;
+  margin-bottom: 0;
 }
 
 .settings-loading-state {
   display: flex;
   justify-content: center;
-  padding: 20px 0;
+  padding: 14px 0;
 }
 
 .settings-empty-state {
   color: var(--rb-text-muted);
   font-size: 14px;
-  margin: 12px 0 0;
+  margin: 8px 0 0;
 }
 
 .settings-member-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .settings-member-row {
   display: flex;
+  flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
   background-color: var(--rb-bg-surface);
   border: 1px solid var(--rb-border);
   border-radius: var(--rb-radius-md);
 }
 
-.settings-member-row.is-inactive {
-  opacity: 0.72;
-  border-style: dashed;
+.settings-member-row.is-editing {
+  padding: 8px;
 }
 
 .settings-member-name {
+  flex: 1;
   font-size: 15px;
   font-weight: 500;
   color: var(--rb-text-primary);
@@ -6572,34 +6627,27 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
   flex-shrink: 0;
-}
-
-.settings-member-actions .btn-sm,
-.settings-member-edit-actions .btn-sm {
-  min-height: 36px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.settings-member-move-btn {
-  min-width: 36px;
-  padding-left: 8px;
-  padding-right: 8px;
 }
 
 .settings-member-edit-form {
   display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.settings-member-edit-row {
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   width: 100%;
 }
 
 .settings-member-edit-input {
   flex: 1;
   min-width: 0;
+  min-height: 44px;
 }
 
 .settings-member-edit-actions {
@@ -6608,52 +6656,16 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   flex-shrink: 0;
 }
 
-.settings-inactive-section {
-  margin-top: 24px;
-  padding-top: 18px;
-  border-top: 1px solid var(--rb-border);
-}
-
-.settings-inactive-heading {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--rb-text-secondary);
-  margin: 0 0 4px;
-}
-
-.settings-inactive-desc {
-  font-size: 13px;
-  color: var(--rb-text-muted);
-  margin: 0 0 10px;
-  line-height: 1.45;
-}
-
 .settings-notifications-card .calendar-push-info-card {
   margin-top: 4px;
 }
 
-@media (max-width: 640px) {
-  .settings-add-member-form {
-    flex-direction: column;
-    align-items: stretch;
+@media (max-width: 768px) {
+  .settings-card {
+    padding: 14px;
   }
 
-  .settings-member-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 10px;
-  }
-
-  .settings-member-actions {
-    justify-content: flex-end;
-  }
-
-  .settings-member-edit-form {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .settings-member-edit-actions {
-    justify-content: flex-end;
+  .settings-page-header {
+    margin-bottom: 12px;
   }
 }

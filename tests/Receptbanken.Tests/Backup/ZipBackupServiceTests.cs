@@ -739,6 +739,33 @@ public class ZipBackupServiceTests : IDisposable
         existing.Should().ContainSingle(m => m.Name == "Original");
     }
 
+    [Fact]
+    public async Task ExportAndRestore_AfterPermanentFamilyMemberDeletion_ShouldExcludeDeletedMembers()
+    {
+        var sourceService = new FamilyMemberService(_sourceDbFactory);
+        var anna = await sourceService.CreateAsync("Anna");
+        var erik = await sourceService.CreateAsync("Erik");
+        var ebba = await sourceService.CreateAsync("Ebba");
+        await sourceService.DeactivateAsync(ebba.Id);
+
+        await sourceService.DeleteAsync(erik.Id);
+        await sourceService.DeleteAsync(ebba.Id);
+
+        var exporter = CreateBackupService(_sourceDbFactory, "source");
+        var zipBytes = await exporter.CreateBackupArchiveAsync();
+
+        var restorer = CreateBackupService(_targetDbFactory, "target");
+        using var zipStream = new MemoryStream(zipBytes);
+        var result = await restorer.RestoreFromArchiveAsync(zipStream, replaceExisting: true);
+
+        result.Success.Should().BeTrue();
+        result.RestoredFamilyMembers.Should().Be(1);
+
+        var targetService = new FamilyMemberService(_targetDbFactory);
+        var restored = await targetService.GetAllAsync(includeInactive: true);
+        restored.Should().ContainSingle(m => m.Name == "Anna" && m.IsActive);
+    }
+
     public void Dispose()
     {
         _sourceDbFactory.Dispose();

@@ -99,7 +99,139 @@ public class SettingsPageTests : TestContext
     }
 
     [Fact]
-    public void SettingsPage_AddRenameDeactivateAndReactivateMember_ShouldUpdateUi()
+    public async Task SettingsPage_ShouldDisplayActiveMembersAlphabetically_WithoutReorderOrInactiveSection()
+    {
+        var (dbFactory, _, service) = SetupServices();
+        using var _ = dbFactory;
+
+        await service.CreateAsync("Örjan");
+        await service.CreateAsync("Erik");
+        await service.CreateAsync("Anna");
+        await service.CreateAsync("Åsa");
+        var inactive = await service.CreateAsync("InaktivPerson");
+        await service.DeactivateAsync(inactive.Id);
+
+        var cut = RenderComponent<SettingsPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".settings-member-row .settings-member-name")
+                .Select(el => el.TextContent.Trim())
+                .ToList();
+            names.Should().Equal("Anna", "Erik", "Åsa", "Örjan");
+        });
+
+        cut.FindAll(".settings-member-move-btn").Should().BeEmpty();
+        cut.FindAll(".settings-inactive-section").Should().BeEmpty();
+        cut.Markup.Should().NotContain("InaktivPerson");
+    }
+
+    [Fact]
+    public async Task SettingsPage_AddRenameAndPermanentDelete_ShouldUseCompactControlsAndConfirmationDialog()
+    {
+        var (dbFactory, _, service) = SetupServices();
+        using var _ = dbFactory;
+
+        var cut = RenderComponent<SettingsPage>();
+        cut.WaitForAssertion(() => cut.Find("#settings-new-member-input").Should().NotBeNull());
+
+        // Add button has accessible Swedish label/tooltip and is disabled when input is blank
+        var addButton = cut.Find("#settings-add-member-btn");
+        addButton.GetAttribute("aria-label").Should().Be("Lägg till familjemedlem");
+        addButton.GetAttribute("title").Should().Be("Lägg till familjemedlem");
+        addButton.HasAttribute("disabled").Should().BeTrue();
+
+        cut.Find("#settings-new-member-input").Input("   ");
+        cut.Find("#settings-add-member-btn").HasAttribute("disabled").Should().BeTrue();
+
+        // Add members
+        cut.Find("#settings-new-member-input").Input("Erik");
+        cut.Find("#settings-add-member-btn").HasAttribute("disabled").Should().BeFalse();
+        cut.Find(".settings-add-member-form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll(".settings-member-row").Should().ContainSingle();
+            cut.Find(".settings-member-row .settings-member-name").TextContent.Should().Be("Erik");
+        });
+
+        // Duplicate case-insensitive error stays inline next to input, not floating
+        cut.Find("#settings-new-member-input").Input("erik");
+        cut.Find(".settings-add-member-form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            var inlineError = cut.Find(".settings-family-feedback");
+            inlineError.TextContent.Should().Contain("finns redan");
+            inlineError.ClassList.Should().NotContain("rb-feedback-floating");
+        });
+
+        // Compact row actions: edit and delete icon buttons with accessible labels/tooltips
+        var editBtn = cut.Find(".settings-member-edit-btn");
+        editBtn.GetAttribute("aria-label").Should().Contain("Erik");
+        editBtn.GetAttribute("title").Should().Be("Byt namn");
+
+        var deleteBtn = cut.Find(".settings-member-delete-btn");
+        deleteBtn.GetAttribute("aria-label").Should().Contain("Erik");
+        deleteBtn.GetAttribute("title").Should().Be("Ta bort");
+
+        // Inline rename validation error stays inline in edit form, then valid rename succeeds
+        editBtn.Click();
+        await service.CreateAsync("Anna");
+        cut.Find(".settings-member-edit-input").Input("anna");
+        cut.Find(".settings-member-edit-form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find(".settings-inline-error").TextContent.Should().Contain("Anna");
+        });
+
+        cut.Find(".settings-member-edit-input").Input("Beatrice");
+        cut.Find(".settings-member-edit-form").Submit();
+
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".settings-member-row .settings-member-name")
+                .Select(el => el.TextContent.Trim())
+                .ToList();
+            names.Should().Equal("Anna", "Beatrice");
+        });
+
+        // Permanent delete confirmation dialog: cancel preserves member, confirm deletes permanently
+        cut.FindAll(".settings-member-delete-btn").Last().Click();
+        cut.WaitForAssertion(() => cut.Find(".modal-dialog-custom").Should().NotBeNull());
+
+        var dialogText = cut.Find(".modal-dialog-custom").TextContent;
+        dialogText.Should().Contain("permanent");
+        dialogText.Should().Contain("kalenderhändelser");
+        dialogText.Should().Contain("receptbetyg");
+        dialogText.Should().Contain("finns kvar");
+        dialogText.Should().Contain("säkerhetskopia");
+
+        // Cancel keeps Beatrice
+        cut.Find(".modal-dialog-custom button.btn-secondary-custom").Click();
+        cut.WaitForAssertion(() => cut.FindAll(".modal-dialog-custom").Should().BeEmpty());
+        (await service.GetAllAsync(includeInactive: true)).Should().HaveCount(2);
+
+        // Confirm permanently removes Beatrice
+        cut.FindAll(".settings-member-delete-btn").Last().Click();
+        cut.WaitForAssertion(() => cut.Find(".modal-dialog-custom button.btn-danger-custom").Should().NotBeNull());
+        cut.Find(".modal-dialog-custom button.btn-danger-custom").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var names = cut.FindAll(".settings-member-row .settings-member-name")
+                .Select(el => el.TextContent.Trim())
+                .ToList();
+            names.Should().Equal("Anna");
+        });
+
+        var remaining = await service.GetAllAsync(includeInactive: true);
+        remaining.Should().ContainSingle(m => m.Name == "Anna");
+    }
+
+    [Fact]
+    public void SettingsPage_SuccessFeedback_ShouldRenderAsFloatingToast_AndDismissManually()
     {
         var (dbFactory, _, _) = SetupServices();
         using var _ = dbFactory;
@@ -107,53 +239,23 @@ public class SettingsPageTests : TestContext
         var cut = RenderComponent<SettingsPage>();
         cut.WaitForAssertion(() => cut.Find("#settings-new-member-input").Should().NotBeNull());
 
-        // Add member
         cut.Find("#settings-new-member-input").Input("Ebba");
         cut.Find(".settings-add-member-form").Submit();
 
         cut.WaitForAssertion(() =>
         {
-            cut.FindAll(".settings-member-row:not(.is-inactive)").Should().ContainSingle();
-            cut.Markup.Should().Contain("Ebba");
+            var toast = cut.Find(".settings-success-toast");
+            toast.ClassList.Should().Contain("rb-feedback-floating");
+            toast.ClassList.Should().Contain("rb-feedback-success");
+            toast.GetAttribute("role").Should().Be("status");
+            toast.GetAttribute("aria-live").Should().Be("polite");
+            toast.TextContent.Should().Contain("Ebba");
+            // Toast must not be inside the family card's normal flow
+            cut.FindAll(".settings-family-card .settings-success-toast").Should().BeEmpty();
         });
 
-        // Duplicate case-insensitive error
-        cut.Find("#settings-new-member-input").Input("ebba");
-        cut.Find(".settings-add-member-form").Submit();
-
-        cut.WaitForAssertion(() =>
-        {
-            cut.Find(".settings-family-feedback").TextContent.Should().Contain("finns redan");
-        });
-
-        // Inline rename
-        cut.Find(".settings-member-edit-btn").Click();
-        cut.Find(".settings-member-edit-input").Input("Ebba K");
-        cut.Find(".settings-member-edit-form").Submit();
-
-        cut.WaitForAssertion(() =>
-        {
-            cut.Find(".settings-member-row:not(.is-inactive) .settings-member-name").TextContent.Should().Be("Ebba K");
-        });
-
-        // Deactivate requires confirmation
-        cut.Find(".settings-member-deactivate-btn").Click();
-        cut.WaitForAssertion(() => cut.Find(".modal-dialog-custom button.btn-danger-custom").Should().NotBeNull());
-        cut.Find(".modal-dialog-custom button.btn-danger-custom").Click();
-
-        cut.WaitForAssertion(() =>
-        {
-            cut.FindAll(".settings-member-row:not(.is-inactive)").Should().BeEmpty();
-            cut.Find(".settings-inactive-section").TextContent.Should().Contain("Ebba K");
-        });
-
-        // Reactivate
-        cut.Find(".settings-member-reactivate-btn").Click();
-        cut.WaitForAssertion(() =>
-        {
-            cut.FindAll(".settings-member-row:not(.is-inactive)").Should().ContainSingle();
-            cut.FindAll(".settings-inactive-section").Should().BeEmpty();
-        });
+        cut.Find(".settings-success-toast .rb-feedback-close").Click();
+        cut.WaitForAssertion(() => cut.FindAll(".settings-success-toast").Should().BeEmpty());
     }
 
     [Fact]

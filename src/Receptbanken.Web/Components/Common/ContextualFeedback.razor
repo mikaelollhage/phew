@@ -4,8 +4,10 @@
 @if (HasActiveContent)
 {
     <div id="@Id"
-         class="rb-feedback @SeverityCssClass @LegacySeverityCssClass @CssClass"
-         role="@AriaRole">
+         class="rb-feedback @SeverityCssClass @LegacySeverityCssClass @(Floating ? "rb-feedback-floating" : string.Empty) @CssClass"
+         role="@AriaRole"
+         aria-live="@AriaLive"
+         aria-atomic="true">
         <div class="rb-feedback-content">
             <span class="rb-feedback-icon" aria-hidden="true">@IconText</span>
             <div class="rb-feedback-text">
@@ -53,6 +55,7 @@
     [Parameter] public int AutoDismissDurationMs { get; set; } = DefaultSuccessAutoDismissMs;
     [Parameter] public string? CssClass { get; set; }
     [Parameter] public string? Id { get; set; }
+    [Parameter] public bool Floating { get; set; }
     [Parameter] public string? ActionText { get; set; }
     [Parameter] public EventCallback OnAction { get; set; }
     [Parameter] public EventCallback OnDismiss { get; set; }
@@ -98,6 +101,7 @@
     };
 
     private string AriaRole => EffectiveSeverity == FeedbackSeverity.Error ? "alert" : "status";
+    private string AriaLive => EffectiveSeverity == FeedbackSeverity.Error ? "assertive" : "polite";
 
     protected override void OnParametersSet()
     {
