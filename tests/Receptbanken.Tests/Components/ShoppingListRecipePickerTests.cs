@@ -189,8 +189,10 @@ public class ShoppingListRecipePickerTests : TestContext
             textContent.Should().Contain("600 g laxfilé");
             textContent.Should().Contain("400 g pasta");
 
-            // Tydlig feedback visas
-            cut.Find(".shopping-recipe-feedback").TextContent.Should().Contain("2 varor lades till i inköpslistan från Krämig Laxpasta");
+            // Tydlig flytande bekräftelsetoast visas
+            var recipeToast = cut.Find(".shopping-recipe-feedback.rb-feedback-success");
+            recipeToast.ClassList.Should().Contain("rb-feedback-floating");
+            recipeToast.TextContent.Should().Contain("2 varor lades till i inköpslistan från Krämig Laxpasta");
         });
     }
 
@@ -274,7 +276,9 @@ public class ShoppingListRecipePickerTests : TestContext
 
         cut.WaitForAssertion(() =>
         {
-            cut.Find(".shopping-recipe-feedback").TextContent.Should().Contain("Ange ett giltigt antal portioner (1–100)");
+            var errorBanner = cut.Find(".shopping-recipe-feedback.rb-feedback-error");
+            errorBanner.ClassList.Should().NotContain("rb-feedback-floating");
+            errorBanner.TextContent.Should().Contain("Ange ett giltigt antal portioner (1–100)");
             cut.FindAll(".shopping-item-row").Should().BeEmpty("inga varor ska ha lagts till med ogiltiga portioner");
             cut.FindAll(".shopping-recipe-selected-panel").Should().ContainSingle("sektionen ska förbli öppen");
         });

@@ -141,7 +141,8 @@
                 </p>
             </div>
 
-            <CalendarPushSettingsCard />
+            <CalendarPushSettingsCard @ref="_pushSettingsCard"
+                                      OnSuccessFeedbackShown="HandlePushSuccessFeedbackShown" />
         </section>
     </div>
 </div>
@@ -194,9 +195,15 @@
     }
 
     private FamilyMember? memberToDelete;
+    private CalendarPushSettingsCard? _pushSettingsCard;
     private readonly FeedbackState familyErrorFeedback = new();
     private readonly FeedbackState renameErrorFeedback = new();
     private readonly FeedbackState familySuccessFeedback = new();
+
+    private void HandlePushSuccessFeedbackShown()
+    {
+        familySuccessFeedback.Clear();
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -234,6 +241,7 @@
             var created = await FamilyMemberService.CreateAsync(newMemberName);
             newMemberName = string.Empty;
             await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
             familySuccessFeedback.ShowSuccess($"Familjemedlemmen \"{created.Name}\" lades till.");
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
@@ -288,6 +296,7 @@
             editingMemberId = null;
             editingName = string.Empty;
             await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
             familySuccessFeedback.ShowSuccess($"Namnet uppdaterades till \"{updated.Name}\".");
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
@@ -337,6 +346,7 @@
                 CancelEdit();
             }
             await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
             familySuccessFeedback.ShowSuccess($"\"{target.Name}\" togs bort permanent.");
         }
         catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)

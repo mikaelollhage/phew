@@ -53,7 +53,7 @@
                 </div>
             }
 
-            <ContextualFeedback State="formFeedback" CssClass="category-form-feedback" />
+            <ContextualFeedback State="formFeedback" Floating="@formFeedback.IsSuccess" CssClass="category-form-feedback" />
 
             <div style="display: flex; gap: 10px; margin-top: 8px;">
                 <button type="button" class="btn-primary-custom" @onclick="SaveCategory" disabled="@string.IsNullOrWhiteSpace(formName)">
@@ -72,7 +72,7 @@
     <div class="detail-card">
         <h2 class="detail-card-title">Befintliga kategorier (@categories.Count)</h2>
 
-        <ContextualFeedback State="listFeedback" CssClass="category-list-feedback" />
+        <ContextualFeedback State="listFeedback" Floating="@listFeedback.IsSuccess" CssClass="category-list-feedback" />
 
         @if (isLoading)
         {
@@ -187,6 +187,11 @@
 
         try
         {
+            if (listFeedback.IsSuccess)
+            {
+                listFeedback.Clear();
+            }
+
             if (editingCategoryId.HasValue)
             {
                 await CategoryService.UpdateCategoryAsync(new Category
@@ -239,6 +244,10 @@
         try
         {
             await CategoryService.DeleteCategoryAsync(cat.Id);
+            if (formFeedback.IsSuccess)
+            {
+                formFeedback.Clear();
+            }
             listFeedback.ShowSuccess($"Kategorin '{cat.Name}' har raderats.");
             await LoadCategories();
         }

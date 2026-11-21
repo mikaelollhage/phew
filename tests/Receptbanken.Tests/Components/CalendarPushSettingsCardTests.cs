@@ -168,14 +168,29 @@ public class CalendarPushSettingsCardTests : TestContext
             cut.Markup.Should().NotContain("aktiva enheter");
             cut.Find(".calendar-push-test-btn").Should().NotBeNull();
             cut.Find(".calendar-push-disable-btn").Should().NotBeNull();
+
+            var subscribeToast = cut.Find(".calendar-push-feedback.rb-feedback-success");
+            subscribeToast.ClassList.Should().Contain("rb-feedback-floating");
+            subscribeToast.TextContent.Should().Contain("Pushnotiser är nu aktiverade på den här enheten.");
         });
 
-        // Clicking test notification button sends a test push
+        // Clicking test notification button sends a test push and shows a floating success toast
         cut.Find(".calendar-push-test-btn").Click();
         cut.WaitForAssertion(() =>
         {
             client.SendCount.Should().Be(1);
-            cut.Markup.Should().Contain("Testnotis skickad!");
+            var testToast = cut.Find(".calendar-push-feedback.rb-feedback-success");
+            testToast.ClassList.Should().Contain("rb-feedback-floating");
+            testToast.TextContent.Should().Contain("Testnotis skickad!");
+        });
+
+        // Clicking test notification immediately again hits cooldown -> shows inline error (not floating)
+        cut.Find(".calendar-push-test-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var cooldownError = cut.Find(".calendar-push-feedback.rb-feedback-error");
+            cooldownError.ClassList.Should().NotContain("rb-feedback-floating");
+            cooldownError.TextContent.Should().Contain("Vänta");
         });
     }
 

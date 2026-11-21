@@ -631,6 +631,7 @@ public class ContextualFeedbackComponentTests : TestContext
         cut.WaitForAssertion(() =>
         {
             var error = cut.Find(".category-form-feedback.rb-feedback-error");
+            error.ClassList.Should().NotContain("rb-feedback-floating");
             error.GetAttribute("role").Should().Be("alert");
             error.TextContent.Should().Contain("finns redan");
         });
@@ -642,12 +643,24 @@ public class ContextualFeedbackComponentTests : TestContext
             cut.FindAll(".category-form-feedback").Should().BeEmpty();
         });
 
-        // Saving the valid category shows a contextual confirmation in the form
+        // Saving the valid category shows a floating confirmation toast
         saveBtn.Click();
         cut.WaitForAssertion(() =>
         {
             var success = cut.Find(".category-form-feedback.rb-feedback-success");
+            success.ClassList.Should().Contain("rb-feedback-floating");
             success.TextContent.Should().Contain("Kategorin 'Fisk & Skaldjur' har skapats.");
+        });
+
+        // Deleting a category clears the form toast and shows a single floating delete confirmation toast
+        cut.FindAll("button.btn-danger-custom.btn-sm").First().Click();
+        cut.Find(".modal-dialog-custom button.btn-danger-custom").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var deleteSuccess = cut.Find(".category-list-feedback.rb-feedback-success");
+            deleteSuccess.ClassList.Should().Contain("rb-feedback-floating");
+            deleteSuccess.TextContent.Should().Contain("har raderats");
+            cut.FindAll(".rb-feedback-floating").Should().ContainSingle();
         });
     }
 
@@ -661,17 +674,19 @@ public class ContextualFeedbackComponentTests : TestContext
 
         var cut = RenderComponent<BackupPlaceholder>();
 
-        // 1. Export backup -> shows contextual confirmation in export card
+        // 1. Export backup -> shows floating confirmation toast
         var exportBtn = cut.FindAll("button").First(b => b.TextContent.Contains("Ladda ner säkerhetskopia"));
         exportBtn.Click();
 
         cut.WaitForAssertion(() =>
         {
             cut.FindAll(".backup-export-feedback.rb-feedback-success").Should().ContainSingle();
-            cut.Find(".backup-export-feedback").TextContent.Should().Contain("Säkerhetskopian har skapats och laddats ner.");
+            var exportToast = cut.Find(".backup-export-feedback");
+            exportToast.ClassList.Should().Contain("rb-feedback-floating");
+            exportToast.TextContent.Should().Contain("Säkerhetskopian har skapats och laddats ner.");
         });
 
-        // 2. Select backup file and restore -> shows exactly ONE contextual confirmation in restore card
+        // 2. Select backup file and restore -> shows inline seven-counter summary in restore card (not floating)
         var inputFile = cut.FindComponent<InputFile>();
         var fakeZip = new FakeBrowserFile("backup.zip", "application/zip", [0x50, 0x4B, 0x03, 0x04]);
         cut.InvokeAsync(() => inputFile.Instance.OnChange.InvokeAsync(new InputFileChangeEventArgs([fakeZip])));
@@ -688,7 +703,9 @@ public class ContextualFeedbackComponentTests : TestContext
         {
             fakeBackup.LastReplaceExisting.Should().BeTrue();
             cut.FindAll(".backup-restore-feedback.rb-feedback-success").Should().ContainSingle();
-            cut.Find(".backup-restore-feedback").TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier, 2 bilder, 1 veckomenyer, 4 kalenderhändelser, 0 att göra-listor (0 uppgifter) och 0 familjemedlemmar återställdes.");
+            var restoreBanner = cut.Find(".backup-restore-feedback");
+            restoreBanner.ClassList.Should().NotContain("rb-feedback-floating");
+            restoreBanner.TextContent.Should().Contain("Återställningen lyckades! 5 recept, 3 kategorier, 2 bilder, 1 veckomenyer, 4 kalenderhändelser, 0 att göra-listor (0 uppgifter) och 0 familjemedlemmar återställdes.");
         });
     }
 

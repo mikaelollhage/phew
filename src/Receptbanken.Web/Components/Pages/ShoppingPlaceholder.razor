@@ -192,7 +192,7 @@
                     </div>
                 }
 
-                <ContextualFeedback State="recipeAddFeedback" CssClass="shopping-recipe-feedback" />
+                <ContextualFeedback State="recipeAddFeedback" Floating="@recipeAddFeedback.IsSuccess" CssClass="shopping-recipe-feedback" />
             </div>
         }
     </div>
@@ -1166,6 +1166,9 @@
     {
         showWeeklyMenuPreview = false;
         await ReloadItemsAsync();
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
         if (!string.IsNullOrWhiteSpace(result.Message))
         {
             recipeAddFeedback.ShowSuccess(result.Message);
@@ -1262,6 +1265,9 @@
         var servingsUnit = selectedRecipe?.ServingsUnit ?? "portioner";
         selectedRecipe = null;
         await ReloadItemsAsync();
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
         recipeAddFeedback.ShowSuccess(result.Message ?? $"{result.AddedItemsCount} ingredienser från \"{recipeTitle}\" ({servings} {servingsUnit}) lades till i inköpslistan.");
     }
 
@@ -1289,6 +1295,10 @@
 
             if (isChecked)
             {
+                if (recipeAddFeedback.IsSuccess)
+                {
+                    recipeAddFeedback.Clear();
+                }
                 undoDeletedItemSnapshot = null;
                 undoCheckedItemId = itemId;
                 undoCheckFeedback.ShowSuccess($"\"{itemName}\" markerad som klar.");
@@ -1510,6 +1520,10 @@
 
             if (deleted && snapshot != null)
             {
+                if (recipeAddFeedback.IsSuccess)
+                {
+                    recipeAddFeedback.Clear();
+                }
                 undoCheckedItemId = null;
                 undoDeletedItemSnapshot = snapshot;
                 undoCheckFeedback.ShowSuccess($"\"{snapshot.Name}\" borttagen.");

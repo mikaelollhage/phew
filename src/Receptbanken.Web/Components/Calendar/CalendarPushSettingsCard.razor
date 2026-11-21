@@ -87,16 +87,15 @@
             </div>
         }
 
-        @if (!string.IsNullOrWhiteSpace(_statusMessage))
-        {
-            <p class="calendar-push-feedback @(_isErrorMessage ? "is-error" : "is-success")" role="status">
-                @_statusMessage
-            </p>
-        }
+        <ContextualFeedback State="_feedback"
+                            Floating="@_feedback.IsSuccess"
+                            CssClass="calendar-push-feedback" />
     </div>
 </section>
 
 @code {
+    [Parameter] public EventCallback OnSuccessFeedbackShown { get; set; }
+
     private ElementReference _enableButtonRef;
     private bool _hasBoundEnableButton;
     private DotNetObjectReference<CalendarPushSettingsCard>? _dotNetRef;
@@ -106,9 +105,16 @@
     private bool _isBusy;
     private bool _isSubscribed;
     private string? _vapidPublicKey;
-    private string? _statusMessage;
-    private bool _isErrorMessage;
+    private readonly FeedbackState _feedback = new();
     private PushEnvironmentState _envState = new();
+
+    public void ClearSuccessFeedback()
+    {
+        if (_feedback.IsSuccess)
+        {
+            _feedback.Clear();
+        }
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -200,7 +206,7 @@
             return;
 
         _isBusy = true;
-        _statusMessage = null;
+        _feedback.Clear();
         StateHasChanged();
 
         try
@@ -215,20 +221,21 @@
             {
                 await UnbindEnableButtonAsync();
                 await RefreshStateAsync();
-                _isErrorMessage = false;
-                _statusMessage = "Pushnotiser är nu aktiverade på den här enheten.";
+                if (OnSuccessFeedbackShown.HasDelegate)
+                {
+                    await OnSuccessFeedbackShown.InvokeAsync();
+                }
+                _feedback.ShowSuccess("Pushnotiser är nu aktiverade på den här enheten.");
             }
             else
             {
-                _isErrorMessage = true;
-                _statusMessage = result.ErrorMessage ?? "Kunde inte spara pushprenumerationen.";
+                _feedback.ShowError(result.ErrorMessage ?? "Kunde inte spara pushprenumerationen.");
             }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Fel vid sparning av pushprenumeration.");
-            _isErrorMessage = true;
-            _statusMessage = "Kunde inte aktivera pushnotiser. Försök igen.";
+            _feedback.ShowError("Kunde inte aktivera pushnotiser. Försök igen.");
         }
         finally
         {
@@ -244,10 +251,9 @@
             return;
 
         await RefreshStateAsync();
-        _isErrorMessage = true;
-        _statusMessage = string.Equals(permission, "denied", StringComparison.OrdinalIgnoreCase)
+        _feedback.ShowError(string.Equals(permission, "denied", StringComparison.OrdinalIgnoreCase)
             ? "Notisbehörighet nekades. Ändra i webbläsarens inställningar för att aktivera."
-            : "Notisbehörighet beviljades inte.";
+            : "Notisbehörighet beviljades inte.");
         StateHasChanged();
     }
 
@@ -257,10 +263,9 @@
         if (_isDisposed)
             return;
 
-        _isErrorMessage = true;
-        _statusMessage = string.IsNullOrWhiteSpace(message)
+        _feedback.ShowError(string.IsNullOrWhiteSpace(message)
             ? "Kunde inte aktivera pushnotiser."
-            : message;
+            : message);
         StateHasChanged();
     }
 
@@ -270,7 +275,7 @@
             return;
 
         _isBusy = true;
-        _statusMessage = null;
+        _feedback.Clear();
 
         try
         {
@@ -282,8 +287,11 @@
             }
 
             await RefreshStateAsync();
-            _isErrorMessage = false;
-            _statusMessage = "Pushnotiser avaktiverades för den här enheten.";
+            if (OnSuccessFeedbackShown.HasDelegate)
+            {
+                await OnSuccessFeedbackShown.InvokeAsync();
+            }
+            _feedback.ShowSuccess("Pushnotiser avaktiverades för den här enheten.");
         }
         catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
         {
@@ -292,8 +300,7 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Fel vid avaktivering av pushnotiser.");
-            _isErrorMessage = true;
-            _statusMessage = "Kunde inte avaktivera pushnotiser.";
+            _feedback.ShowError("Kunde inte avaktivera pushnotiser.");
         }
         finally
         {
@@ -307,24 +314,29 @@
             return;
 
         _isBusy = true;
-        _statusMessage = null;
+        _feedback.Clear();
 
         try
         {
             var result = await PushSubscriptionService.SendTestNotificationAsync(_envState.Endpoint);
-            _isErrorMessage = !result.Success;
-            _statusMessage = result.Message;
-
-            if (!result.Success)
+            if (result.Success)
             {
+                if (OnSuccessFeedbackShown.HasDelegate)
+                {
+                    await OnSuccessFeedbackShown.InvokeAsync();
+                }
+                _feedback.ShowSuccess(result.Message);
+            }
+            else
+            {
+                _feedback.ShowError(result.Message);
                 await RefreshStateAsync();
             }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Fel vid utskick av testnotis.");
-            _isErrorMessage = true;
-            _statusMessage = "Kunde inte skicka testnotis.";
+            _feedback.ShowError("Kunde inte skicka testnotis.");
         }
         finally
         {

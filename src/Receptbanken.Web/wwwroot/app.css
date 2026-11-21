@@ -5778,18 +5778,9 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   margin-top: 12px;
 }
 
-.calendar-push-feedback {
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.calendar-push-feedback.is-success {
-  color: #1f7a6f;
-}
-
-.calendar-push-feedback.is-error {
-  color: #b44a2f;
+.calendar-push-feedback:not(.rb-feedback-floating) {
+  margin-top: 12px;
+  margin-bottom: 0;
 }
 
 .calendar-push-dialog {
