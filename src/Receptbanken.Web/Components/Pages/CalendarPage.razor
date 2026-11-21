@@ -1,7 +1,6 @@
 @page "/kalender"
 @implements IAsyncDisposable
 @inject CalendarService CalendarService
-@inject WeeklyMenuService WeeklyMenuService
 @inject ILocalDateProvider LocalDateProvider
 @inject IJSRuntime JSRuntime
 @inject ILogger<CalendarPage> Logger
@@ -68,13 +67,11 @@ else
         @foreach (var date in currentWeek.GetDates())
         {
             var dayOccurrences = occurrencesByDate.TryGetValue(date, out var list) ? list : (IReadOnlyList<CalendarOccurrenceDto>)[];
-            plannedMealsByDate.TryGetValue(date, out var plannedMeal);
 
             <CalendarDayCard @key="@date.ToString("yyyy-MM-dd")"
                              Date="date"
                              IsToday="@(date == localToday)"
                              Occurrences="dayOccurrences"
-                             PlannedMeal="plannedMeal"
                              ExpandedOccurrenceKeys="expandedOccurrenceKeys"
                              OnToggleEventExpanded="ToggleEventExpanded"
                              OnAddEvent="OpenNewEventForDate"
@@ -120,7 +117,6 @@ else
     private CancellationTokenSource? _midnightWatcherCts;
 
     private Dictionary<DateOnly, IReadOnlyList<CalendarOccurrenceDto>> occurrencesByDate = new();
-    private Dictionary<DateOnly, PlannedDayMealDto> plannedMealsByDate = new();
     private List<string> knownFamilyMembers = [];
     private readonly FeedbackState feedback = new();
 
@@ -222,7 +218,6 @@ else
             var versionBeforeLoad = CalendarService.Notifier.Version;
             var occurrences = await CalendarService.GetWeekOccurrencesAsync(currentWeek.WeekStartDate);
             var members = await CalendarService.GetKnownFamilyMembersAsync();
-            var savedMenu = await WeeklyMenuService.GetSavedMenuForWeekAsync(currentWeek.WeekStartDate);
 
             occurrencesByDate = occurrences
                 .GroupBy(o => o.Date)
@@ -235,26 +230,6 @@ else
             expandedOccurrenceKeys.IntersectWith(validKeys);
 
             knownFamilyMembers = members;
-
-            plannedMealsByDate = new Dictionary<DateOnly, PlannedDayMealDto>();
-            if (savedMenu != null)
-            {
-                foreach (var day in savedMenu.Days)
-                {
-                    if (day.Recipe != null)
-                    {
-                        plannedMealsByDate[day.Date] = new PlannedDayMealDto
-                        {
-                            CalendarWeek = currentWeek,
-                            Date = day.Date,
-                            HasSavedMenu = true,
-                            MenuStatus = savedMenu.Status,
-                            Recipe = day.Recipe,
-                            Servings = day.Servings ?? day.Recipe.Servings
-                        };
-                    }
-                }
-            }
 
             _lastLoadedVersion = Math.Max(versionBeforeLoad, CalendarService.Notifier.Version);
         }

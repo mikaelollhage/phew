@@ -496,4 +496,137 @@ public class RecipeReusableComponentsTests : TestContext
         var fullRecipe = await recipeService.GetRecipeByIdAsync(saved.Id);
         fullRecipe!.RecipeCategories.Should().ContainSingle(rc => rc.CategoryId == createdCat.Id);
     }
+
+    [Fact]
+    public void RecipeIngredientRow_WhenOptionalFieldsEmpty_ShouldCollapseByDefaultAndExpandOnToggle()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 2m,
+            Unit = "dl",
+            Name = "grädde"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Optional fields should be collapsed initially
+        cut.FindAll(".ingredient-optional-fields").Should().BeEmpty();
+        cut.Markup.Should().NotContain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
+        cut.Markup.Should().NotContain("placeholder=\"Beredning (t.ex. hackad)\"");
+
+        var toggle = cut.Find(".ingredient-optional-toggle");
+        toggle.GetAttribute("aria-expanded").Should().Be("false");
+        toggle.TextContent.Trim().Should().Be("Fler fält");
+        toggle.QuerySelector(".ingredient-optional-chevron svg").Should().NotBeNull();
+        toggle.ClassList.Should().NotContain("has-values");
+
+        // Expanding exposes both optional fields and preserves state across parent rerenders
+        toggle.Click();
+
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
+        cut.Markup.Should().Contain("placeholder=\"Beredning (t.ex. hackad)\"");
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+        cut.Find(".ingredient-optional-toggle").TextContent.Trim().Should().Be("Dölj fält");
+
+        // Re-rendering with the same ingredient reference must not collapse expanded fields
+        cut.Render();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_WhenOptionalFieldsHaveData_ShouldExpandInitiallyAndPreserveOnCollapseReopenAndRerender()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 1m,
+            Unit = "st",
+            Name = "lök",
+            Preparation = "finhackad"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Nonempty optional field should cause automatic expansion on initial render
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("finhackad");
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+
+        // Parent rerender must keep it expanded
+        cut.Render();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+
+        // Enter comment as well, then collapse
+        var optionalFields = cut.FindAll(".ingredient-optional-fields fluent-text-field");
+        optionalFields.Should().HaveCount(2);
+        optionalFields.ElementAt(0).Change("gul");
+
+        cut.Find(".ingredient-optional-toggle").Click();
+
+        // Collapsed state preserves values and indicates saved optional data exists
+        cut.FindAll(".ingredient-optional-fields").Should().BeEmpty();
+        ingredient.Comment.Should().Be("gul");
+        ingredient.Preparation.Should().Be("finhackad");
+
+        var collapsedToggle = cut.Find(".ingredient-optional-toggle");
+        collapsedToggle.GetAttribute("aria-expanded").Should().Be("false");
+        collapsedToggle.ClassList.Should().Contain("has-values");
+        collapsedToggle.GetAttribute("aria-label").Should().Contain("innehåller");
+        cut.FindAll(".ingredient-optional-indicator").Should().ContainSingle();
+
+        // Reopening restores both values
+        collapsedToggle.Click();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("gul");
+        cut.Markup.Should().Contain("finhackad");
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_ReorderingAndMovingBetweenSections_ShouldPreserveOptionalValuesAndExpansionState()
+    {
+        var first = new Ingredient { Quantity = 2m, Unit = "dl", Name = "mjöl", GroupHeader = "Deg" };
+        var second = new Ingredient
+        {
+            Quantity = 1m,
+            Unit = "tsk",
+            Name = "salt",
+            Comment = "flingsalt",
+            GroupHeader = "Sås"
+        };
+        var ingredients = new List<Ingredient> { first, second };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // First row is collapsed (empty optional fields); second row is expanded (nonempty comment)
+        var toggles = cut.FindAll(".ingredient-optional-toggle");
+        toggles.Should().HaveCount(2);
+        toggles.ElementAt(0).GetAttribute("aria-expanded").Should().Be("false");
+        toggles.ElementAt(1).GetAttribute("aria-expanded").Should().Be("true");
+
+        // Expand first row manually and fill preparation
+        toggles.ElementAt(0).Click();
+        var firstOptionalInputs = cut.FindAll(".ingredient-editor-row").ElementAt(0).QuerySelectorAll(".ingredient-optional-fields fluent-text-field");
+        firstOptionalInputs.ElementAt(1).Change("siktat");
+
+        // Move second ingredient ("salt" in "Sås") up into "Deg" via contextual menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(3).Click(); // items: [Deg section, mjöl, Sås section, salt]
+        cut.Find(".ingredient-move-up-btn").Click();
+
+        // Now "salt" is above "Sås" section (inside "Deg"), and both rows keep their expansion state & data
+        second.GroupHeader.Should().Be("Deg");
+        second.Comment.Should().Be("flingsalt");
+        first.Preparation.Should().Be("siktat");
+
+        var rowsAfterMove = cut.FindAll(".ingredient-editor-row");
+        rowsAfterMove.Should().HaveCount(2);
+        rowsAfterMove.ElementAt(0).QuerySelector(".ingredient-optional-toggle")!.GetAttribute("aria-expanded").Should().Be("true");
+        rowsAfterMove.ElementAt(1).QuerySelector(".ingredient-optional-toggle")!.GetAttribute("aria-expanded").Should().Be("true");
+        cut.Markup.Should().Contain("siktat");
+        cut.Markup.Should().Contain("flingsalt");
+    }
 }

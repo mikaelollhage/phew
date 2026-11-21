@@ -1282,13 +1282,41 @@ fluent-number-field::part(control) {
 }
 
 /* Ingredient Editor Header & Unified Section List */
+.recipe-edit-header {
+  margin-bottom: 18px;
+}
+
+.recipe-edit-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recipe-edit-sections > .form-section {
+  margin-bottom: 0;
+}
+
+.recipe-edit-bottom-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .ingredient-editor-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
+}
+
+.ingredient-editor-help {
+  font-size: 13px;
+  color: var(--rb-text-secondary);
+  margin: 0 0 10px 0;
+  line-height: 1.4;
 }
 
 .ingredient-editor-actions {
@@ -1296,13 +1324,40 @@ fluent-number-field::part(control) {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 16px;
+  margin-top: 12px;
+}
+
+.ingredient-editor-actions .ingredient-add-btn,
+.ingredient-editor-actions .ingredient-add-section-btn {
+  padding: 6px 12px;
+  min-height: 38px;
+  font-size: 13px;
+  gap: 6px;
+  background-color: transparent;
+}
+
+.ingredient-editor-actions .ingredient-add-btn {
+  border: 1px dashed var(--rb-border);
+  color: var(--rb-text-primary);
+}
+
+.ingredient-editor-actions .ingredient-add-section-btn {
+  border: 1px dashed var(--rb-border-subtle);
+  color: var(--rb-text-secondary);
+}
+
+.ingredient-editor-actions .ingredient-add-btn:hover:not(:disabled),
+.ingredient-editor-actions .ingredient-add-section-btn:hover:not(:disabled) {
+  background-color: var(--rb-bg-elevated);
+  border-style: solid;
+  border-color: var(--rb-border);
+  color: var(--rb-text-primary);
 }
 
 .ingredient-editor-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .ingredient-editor-item {
@@ -1345,17 +1400,26 @@ fluent-number-field::part(control) {
 .ingredient-section-header-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 8px 10px;
   border-radius: var(--rb-radius-sm);
   background-color: var(--rb-bg-elevated);
   border: 1px solid var(--rb-border);
   border-left: 3px solid var(--rb-accent-gold);
+  min-width: 0;
 }
 
 .ingredient-section-header-row.is-empty-section {
   border-style: dashed;
   border-left-style: solid;
+}
+
+.ingredient-section-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ingredient-section-title-input {
@@ -1527,17 +1591,6 @@ fluent-number-field::part(control) {
   margin: 3px 4px;
 }
 
-.ingredient-section-remove-btn {
-  padding: 6px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.ingredient-section-remove-btn svg,
 .instruction-remove-btn svg {
   width: 16px;
   height: 16px;
@@ -1638,14 +1691,92 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   flex: 1;
   min-width: 0;
   display: grid;
-  grid-template-columns: 90px 90px minmax(130px, 1.1fr) minmax(110px, 0.9fr) 180px;
-  gap: 10px;
+  grid-template-columns: 90px 90px minmax(180px, 1fr) auto;
+  gap: 8px 10px;
   align-items: center;
 }
 
 .ingredient-editor-fields > * {
   width: 100%;
   min-width: 0;
+}
+
+.ingredient-optional-toggle {
+  position: relative;
+  width: auto;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 2px;
+  min-height: 24px;
+  border-radius: var(--rb-radius-sm);
+  border: none;
+  background-color: transparent;
+  color: var(--rb-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.ingredient-optional-toggle::after {
+  content: "";
+  position: absolute;
+  inset: -6px -10px;
+}
+
+.ingredient-optional-toggle:hover {
+  background-color: transparent;
+  color: var(--rb-text-primary);
+}
+
+.ingredient-optional-toggle:focus-visible {
+  outline: 2px solid var(--rb-accent);
+  outline-offset: 2px;
+}
+
+.ingredient-optional-toggle.has-values {
+  color: var(--rb-accent-gold);
+}
+
+.ingredient-optional-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  transition: transform 0.15s ease;
+}
+
+.ingredient-optional-chevron svg {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+}
+
+.ingredient-optional-toggle[aria-expanded="false"] .ingredient-optional-chevron {
+  transform: rotate(-90deg);
+}
+
+.ingredient-optional-toggle[aria-expanded="true"] .ingredient-optional-chevron {
+  transform: rotate(0deg);
+}
+
+.ingredient-optional-indicator {
+  font-size: 14px;
+  line-height: 1;
+  color: var(--rb-accent-gold);
+}
+
+.ingredient-optional-fields {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
 }
 
 .ingredient-editor-row > .ingredient-row-actions {
@@ -1656,7 +1787,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 @media (max-width: 1140px) {
   .ingredient-editor-row {
     align-items: flex-start;
-    padding: 10px;
+    padding: 8px 10px;
   }
 
   .ingredient-row-drag,
@@ -1665,32 +1796,56 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   }
 
   .ingredient-editor-fields {
-    grid-template-columns: 100px 110px minmax(0, 1fr);
-  }
-
-  .ingredient-editor-fields > :nth-child(4) {
-    grid-column: 1 / 3;
-  }
-
-  .ingredient-editor-fields > :nth-child(5) {
-    grid-column: 3 / 4;
+    grid-template-columns: 90px 100px minmax(0, 1fr) auto;
   }
 }
 
 @media (max-width: 520px) {
-  .ingredient-editor-row {
-    gap: 6px;
-    padding: 10px 8px;
+  .recipe-edit-header {
+    margin-bottom: 14px;
   }
 
-  .ingredient-editor-row .ingredient-drag-handle {
+  .recipe-edit-sections {
+    gap: 12px;
+  }
+
+  .recipe-edit-sections > .form-section {
+    padding: 14px;
+  }
+
+  .recipe-edit-sections .form-section-title {
+    margin-bottom: 12px;
+  }
+
+  .ingredient-editor-actions .ingredient-add-btn,
+  .ingredient-editor-actions .ingredient-add-section-btn {
+    min-height: 42px;
+    padding: 8px 12px;
+  }
+
+  .ingredient-editor-list {
+    gap: 6px;
+  }
+
+  .ingredient-editor-row {
+    gap: 6px;
+    padding: 6px 8px 4px 6px;
+  }
+
+  .ingredient-editor-row:has(.has-optional-expanded) {
+    padding-bottom: 6px;
+  }
+
+  .ingredient-editor-row .ingredient-drag-handle,
+  .ingredient-section-header-row .ingredient-drag-handle {
     width: 36px;
     min-width: 36px;
     height: 44px;
     min-height: 44px;
   }
 
-  .ingredient-editor-row .btn-secondary-custom.ingredient-row-menu-btn {
+  .ingredient-editor-row .btn-secondary-custom.ingredient-row-menu-btn,
+  .ingredient-section-header-row .btn-secondary-custom.ingredient-row-menu-btn {
     width: 40px;
     min-width: 40px;
     height: 44px;
@@ -1699,36 +1854,61 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 
   .ingredient-editor-fields {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
+    gap: 4px 6px;
   }
 
   .ingredient-editor-fields > :nth-child(3) {
     grid-column: 1 / -1;
   }
 
-  .ingredient-editor-fields > :nth-child(4) {
+  .ingredient-optional-toggle {
     grid-column: 1 / -1;
+    justify-self: start;
+    min-height: 22px;
+    padding: 2px 6px 2px 2px;
+    margin-top: -1px;
   }
 
-  .ingredient-editor-fields > :nth-child(5) {
-    grid-column: 1 / -1;
+  .ingredient-optional-toggle::after {
+    inset: -8px -12px;
+  }
+
+  .ingredient-optional-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+    margin-top: 2px;
   }
 
   .ingredient-section-header-row {
+    gap: 6px;
+    padding: 6px 8px 6px 6px;
+  }
+
+  .ingredient-section-content {
     flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .ingredient-section-title-input {
+    min-width: 0;
+    flex: 1 1 140px;
   }
 
   .ingredient-section-badge {
-    order: 4;
+    max-width: 100%;
   }
 }
 
 /* Instruction Editor Row */
+.instruction-editor-header {
+  margin-bottom: 10px;
+}
+
 .instruction-editor-list {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 10px;
 }
 
 .instruction-editor-row {
@@ -1736,7 +1916,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   gap: 12px;
   align-items: flex-start;
   background-color: var(--rb-bg-surface);
-  padding: 12px;
+  padding: 10px 12px;
   border-radius: var(--rb-radius-md);
   border: 1px solid var(--rb-border-subtle);
   min-width: 0;
@@ -1747,7 +1927,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 
 .instruction-editor-row .step-number {
@@ -1783,7 +1963,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   flex-direction: row;
   gap: 8px;
   align-items: center;
-  margin-top: 16px;
+  margin-top: 12px;
 }
 
 .instruction-add-input {
@@ -1812,12 +1992,12 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 
 @media (max-width: 600px) {
   .instruction-editor-list {
-    gap: 10px;
+    gap: 8px;
   }
 
   .instruction-editor-row {
     gap: 8px;
-    padding: 10px;
+    padding: 8px 10px;
   }
 
   .btn-secondary-custom.instruction-row-menu-btn {
@@ -5226,52 +5406,6 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   flex-wrap: wrap;
 }
 
-.calendar-dinner-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-  padding: 8px 12px;
-  background-color: var(--rb-bg-surface);
-  border: 1px solid var(--rb-border-subtle);
-  border-radius: var(--rb-radius-sm);
-  font-size: 13px;
-  color: var(--rb-text-secondary);
-}
-
-.calendar-dinner-label {
-  font-weight: 500;
-  color: var(--rb-text-muted);
-}
-
-.calendar-dinner-recipe-link {
-  color: var(--rb-text-primary);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.calendar-dinner-recipe-link:hover {
-  color: var(--rb-accent);
-  text-decoration: underline;
-}
-
-.calendar-dinner-draft-tag {
-  font-size: 12px;
-  color: var(--rb-text-muted);
-}
-
-.calendar-dinner-menu-link {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--rb-accent);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.calendar-dinner-menu-link:hover {
-  text-decoration: underline;
-}
-
 .calendar-day-empty {
   padding: 0;
   line-height: 1.25;
@@ -5294,7 +5428,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   position: relative;
   display: flex;
   flex-direction: column;
-  padding: 6px 10px 6px 12px;
+  padding: 0;
   background-color: var(--rb-bg-surface);
   border: 1px solid var(--rb-border);
   border-radius: var(--rb-radius-md);
@@ -5308,17 +5442,42 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   border-left: 3px solid var(--rb-accent);
 }
 
-.calendar-event-primary-row {
+.calendar-event-summary-btn {
+  width: 100%;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 6px 10px 6px 12px;
+  min-height: 40px;
+  background: transparent;
+  border: none;
+  border-radius: var(--rb-radius-md);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color var(--rb-transition);
+}
+
+.calendar-event-summary-btn:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.calendar-event-summary-btn:focus-visible {
+  outline: 2px solid var(--rb-accent);
+  outline-offset: 2px;
+}
+
+.calendar-event-summary-btn.is-expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
 }
 
 .calendar-event-primary-main {
   flex: 1;
   min-width: 0;
-  min-height: 32px;
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -5394,24 +5553,20 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   font-variant-numeric: tabular-nums;
 }
 
-.calendar-event-expand-btn {
+.calendar-event-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  margin-left: auto;
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
-  border-radius: var(--rb-radius-sm);
-  color: var(--rb-text-secondary);
+  color: var(--rb-text-muted);
+  transition: color var(--rb-transition);
 }
 
-.calendar-event-expand-btn.is-expanded {
-  color: var(--rb-text-primary);
-  background-color: var(--rb-bg-elevated);
+.calendar-event-summary-btn:hover .calendar-event-chevron,
+.calendar-event-chevron.is-expanded {
+  color: var(--rb-text-secondary);
 }
 
 .calendar-event-details {
@@ -5419,8 +5574,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px 12px;
-  margin-top: 6px;
-  padding-top: 8px;
+  padding: 8px 10px 8px 12px;
   border-top: 1px solid var(--rb-border-subtle);
 }
 
@@ -5970,24 +6124,13 @@ fluent-dialog.recipe-picker-dialog::part(control) {
     padding-bottom: 8px;
   }
 
-  .calendar-dinner-row {
-    padding: 6px 10px;
-    gap: 4px 6px;
-  }
-
-  .calendar-event-item {
+  .calendar-event-summary-btn {
     padding: 6px 8px 6px 10px;
+    min-height: 44px;
   }
 
-  .calendar-event-primary-main {
-    min-height: 40px;
-  }
-
-  .btn-secondary-custom.calendar-event-expand-btn {
-    width: 40px;
-    height: 40px;
-    min-width: 40px;
-    min-height: 40px;
+  .calendar-event-details {
+    padding: 8px 8px 8px 10px;
   }
 
   .calendar-form-row,

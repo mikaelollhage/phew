@@ -1,5 +1,3 @@
-@using Receptbanken.Infrastructure.Services
-
 <section class="weekly-day-card calendar-day-card @(IsToday ? "is-today" : "") @(OrderedOccurrences.Count == 0 ? "is-empty" : "has-events")"
          data-date="@Date.ToString("yyyy-MM-dd")"
          aria-label="@CalendarWeek.FormatDayHeaderSwedish(Date)">
@@ -20,23 +18,6 @@
         </button>
     </div>
 
-    @if (PlannedMeal?.Recipe != null)
-    {
-        var dinnerRecipe = PlannedMeal.Recipe;
-        <div class="calendar-dinner-row" aria-label="Planerad middag">
-            <span class="calendar-dinner-icon" aria-hidden="true">🍽️</span>
-            <span class="calendar-dinner-label">Middag:</span>
-            <a href="@($"/recept/{dinnerRecipe.Id}")" class="calendar-dinner-recipe-link">@dinnerRecipe.Title</a>
-            @if (PlannedMeal.IsDraft)
-            {
-                <span class="calendar-dinner-draft-tag">(utkast)</span>
-            }
-            <a href="@($"/veckomeny?datum={Date:yyyy-MM-dd}")" class="calendar-dinner-menu-link">
-                Veckomeny →
-            </a>
-        </div>
-    }
-
     @if (OrderedOccurrences.Count == 0)
     {
         <div class="calendar-day-empty">
@@ -53,14 +34,18 @@
                 var occurrenceKey = CalendarDisplayHelper.GetOccurrenceKey(occurrence);
                 var isExpanded = ExpandedOccurrenceKeys?.Contains(occurrenceKey) == true;
                 var hasDetailsMeta = !string.IsNullOrWhiteSpace(occurrence.Location) ||
-                                     occurrence.FamilyMembers.Count > 0 ||
+                                     occurrence.FamilyMembers.Count >= 2 ||
                                      !string.IsNullOrWhiteSpace(occurrence.Notes);
 
                 <li class="calendar-event-item @(occurrence.IsAllDay ? "is-all-day" : "is-timed") @(isExpanded ? "is-expanded" : "")"
                     data-event-id="@occurrence.CalendarEventId"
                     data-occurrence-key="@occurrenceKey">
-                    <div class="calendar-event-primary-row">
-                        <div class="calendar-event-primary-main">
+                    <button type="button"
+                            class="calendar-event-summary-btn @(isExpanded ? "is-expanded" : "")"
+                            aria-expanded="@(isExpanded ? "true" : "false")"
+                            aria-label="@(isExpanded ? $"Dölj detaljer för {occurrence.Title}" : $"Visa detaljer för {occurrence.Title}")"
+                            @onclick="@(() => HandleToggleExpandedClicked(occurrenceKey))">
+                        <span class="calendar-event-primary-main">
                             <span class="calendar-event-time-badge @(occurrence.IsAllDay ? "is-all-day" : "")">
                                 @timeLabel
                             </span>
@@ -69,7 +54,7 @@
 
                             @if (occurrence.IsRecurring || occurrence.ReminderMinutesBefore.HasValue)
                             {
-                                <div class="calendar-event-indicators">
+                                <span class="calendar-event-indicators">
                                     @if (occurrence.IsRecurring)
                                     {
                                         var recurrenceTooltip = CalendarDisplayHelper.FormatRecurrenceSummary(
@@ -89,7 +74,7 @@
                                             🔔
                                         </span>
                                     }
-                                </div>
+                                </span>
                             }
 
                             @if (occurrence.FamilyMembers.Count == 1)
@@ -108,14 +93,9 @@
                                     <span>@occurrence.FamilyMembers.Count</span>
                                 </span>
                             }
-                        </div>
+                        </span>
 
-                        <button type="button"
-                                class="btn-secondary-custom calendar-event-expand-btn @(isExpanded ? "is-expanded" : "")"
-                                title="@(isExpanded ? "Dölj detaljer" : "Visa detaljer")"
-                                aria-label="@(isExpanded ? $"Dölj detaljer för {occurrence.Title}" : $"Visa detaljer för {occurrence.Title}")"
-                                aria-expanded="@(isExpanded ? "true" : "false")"
-                                @onclick="@(() => HandleToggleExpandedClicked(occurrenceKey))">
+                        <span class="calendar-event-chevron @(isExpanded ? "is-expanded" : "")" aria-hidden="true">
                             @if (isExpanded)
                             {
                                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronUp())" Color="Color.Custom" CustomColor="currentColor" />
@@ -124,8 +104,8 @@
                             {
                                 <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
                             }
-                        </button>
-                    </div>
+                        </span>
+                    </button>
 
                     @if (isExpanded)
                     {
@@ -142,7 +122,7 @@
                                             <span>@occurrence.Location</span>
                                         </div>
                                     }
-                                    @if (occurrence.FamilyMembers.Count > 0)
+                                    @if (occurrence.FamilyMembers.Count >= 2)
                                     {
                                         <div class="calendar-event-detail-row calendar-event-members" aria-label="Tilldelade personer">
                                             <span class="calendar-event-detail-icon" aria-hidden="true">
@@ -189,7 +169,6 @@
     [Parameter, EditorRequired] public DateOnly Date { get; set; }
     [Parameter] public bool IsToday { get; set; }
     [Parameter] public IReadOnlyList<CalendarOccurrenceDto> Occurrences { get; set; } = [];
-    [Parameter] public PlannedDayMealDto? PlannedMeal { get; set; }
     [Parameter] public IReadOnlySet<string>? ExpandedOccurrenceKeys { get; set; }
     [Parameter] public EventCallback<string> OnToggleEventExpanded { get; set; }
     [Parameter] public EventCallback<DateOnly> OnAddEvent { get; set; }

@@ -207,7 +207,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Expanding Kvällsträning reveals location and full member names
-        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(2).Click();
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(2).Click();
         cut.WaitForAssertion(() =>
         {
             var mondayCard = cut.Find(".calendar-day-card[data-date='2026-11-09']");
@@ -254,7 +254,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Expand event to view location and Edit/Delete actions
-        cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-expand-btn").Click();
+        cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-summary-btn").Click();
         cut.WaitForAssertion(() =>
             cut.Find(".calendar-day-card[data-date='2026-11-10']").TextContent.Should().Contain("Skogen"));
 
@@ -302,7 +302,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Edit Monday occurrence -> choose "Endast detta tillfälle" and move to Tuesday 2026-11-10
-        cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").Click();
+        cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").Click();
         cut.Find(".calendar-day-card[data-date='2026-11-09'] .calendar-event-edit-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
         cut.Find(".calendar-scope-single-btn").Click();
@@ -320,7 +320,7 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Delete Wednesday occurrence -> choose "Endast detta tillfälle"
-        cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-expand-btn").Click();
+        cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-summary-btn").Click();
         cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-delete-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
         cut.Find(".calendar-scope-single-btn").Click();
@@ -332,10 +332,10 @@ public class CalendarPageAndHomeTests : TestContext
         });
 
         // Delete remaining occurrence -> choose "Hela serien"
-        var tuesdayExpandBtn = cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-expand-btn");
-        if (tuesdayExpandBtn.GetAttribute("aria-expanded") != "true")
+        var tuesdaySummaryBtn = cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-summary-btn");
+        if (tuesdaySummaryBtn.GetAttribute("aria-expanded") != "true")
         {
-            tuesdayExpandBtn.Click();
+            tuesdaySummaryBtn.Click();
         }
         cut.Find(".calendar-day-card[data-date='2026-11-10'] .calendar-event-delete-btn").Click();
         cut.WaitForAssertion(() => cut.Find(".calendar-scope-dialog").Should().NotBeNull());
@@ -346,7 +346,7 @@ public class CalendarPageAndHomeTests : TestContext
     }
 
     [Fact]
-    public async Task CalendarPage_DinnerRow_ShowsReadOnlyMealWhenPlannedAndWorksWithoutMeal()
+    public async Task CalendarPage_ShouldNotRenderDinnerPreviews_EvenWhenWeeklyMenuIsConfirmed()
     {
         var monday = new DateOnly(2026, 11, 9);
         using var bundle = SetupServices(monday);
@@ -367,13 +367,17 @@ public class CalendarPageAndHomeTests : TestContext
         cut.WaitForAssertion(() =>
         {
             var mondayCard = cut.Find(".calendar-day-card[data-date='2026-11-09']");
-            mondayCard.TextContent.Should().Contain("Middag:");
-            mondayCard.TextContent.Should().Contain("Korv stroganoff");
-            mondayCard.QuerySelector($"a[href='/recept/{recipe.Id}']").Should().NotBeNull();
-            mondayCard.QuerySelector("a[href='/veckomeny?datum=2026-11-09']").Should().NotBeNull();
+            mondayCard.QuerySelectorAll(".calendar-dinner-row").Should().BeEmpty();
+            mondayCard.TextContent.Should().NotContain("Middag:");
+            mondayCard.TextContent.Should().NotContain("Korv stroganoff");
+            mondayCard.TextContent.Should().NotContain("Veckomeny");
+            mondayCard.QuerySelector($"a[href='/recept/{recipe.Id}']").Should().BeNull();
+            mondayCard.QuerySelector("a[href='/veckomeny?datum=2026-11-09']").Should().BeNull();
+            mondayCard.TextContent.Should().Contain("Inga händelser planerade.");
 
             var tuesdayCard = cut.Find(".calendar-day-card[data-date='2026-11-10']");
             tuesdayCard.QuerySelectorAll(".calendar-dinner-row").Should().BeEmpty();
+            tuesdayCard.TextContent.Should().Contain("Inga händelser planerade.");
         });
     }
 
@@ -528,34 +532,55 @@ public class CalendarPageAndHomeTests : TestContext
         multiBadge.GetAttribute("title").Should().Be("Leo, Maya, Erik");
         multiBadge.QuerySelector("svg").Should().NotBeNull();
 
-        // All collapsed initially; no floating menus or permanently visible edit/delete buttons
+        // All collapsed initially; no legacy expand button, floating menus, or permanently visible edit/delete buttons
+        cut.FindAll(".calendar-event-expand-btn").Should().BeEmpty();
         cut.FindAll(".calendar-event-details").Should().BeEmpty();
         cut.FindAll(".calendar-event-edit-btn").Should().BeEmpty();
         cut.FindAll(".calendar-event-delete-btn").Should().BeEmpty();
         cut.FindAll(".calendar-event-menu-popover").Should().BeEmpty();
 
-        // Expand first and third event simultaneously
-        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(0).Click();
-        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(2).Click();
+        // Summary row is a native button with aria-expanded="false" and no nested interactive elements
+        var firstSummaryBtn = mondayItems[0].QuerySelector("button.calendar-event-summary-btn[type='button']")!;
+        firstSummaryBtn.Should().NotBeNull();
+        firstSummaryBtn.GetAttribute("aria-expanded").Should().Be("false");
+        firstSummaryBtn.QuerySelectorAll("button, a, input, select, textarea").Should().BeEmpty();
+        firstSummaryBtn.QuerySelector(".calendar-event-chevron")!.ClassList.Should().NotContain("is-expanded");
+
+        // Expand first and third event simultaneously by clicking summary row
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(0).Click();
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(2).Click();
 
         cut.WaitForAssertion(() =>
         {
             var expanded = cut.FindAll(".calendar-event-item.is-expanded").ToList();
             expanded.Should().HaveCount(2);
+            expanded[0].QuerySelector(".calendar-event-summary-btn")!.GetAttribute("aria-expanded").Should().Be("true");
+            expanded[0].QuerySelector(".calendar-event-chevron")!.ClassList.Should().Contain("is-expanded");
             expanded[0].TextContent.Should().Contain("Glöm inte klubba");
-            expanded[1].TextContent.Should().Contain("Leo");
-            expanded[1].TextContent.Should().Contain("Maya");
-            expanded[1].TextContent.Should().Contain("Erik");
+            expanded[0].QuerySelectorAll(".calendar-event-members").Should().BeEmpty();
+            expanded[0].QuerySelector(".calendar-event-edit-btn").Should().NotBeNull();
+            expanded[0].QuerySelector(".calendar-event-delete-btn").Should().NotBeNull();
+
+            var multiMembersSection = expanded[1].QuerySelector(".calendar-event-members")!;
+            multiMembersSection.Should().NotBeNull();
+            multiMembersSection.TextContent.Should().Contain("Leo");
+            multiMembersSection.TextContent.Should().Contain("Maya");
+            multiMembersSection.TextContent.Should().Contain("Erik");
 
             // Wednesday occurrence of the same recurring event remains collapsed
             var wednesdayItem = cut.Find(".calendar-day-card[data-date='2026-11-11'] .calendar-event-item");
             wednesdayItem.ClassList.Should().NotContain("is-expanded");
-            wednesdayItem.QuerySelector(".calendar-event-expand-btn")!.GetAttribute("aria-expanded").Should().Be("false");
+            wednesdayItem.QuerySelector(".calendar-event-summary-btn")!.GetAttribute("aria-expanded").Should().Be("false");
         });
 
-        // Collapse first event; third stays expanded
-        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-expand-btn").ElementAt(0).Click();
-        cut.WaitForAssertion(() => cut.FindAll(".calendar-event-item.is-expanded").Should().HaveCount(1));
+        // Collapse first event via summary row; third stays expanded
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(0).Click();
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll(".calendar-event-item.is-expanded").Should().HaveCount(1);
+            cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(0)
+                .GetAttribute("aria-expanded").Should().Be("false");
+        });
 
         // Navigating to another week and back clears expanded state
         cut.Find(".calendar-next-week-btn").Click();
@@ -565,5 +590,63 @@ public class CalendarPageAndHomeTests : TestContext
         cut.Find(".calendar-prev-week-btn").Click();
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("Vecka 46, 2026"));
         cut.FindAll(".calendar-event-item.is-expanded").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task CalendarPage_SingleParticipantEvent_ShouldShowNameInSummaryOnlyAndNotDuplicateInExpandedDetails()
+    {
+        var monday = new DateOnly(2026, 11, 9);
+        using var bundle = SetupServices(monday);
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Simträning",
+            StartDate = monday,
+            IsAllDay = false,
+            StartTime = new TimeOnly(17, 0),
+            Location = "Badhuset",
+            FamilyMembers = ["Leo"]
+        });
+
+        await bundle.CalendarService.CreateEventAsync(new CalendarEventInput
+        {
+            Title = "Läxläsning",
+            StartDate = monday,
+            IsAllDay = false,
+            StartTime = new TimeOnly(18, 30),
+            FamilyMembers = ["Maya"]
+        });
+
+        var cut = RenderComponent<CalendarPage>();
+        cut.WaitForAssertion(() =>
+            cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-item").Should().HaveCount(2));
+
+        // Expand both single-participant events
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(0).Click();
+        cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-summary-btn").ElementAt(1).Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var items = cut.FindAll(".calendar-day-card[data-date='2026-11-09'] .calendar-event-item.is-expanded").ToList();
+            items.Should().HaveCount(2);
+
+            // Event with location + 1 participant: name in summary, location in details, no participant section in details
+            items[0].QuerySelector(".calendar-event-summary-btn .calendar-event-person-badge")!.TextContent.Trim().Should().Be("Leo");
+            var firstDetails = items[0].QuerySelector(".calendar-event-details")!;
+            firstDetails.QuerySelector(".calendar-event-location")!.TextContent.Should().Contain("Badhuset");
+            firstDetails.QuerySelectorAll(".calendar-event-members").Should().BeEmpty();
+            firstDetails.TextContent.Should().NotContain("Leo");
+            firstDetails.QuerySelector(".calendar-event-edit-btn").Should().NotBeNull();
+            firstDetails.QuerySelector(".calendar-event-delete-btn").Should().NotBeNull();
+
+            // Event with no location/notes + 1 participant: name in summary, no empty meta container in details
+            items[1].QuerySelector(".calendar-event-summary-btn .calendar-event-person-badge")!.TextContent.Trim().Should().Be("Maya");
+            var secondDetails = items[1].QuerySelector(".calendar-event-details")!;
+            secondDetails.QuerySelectorAll(".calendar-event-details-meta").Should().BeEmpty();
+            secondDetails.QuerySelectorAll(".calendar-event-members").Should().BeEmpty();
+            secondDetails.TextContent.Should().NotContain("Maya");
+            secondDetails.QuerySelector(".calendar-event-edit-btn").Should().NotBeNull();
+            secondDetails.QuerySelector(".calendar-event-delete-btn").Should().NotBeNull();
+        });
     }
 }

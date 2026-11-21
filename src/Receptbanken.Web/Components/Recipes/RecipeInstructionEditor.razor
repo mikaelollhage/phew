@@ -3,7 +3,7 @@
 @inject IJSRuntime JSRuntime
 
 <div class="form-section">
-    <div style="margin-bottom: 16px;">
+    <div class="instruction-editor-header">
         @if (HeadingLevel == 3)
         {
             <h3 class="form-section-title" style="margin-bottom: 0;">@HeadingText</h3>
@@ -16,7 +16,7 @@
 
     @if (!string.IsNullOrWhiteSpace(HelpText))
     {
-        <p style="font-size: 13px; color: var(--rb-text-secondary); margin-bottom: 16px;">
+        <p class="ingredient-editor-help">
             @HelpText
         </p>
     }

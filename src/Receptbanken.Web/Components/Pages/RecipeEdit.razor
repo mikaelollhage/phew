@@ -25,10 +25,10 @@ else if (recipeNotFound)
 }
 else
 {
-    <div class="page-header">
+    <div class="page-header recipe-edit-header">
         <div>
             <h1 class="page-title">@(IsEditing ? "Redigera recept" : "Skapa nytt recept")</h1>
-            <p class="page-subtitle">Fyll i receptets ingredienser, tillagningstid och steg-för-steg-instruktioner.</p>
+            <p class="page-subtitle">Fyll i ingredienser, tillagningstid och instruktioner.</p>
         </div>
         <div style="display: flex; gap: 12px;">
             <button type="button" class="btn-secondary-custom" @onclick="Cancel">Avbryt</button>
@@ -43,7 +43,7 @@ else
         <ContextualFeedback State="saveFeedback" CssClass="recipe-save-feedback recipe-save-feedback-top" />
     }
 
-    <div style="display: flex; flex-direction: column; gap: 24px;">
+    <div class="recipe-edit-sections">
         <div class="form-section">
             <h2 class="form-section-title">Grunduppgifter</h2>
             <RecipeBasicInfoFields Recipe="model"
@@ -114,7 +114,7 @@ else
         <RecipeIngredientEditor Ingredients="model.Ingredients"
                                 Title="Ingredienser"
                                 HeadingLevel="2"
-                                HelpText='Ange mängd, enhet och råvara. Lägg till sektionsrubriker (t.ex. "Pajdeg" eller "Sås") och dra med handtaget ⠿ för att ändra ordning eller flytta mellan sektioner.'
+                                HelpText='Lägg till sektioner (t.ex. "Pajdeg") och dra med ⠿ för att ordna.'
                                 AddButtonText="Lägg till ingrediens"
                                 ShowAddIcon="true" />
 
@@ -135,7 +135,7 @@ else
             <ContextualFeedback State="saveFeedback" CssClass="recipe-save-feedback recipe-save-feedback-bottom" />
         }
 
-        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 40px;">
+        <div class="recipe-edit-bottom-actions">
             <button type="button" class="btn-secondary-custom" @onclick="Cancel">Avbryt</button>
             <button type="button" class="btn-primary-custom" @onclick="() => SaveRecipe(FeedbackPlacement.Bottom)" disabled="@isSaving">
                 @(isSaving ? "Sparar..." : (IsEditing ? "Spara ändringar" : "Spara recept"))

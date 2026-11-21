@@ -9,12 +9,32 @@
                 @DragHandle
             </div>
         }
-        <div class="ingredient-editor-fields">
+        <div class="ingredient-editor-fields @(showOptionalFields ? "has-optional-expanded" : "")">
             <FluentTextField Id="@FirstInputId" @bind-Value="QuantityDisplay" Placeholder="Mängd" Title="Mängd" Style="width: 100%;" />
             <FluentTextField @bind-Value="Ingredient.Unit" Immediate="true" ImmediateDelay="250" Placeholder="Enhet" Title="Enhet" Style="width: 100%;" />
             <FluentTextField @bind-Value="Ingredient.Name" Immediate="true" ImmediateDelay="250" Placeholder="Råvara *" Title="Råvara" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Comment" Immediate="true" ImmediateDelay="250" Placeholder="Kommentar (t.ex. à 200 g)" Title="Kommentar" Style="width: 100%;" />
-            <FluentTextField @bind-Value="Ingredient.Preparation" Immediate="true" ImmediateDelay="250" Placeholder="Beredning (t.ex. hackad)" Title="Beredning" Style="width: 100%;" />
+            <button type="button"
+                    class="ingredient-optional-toggle @(HasOptionalValues && !showOptionalFields ? "has-values" : "")"
+                    aria-expanded="@(showOptionalFields ? "true" : "false")"
+                    aria-label="@OptionalToggleAriaLabel"
+                    title="@OptionalToggleTitle"
+                    @onclick="ToggleOptionalFields">
+                <span class="ingredient-optional-chevron" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.ChevronDown())" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <span>@(showOptionalFields ? "Dölj fält" : "Fler fält")</span>
+                @if (!showOptionalFields && HasOptionalValues)
+                {
+                    <span class="ingredient-optional-indicator" aria-hidden="true">•</span>
+                }
+            </button>
+            @if (showOptionalFields)
+            {
+                <div class="ingredient-optional-fields">
+                    <FluentTextField @bind-Value="Ingredient.Comment" Immediate="true" ImmediateDelay="250" Placeholder="Kommentar (t.ex. à 200 g)" Title="Kommentar" Style="width: 100%;" />
+                    <FluentTextField @bind-Value="Ingredient.Preparation" Immediate="true" ImmediateDelay="250" Placeholder="Beredning (t.ex. hackad)" Title="Beredning" Style="width: 100%;" />
+                </div>
+            }
         </div>
         @if (RowActions != null)
         {
@@ -37,6 +57,43 @@
 
     [Parameter]
     public RenderFragment? DragHandle { get; set; }
+
+    private Ingredient? _lastIngredientRef;
+    private bool showOptionalFields;
+
+    private bool HasOptionalValues =>
+        !string.IsNullOrWhiteSpace(Ingredient?.Comment) ||
+        !string.IsNullOrWhiteSpace(Ingredient?.Preparation);
+
+    private string OptionalToggleAriaLabel =>
+        showOptionalFields
+            ? "Dölj kommentar och beredning"
+            : (HasOptionalValues
+                ? "Visa fler fält (innehåller kommentar eller beredning)"
+                : "Visa fler fält (kommentar och beredning)");
+
+    private string OptionalToggleTitle =>
+        showOptionalFields
+            ? "Dölj kommentar och beredning"
+            : (HasOptionalValues
+                ? "Visa kommentar och beredning (innehåller sparade värden)"
+                : "Visa kommentar och beredning");
+
+    protected override void OnParametersSet()
+    {
+        // Only initialize expansion state when the Ingredient reference changes so parent rerenders
+        // do not collapse fields the user has opened or reset manual toggle choices.
+        if (!ReferenceEquals(Ingredient, _lastIngredientRef))
+        {
+            _lastIngredientRef = Ingredient;
+            showOptionalFields = HasOptionalValues;
+        }
+    }
+
+    private void ToggleOptionalFields()
+    {
+        showOptionalFields = !showOptionalFields;
+    }
 
     private string QuantityDisplay
     {

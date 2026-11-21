@@ -16,7 +16,7 @@
 
     @if (!string.IsNullOrWhiteSpace(HelpText))
     {
-        <p style="font-size: 13px; color: var(--rb-text-secondary); margin-bottom: 16px;">
+        <p class="ingredient-editor-help">
             @HelpText
         </p>
     }
@@ -60,40 +60,36 @@
                     var sectionLabel = isUnnamedSection ? "sektion" : $"sektion {item.SectionTitle}";
 
                     <div class="ingredient-section-header-row @(isEmptySection ? "is-empty-section" : "")">
-                        <input type="text"
-                               id="@($"ingredient-section-input-{itemKey}")"
-                               class="ingredient-section-title-input"
-                               value="@item.SectionTitle"
-                               maxlength="100"
-                               placeholder="Sektionsrubrik (t.ex. Pajdeg, Sås)"
-                               aria-label="Sektionsrubrik"
-                               @oninput="@(e => RenameSection(itemKey, e.Value?.ToString() ?? string.Empty))" />
+                        <div class="ingredient-row-drag">
+                            @RenderDragHandle(itemKey, sectionLabel)
+                        </div>
 
-                        @if (isEmptySection)
-                        {
-                            <span class="ingredient-section-badge is-empty" title="Tomma sektioner sparas inte förrän du lägger till eller drar hit ingredienser">
-                                Tom sektion (sparas inte)
-                            </span>
-                        }
-                        else if (isUnnamedSection)
-                        {
-                            <span class="ingredient-section-badge is-ungrouped" title="Ingredienserna under en namnlös sektion sparas utan grupprubrik">
-                                Utan rubrik (ogrupperad)
-                            </span>
-                        }
+                        <div class="ingredient-section-content">
+                            <input type="text"
+                                   id="@($"ingredient-section-input-{itemKey}")"
+                                   class="ingredient-section-title-input"
+                                   value="@item.SectionTitle"
+                                   maxlength="100"
+                                   placeholder="Sektionsrubrik (t.ex. Pajdeg, Sås)"
+                                   aria-label="Sektionsrubrik"
+                                   @oninput="@(e => RenameSection(itemKey, e.Value?.ToString() ?? string.Empty))" />
+
+                            @if (isEmptySection)
+                            {
+                                <span class="ingredient-section-badge is-empty" title="Tomma sektioner sparas inte förrän du lägger till eller drar hit ingredienser">
+                                    Tom sektion (sparas inte)
+                                </span>
+                            }
+                            else if (isUnnamedSection)
+                            {
+                                <span class="ingredient-section-badge is-ungrouped" title="Ingredienserna under en namnlös sektion sparas utan grupprubrik">
+                                    Utan rubrik (ogrupperad)
+                                </span>
+                            }
+                        </div>
 
                         <div class="ingredient-row-actions">
                             @RenderRowMenu(itemKey, isSection: true, sectionLabel)
-
-                            <button type="button"
-                                    class="btn-danger-custom ingredient-section-remove-btn"
-                                    title="Ta bort sektion (ingredienser behålls)"
-                                    aria-label="@($"Ta bort {sectionLabel} utan att radera ingredienser")"
-                                    @onclick="@(() => RemoveSection(itemKey))">
-                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
-                            </button>
-
-                            @RenderDragHandle(itemKey, sectionLabel)
                         </div>
                     </div>
                 }
@@ -294,6 +290,18 @@
                                 <FluentIcon Value="@(new Icons.Regular.Size16.TextBulletListLtr())" Color="Color.Custom" CustomColor="currentColor" />
                             </span>
                             <span>Gör till ingrediens</span>
+                        </button>
+                        <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item ingredient-section-menu-remove-btn is-danger"
+                                title="Ta bort sektion (ingredienser behålls)"
+                                aria-label="@($"Ta bort {targetDesc} utan att radera ingredienser")"
+                                @onclick="@(() => RemoveSection(itemKey))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Ta bort sektion</span>
                         </button>
                     }
                     else
