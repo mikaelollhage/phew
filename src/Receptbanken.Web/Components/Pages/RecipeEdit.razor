@@ -54,54 +54,55 @@ else
 
         <div class="form-section">
             <h2 class="form-section-title">Receptbild</h2>
-            <div class="image-upload-grid">
-                <div>
-                    <p style="font-size: 14px; color: var(--rb-text-secondary); margin-bottom: 12px;">
-                        Ladda upp en matbild i JPG-, PNG- eller WebP-format (max 10 MB). Bilden konverteras och sparas lokalt.
-                    </p>
-                    <label class="image-upload-dropzone" for="recipe-image-upload">
+            <div class="recipe-image-editor">
+                @if (!string.IsNullOrWhiteSpace(model.ImagePath))
+                {
+                    <div class="recipe-image-preview">
+                        <img src="@($"/{model.ImagePath}")" alt="Förhandsvisning av receptbild" class="recipe-image-preview-img" />
+                    </div>
+
+                    <div class="recipe-image-actions">
+                        <label class="btn-secondary-custom recipe-image-replace-label" for="recipe-image-upload">
+                            <InputFile id="recipe-image-upload"
+                                       class="image-upload-input"
+                                       OnChange="HandleImageFileSelected"
+                                       accept=".jpg,.jpeg,.png,.webp"
+                                       aria-label="Byt receptbild" />
+                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowUpload())" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                            <span>Byt bild</span>
+                        </label>
+                        <button type="button"
+                                class="btn-danger-custom recipe-image-remove-btn"
+                                @onclick="RemoveImage"
+                                aria-label="Ta bort bild">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                            <span>Ta bort bild</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <label class="image-upload-dropzone recipe-image-empty-dropzone" for="recipe-image-upload">
                         <InputFile id="recipe-image-upload"
                                    class="image-upload-input"
                                    OnChange="HandleImageFileSelected"
                                    accept=".jpg,.jpeg,.png,.webp"
                                    aria-label="Välj receptbild att ladda upp" />
-                        <FluentIcon Value="@(new Icons.Regular.Size32.ArrowUpload())" Color="Color.Neutral" aria-hidden="true" />
-                        <div style="margin-top: 8px; font-weight: 600; font-size: 14px;">
-                            Klicka för att välja bild från datorn
-                        </div>
-                        <div style="font-size: 12px; color: var(--rb-text-muted);">
-                            JPG, PNG eller WebP upp till 10 MB
-                        </div>
+                        <FluentIcon Value="@(new Icons.Regular.Size24.ArrowUpload())" Color="Color.Neutral" aria-hidden="true" />
+                        <span class="recipe-image-empty-title">Lägg till bild</span>
+                        <span class="recipe-image-empty-hint">JPG, PNG eller WebP (max 10 MB)</span>
                     </label>
+                }
 
-                    @if (isUploadingImage)
-                    {
-                        <div style="margin-top: 12px; display: flex; align-items: center; gap: 8px;">
-                            <FluentProgressRing Style="width: 20px; height: 20px;" />
-                            <span style="font-size: 13px;">Bearbetar och optimerar bild...</span>
-                        </div>
-                    }
+                @if (isUploadingImage)
+                {
+                    <div class="recipe-image-uploading" role="status" aria-live="polite">
+                        <FluentProgressRing Style="width: 20px; height: 20px;" />
+                        <span>Bearbetar och optimerar bild...</span>
+                    </div>
+                }
 
-                    <ContextualFeedback State="imageUploadFeedback" CssClass="image-upload-feedback" />
-                </div>
-
-                <div>
-                    @if (!string.IsNullOrWhiteSpace(model.ImagePath))
-                    {
-                        <div class="image-preview-box">
-                            <img src="@($"/{model.ImagePath}")" alt="Förhandsvisning" class="image-preview-img" />
-                            <button type="button" class="btn-danger-custom" style="margin-top: 8px; width: 100%; text-align: center;" @onclick="RemoveImage">
-                                Ta bort bild
-                            </button>
-                        </div>
-                    }
-                    else
-                    {
-                        <div style="width: 100%; height: 160px; border-radius: var(--rb-radius-md); background-color: var(--rb-bg-surface); border: 1px solid var(--rb-border); display: flex; align-items: center; justify-content: center; font-size: 36px;">
-                            📷
-                        </div>
-                    }
-                </div>
+                <ContextualFeedback State="imageUploadFeedback" CssClass="image-upload-feedback" />
             </div>
         </div>
 
@@ -210,6 +211,8 @@ else
 
     private async Task HandleImageFileSelected(InputFileChangeEventArgs e)
     {
+        if (e.FileCount == 0) return;
+
         var file = e.File;
         if (file == null) return;
 

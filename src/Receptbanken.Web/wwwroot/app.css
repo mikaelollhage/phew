@@ -1895,6 +1895,78 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   display: block;
 }
 
+/* Recipe Edit Compact Image Section */
+.recipe-image-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 520px;
+}
+
+.recipe-image-preview {
+  width: 100%;
+  border-radius: var(--rb-radius-md);
+  overflow: hidden;
+  background-color: var(--rb-bg-surface);
+  border: 1px solid var(--rb-border);
+}
+
+.recipe-image-preview-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.recipe-image-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.recipe-image-replace-label {
+  position: relative;
+  overflow: hidden;
+  min-height: 44px;
+}
+
+.recipe-image-replace-label:focus-within {
+  outline: 2px solid var(--rb-accent);
+  outline-offset: 2px;
+}
+
+.recipe-image-remove-btn {
+  min-height: 44px;
+}
+
+.recipe-image-empty-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 16px;
+}
+
+.recipe-image-empty-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--rb-text-primary);
+}
+
+.recipe-image-empty-hint {
+  font-size: 12px;
+  color: var(--rb-text-muted);
+}
+
+.recipe-image-uploading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--rb-text-secondary);
+}
+
 /* Cooking Mode Responsive Layout */
 .cooking-mode-grid {
   display: grid;
