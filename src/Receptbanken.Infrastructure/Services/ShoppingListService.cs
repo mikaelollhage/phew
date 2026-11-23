@@ -898,6 +898,19 @@ public class ShoppingListService
         string expectedPreviewStamp,
         IReadOnlyCollection<string> selectedPreviewItemKeys,
         CancellationToken cancellationToken = default)
+        => await ConfirmWeeklyMenuAdditionsAsync(
+            dateInWeek,
+            expectedPreviewStamp,
+            selectedPreviewItemKeys,
+            quantityFreePreviewItemKeys: null,
+            cancellationToken);
+
+    public async Task<WeeklyMenuShoppingConfirmResult> ConfirmWeeklyMenuAdditionsAsync(
+        DateOnly dateInWeek,
+        string expectedPreviewStamp,
+        IReadOnlyCollection<string> selectedPreviewItemKeys,
+        IReadOnlyCollection<string>? quantityFreePreviewItemKeys,
+        CancellationToken cancellationToken = default)
     {
         var week = CalendarWeek.FromDate(dateInWeek);
 
@@ -960,9 +973,9 @@ public class ShoppingListService
                     Message: "Inga varor var valda för tillägg.");
             }
 
-            var incomingShoppingItems = selectedItems
-                .Select(x => x.Item)
-                .ToList();
+            var incomingShoppingItems = PrepareIncomingItemsForConfirm(
+                selectedItems.Select(x => (x.PreviewItemKey, x.Item)),
+                quantityFreePreviewItemKeys);
 
             await MergeIntoTrackedShoppingListAsync(db, incomingShoppingItems, cancellationToken);
 
@@ -1046,11 +1059,14 @@ public class ShoppingListService
             _notifier.NotifyChanged();
 
             var updatedPreview = await BuildWeeklyMenuPreviewInternalAsync(db, week, inMemoryMenuOverride: null, cancellationToken);
-            int conflictCount = selectedItems.Count(x => !string.IsNullOrWhiteSpace(x.ConflictWarning));
+            int conflictCount = selectedItems.Count(x =>
+                !string.IsNullOrWhiteSpace(x.ConflictWarning) &&
+                (quantityFreePreviewItemKeys == null || !quantityFreePreviewItemKeys.Contains(x.PreviewItemKey, StringComparer.Ordinal)));
+            int addedRowCount = incomingShoppingItems.Count;
 
             var messageParts = new List<string>
             {
-                $"{selectedItems.Count} {(selectedItems.Count == 1 ? "vara lades" : "varor lades")} till i inköpslistan från vecka {week.IsoWeek}."
+                $"{addedRowCount} {(addedRowCount == 1 ? "vara lades" : "varor lades")} till i inköpslistan från vecka {week.IsoWeek}."
             };
             if (conflictCount > 0)
             {
@@ -1059,7 +1075,7 @@ public class ShoppingListService
 
             return new WeeklyMenuShoppingConfirmResult(
                 WeeklyMenuConfirmStatus.Success,
-                AddedItemsCount: selectedItems.Count,
+                AddedItemsCount: addedRowCount,
                 AlreadyAddedCount: updatedPreview.AlreadyAddedCount,
                 ConflictCount: conflictCount,
                 UpdatedPreview: updatedPreview,
@@ -1085,6 +1101,21 @@ public class ShoppingListService
         int targetServings,
         string expectedPreviewStamp,
         IReadOnlyCollection<string> selectedPreviewItemKeys,
+        CancellationToken cancellationToken = default)
+        => await ConfirmRecipeShoppingAdditionsAsync(
+            recipeId,
+            targetServings,
+            expectedPreviewStamp,
+            selectedPreviewItemKeys,
+            quantityFreePreviewItemKeys: null,
+            cancellationToken);
+
+    public async Task<RecipeShoppingConfirmResult> ConfirmRecipeShoppingAdditionsAsync(
+        int recipeId,
+        int targetServings,
+        string expectedPreviewStamp,
+        IReadOnlyCollection<string> selectedPreviewItemKeys,
+        IReadOnlyCollection<string>? quantityFreePreviewItemKeys,
         CancellationToken cancellationToken = default)
     {
         await WriteLock.WaitAsync(cancellationToken);
@@ -1138,9 +1169,9 @@ public class ShoppingListService
                     Message: "Inga varor var valda för tillägg.");
             }
 
-            var incomingShoppingItems = selectedItems
-                .Select(x => x.Item)
-                .ToList();
+            var incomingShoppingItems = PrepareIncomingItemsForConfirm(
+                selectedItems.Select(x => (x.PreviewItemKey, x.Item)),
+                quantityFreePreviewItemKeys);
 
             await MergeIntoTrackedShoppingListAsync(db, incomingShoppingItems, cancellationToken);
 
@@ -1152,7 +1183,9 @@ public class ShoppingListService
             _notifier.NotifyChanged();
 
             var updatedPreview = await BuildRecipeShoppingPreviewInternalAsync(db, recipeId, targetServings, cancellationToken);
-            int conflictCount = selectedItems.Count(x => !string.IsNullOrWhiteSpace(x.ConflictWarning));
+            int conflictCount = selectedItems.Count(x =>
+                !string.IsNullOrWhiteSpace(x.ConflictWarning) &&
+                (quantityFreePreviewItemKeys == null || !quantityFreePreviewItemKeys.Contains(x.PreviewItemKey, StringComparer.Ordinal)));
 
             var messageParts = new List<string>
             {
@@ -1921,6 +1954,59 @@ public class ShoppingListService
         }
 
         return _aggregator.FormatRawText(targetClone.Quantity, targetClone.QuantityMax, targetClone.Unit, string.Empty);
+    }
+
+    private List<ShoppingListItem> PrepareIncomingItemsForConfirm(
+        IEnumerable<(string PreviewItemKey, ShoppingListItem Item)> selectedItems,
+        IReadOnlyCollection<string>? quantityFreePreviewItemKeys)
+    {
+        if (quantityFreePreviewItemKeys == null)
+        {
+            return selectedItems.Select(x => CloneShoppingItem(x.Item)).ToList();
+        }
+
+        var quantityFreeSet = quantityFreePreviewItemKeys
+            .Where(k => !string.IsNullOrWhiteSpace(k))
+            .ToHashSet(StringComparer.Ordinal);
+
+        var result = new List<ShoppingListItem>();
+        var quantityFreeGroups = new Dictionary<string, List<ShoppingListItem>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (previewItemKey, item) in selectedItems)
+        {
+            if (quantityFreeSet.Contains(previewItemKey))
+            {
+                var qfItem = _aggregator.ToQuantityFreeItem(item);
+                var canonical = _aggregator.GetCanonicalIngredientKey(qfItem.Name, qfItem.Comment);
+                var groupKey = string.IsNullOrWhiteSpace(canonical) ? previewItemKey : canonical;
+
+                if (!quantityFreeGroups.TryGetValue(groupKey, out var group))
+                {
+                    group = new List<ShoppingListItem>();
+                    quantityFreeGroups[groupKey] = group;
+                }
+                group.Add(qfItem);
+            }
+            else
+            {
+                result.Add(CloneShoppingItem(item));
+            }
+        }
+
+        foreach (var group in quantityFreeGroups.Values)
+        {
+            if (group.Count == 1)
+            {
+                result.Add(group[0]);
+            }
+            else
+            {
+                var merged = _aggregator.MergeItems([], group);
+                result.AddRange(merged);
+            }
+        }
+
+        return result;
     }
 
     private static ShoppingListItem CloneShoppingItem(ShoppingListItem src) =>

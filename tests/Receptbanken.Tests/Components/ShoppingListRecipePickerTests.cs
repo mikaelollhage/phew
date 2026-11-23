@@ -163,7 +163,10 @@ public class ShoppingListRecipePickerTests : TestContext
         // Klicka på "Lägg till ingredienser" -> öppnar förhandsgranskning
         cut.Find("#shopping-add-recipe-btn").Click();
 
-        // Förhandsgranskningen ska visas med skalade ingredienser (600 g laxfilé, 400 g pasta)
+        // Förhandsgranskningen ska visas; växla till "Med mängd och enhet" för att kontrollera skalade ingredienser (600 g laxfilé, 400 g pasta)
+        cut.WaitForAssertion(() => cut.FindAll(".weekly-preview-qty-mode-with").Should().ContainSingle());
+        cut.Find(".weekly-preview-qty-mode-with").Click();
+
         cut.WaitForAssertion(() =>
         {
             cut.FindAll(".weekly-shopping-preview-dialog").Should().ContainSingle();

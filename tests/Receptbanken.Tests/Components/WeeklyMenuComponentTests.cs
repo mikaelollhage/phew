@@ -920,6 +920,9 @@ public class WeeklyMenuComponentTests : TestContext
         confirmBtn.ClassList.Should().NotContain("btn-danger-custom");
         confirmBtn.Click();
 
+        cut.WaitForAssertion(() => cut.FindAll(".weekly-preview-qty-mode-with").Should().ContainSingle());
+        cut.Find(".weekly-preview-qty-mode-with").Click();
+
         cut.WaitForAssertion(() =>
         {
             var previewDialog = cut.Find(".weekly-shopping-preview-dialog");
@@ -1018,7 +1021,7 @@ public class WeeklyMenuComponentTests : TestContext
             var dialog = cut.Find(".weekly-shopping-preview-dialog");
             dialog.TextContent.Should().Contain("Vecka 45, 2026");
             dialog.TextContent.Should().Contain("1 planerad middag");
-            dialog.TextContent.Should().Contain("mjölk");
+            dialog.TextContent.Should().Contain("Mjölk");
         });
 
         // 2. Byt till nästa vecka (Vecka 46) via veckonavigeringen i förhandsgranskningen (K5 #34)
@@ -1029,8 +1032,11 @@ public class WeeklyMenuComponentTests : TestContext
             var dialog = cut.Find(".weekly-shopping-preview-dialog");
             dialog.TextContent.Should().Contain("Vecka 46, 2026");
             dialog.TextContent.Should().Contain("Spikad");
-            dialog.TextContent.Should().Contain("morötter");
+            dialog.TextContent.Should().Contain("Morötter");
         });
+
+        // Växla till "Med mängd och enhet" för att verifiera att skalad mängd (500 g morötter) läggs till
+        cut.Find(".weekly-preview-qty-mode-with").Click();
 
         // Expandera planerade middagar för Vecka 46
         cut.Find("button.weekly-preview-meals-toggle").Click();
@@ -1164,6 +1170,9 @@ public class WeeklyMenuComponentTests : TestContext
         cut2.WaitForAssertion(() => cut2.Find("button.create-shopping-list-btn").Should().NotBeNull());
         cut2.Find("button.create-shopping-list-btn").Click();
 
+        cut2.WaitForAssertion(() => cut2.FindAll(".weekly-preview-qty-mode-with").Should().ContainSingle());
+        cut2.Find(".weekly-preview-qty-mode-with").Click();
+
         cut2.WaitForAssertion(() =>
         {
             // 1. Planerade middagar är hopfällda från start ("3 planerade middagar")
@@ -1176,44 +1185,36 @@ public class WeeklyMenuComponentTests : TestContext
             var pendingRows = cut2.FindAll(".weekly-preview-pending-list .weekly-preview-item-row");
             pendingRows.Should().HaveCount(3);
 
-            // 5. Garneringskommentar är synlig direkt på gräddraden
+            // 5. Icke-väsentlig metadata (kommentarer, veckodagar, portionsstatus, generiska infoknappar) visas inte på vanliga rader
             var creamRow = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='grädde']");
-            creamRow.QuerySelector(".weekly-preview-item-comment")!.TextContent.Should().Contain("till garnering");
+            creamRow.QuerySelectorAll(".weekly-preview-item-comment").Should().BeEmpty();
+            creamRow.QuerySelectorAll("button.weekly-preview-warning-btn").Should().BeEmpty();
 
-            // 6. Portionskomplettering är tydligt markerad på kycklingfilé ("Komplettering för måndag")
             var chickenRow = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='kycklingfilé']");
-            chickenRow.QuerySelector(".weekly-preview-item-short-status")!.TextContent.Trim().Should().Be("Komplettering för måndag");
-            // Detaljerad spårning är dold innan man klickar på ⓘ
+            chickenRow.QuerySelectorAll(".weekly-preview-item-short-status").Should().BeEmpty();
+            chickenRow.QuerySelectorAll("button.weekly-preview-warning-btn").Should().BeEmpty();
             chickenRow.QuerySelectorAll(".weekly-preview-item-details").Should().BeEmpty();
 
-            // 7. Inkompatibla enheter har synlig varning direkt på tomatraden
+            // 6. Inkompatibla enheter har en kompakt klickbar varningsknapp på tomatraden
             var tomatoRow = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater']");
-            tomatoRow.QuerySelector(".weekly-preview-inline-warning")!.TextContent.Should().Contain("Enhetsvarning");
+            tomatoRow.QuerySelector("button.weekly-preview-warning-btn").Should().NotBeNull();
         });
 
-        // 4. Klicka på informationsknappen (ⓘ) på kycklingfilé och tomater -> visar spårningsdetaljer och enhetsvarning
-        cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='kycklingfilé'] button.weekly-preview-info-btn").Click();
-        cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater'] button.weekly-preview-info-btn").Click();
+        // 4. Klicka på varningsknappen på tomater -> visar kort förklaring av enhetskonflikten
+        cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater'] button.weekly-preview-warning-btn").Click();
 
         cut2.WaitForAssertion(() =>
         {
-            var chickenDetails = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='kycklingfilé'] .weekly-preview-item-details");
-            chickenDetails.TextContent.Should().Contain("Veckodagar:").And.Contain("4 av 6 port redan tillagda").And.Contain("Finns i Att handla: 400 g kycklingfilé");
-
             var tomatoDetails = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater'] .weekly-preview-item-details");
             tomatoDetails.TextContent.Should().Contain("annan enhet");
         });
 
-        // Informationsknappen använder en Fluent-ikon (inte tecknet ⓘ) och behåller sina ARIA-attribut/tillståndsklass
-        var openedInfoBtn = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='kycklingfilé'] button.weekly-preview-info-btn");
-        openedInfoBtn.QuerySelector("svg").Should().NotBeNull();
-        openedInfoBtn.TextContent.Should().NotContain("ⓘ");
-        openedInfoBtn.GetAttribute("aria-expanded").Should().Be("true");
-        openedInfoBtn.GetAttribute("aria-controls").Should().NotBeNullOrWhiteSpace();
-        openedInfoBtn.GetAttribute("aria-label").Should().Contain("kycklingfilé");
-        openedInfoBtn.ClassList.Should().Contain("is-open");
-        cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater'] button.weekly-preview-info-btn")
-            .ClassList.Should().Contain("has-warning");
+        var openedWarningBtn = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='tomater'] button.weekly-preview-warning-btn");
+        openedWarningBtn.QuerySelector("svg").Should().NotBeNull();
+        openedWarningBtn.GetAttribute("aria-expanded").Should().Be("true");
+        openedWarningBtn.GetAttribute("aria-controls").Should().NotBeNullOrWhiteSpace();
+        openedWarningBtn.GetAttribute("aria-label").Should().Contain("tomater");
+        openedWarningBtn.ClassList.Should().Contain("is-open");
 
         // Planerade middagar: en rad per middag med fast kolumnstruktur, hopfälld som standard
         cut2.FindAll("#weekly-preview-meals-panel").Should().BeEmpty();
@@ -1289,7 +1290,7 @@ public class WeeklyMenuComponentTests : TestContext
         cut2.WaitForAssertion(() =>
         {
             var riceRow = cut2.Find("#weekly-preview-already-added-panel .weekly-preview-item-row[data-ingredient-name='arborioris']");
-            riceRow.TextContent.Should().Contain("Borttagen ur inköpslistan");
+            riceRow.TextContent.Should().Contain("3 dl arborioris");
             riceRow.QuerySelector("input.weekly-preview-checkbox")!.HasAttribute("checked").Should().BeFalse();
         });
 

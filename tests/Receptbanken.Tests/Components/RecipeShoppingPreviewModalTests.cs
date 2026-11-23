@@ -104,6 +104,16 @@ public class RecipeShoppingPreviewModalTests : TestContext
             cut.FindAll(".weekly-shopping-preview-dialog").Should().ContainSingle();
             var text = cut.Find(".weekly-shopping-preview-dialog").TextContent;
             text.Should().Contain("Gräddig Pasta");
+            text.Should().Contain("Grädde");
+            text.Should().Contain("Pasta");
+            text.Should().Contain("2 varor att lägga till");
+        });
+
+        cut.Find(".weekly-preview-qty-mode-with").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var text = cut.Find(".weekly-shopping-preview-dialog").TextContent;
             text.Should().Contain("400 g pasta");
             text.Should().Contain("4 dl grädde");
             text.Should().Contain("2 varor att lägga till");
@@ -210,7 +220,7 @@ public class RecipeShoppingPreviewModalTests : TestContext
         });
 
         var items = await _shoppingService.GetItemsAsync();
-        items.Should().ContainSingle(i => i.Name == "torsk");
+        items.Should().ContainSingle(i => i.Name == "Torsk" && i.Quantity == null && i.Unit == null);
     }
 
     [Fact]
@@ -228,19 +238,22 @@ public class RecipeShoppingPreviewModalTests : TestContext
             .Add(p => p.RecipeId, recipe.Id)
             .Add(p => p.Servings, 2));
 
-        cut.WaitForAssertion(() => cut.FindAll("button.weekly-preview-info-btn").Should().HaveCount(2));
+        cut.WaitForAssertion(() => cut.FindAll(".weekly-preview-qty-mode-with").Should().ContainSingle());
+        // No warning button in default quantity-free mode
+        cut.FindAll("button.weekly-preview-warning-btn").Should().BeEmpty();
+
+        cut.Find(".weekly-preview-qty-mode-with").Click();
+
+        cut.WaitForAssertion(() => cut.FindAll("button.weekly-preview-warning-btn").Should().HaveCount(2));
         cut.FindAll(".weekly-preview-item-details").Should().BeEmpty();
 
-        cut.Find("button.weekly-preview-info-btn").Click();
-
-        var neutralLine = cut.Find(".weekly-preview-item-details .weekly-preview-detail-line:not(.detail-warning)");
-        neutralLine.TextContent.Should().Contain("Finns i Att handla: 1 st tomater");
+        cut.Find("button.weekly-preview-warning-btn").Click();
 
         var warningLine = cut.Find(".weekly-preview-item-details .weekly-preview-detail-line.detail-warning");
         warningLine.TextContent.Should().Contain("Konflikt med Att handla: annan enhet/förpackning");
         warningLine.TextContent.Should().Contain("Förekommer med olika enheter eller förpackningsstorlekar i receptet");
 
-        cut.Find("button.weekly-preview-info-btn").Click();
+        cut.Find("button.weekly-preview-warning-btn").Click();
         cut.FindAll(".weekly-preview-item-details").Should().BeEmpty();
     }
 

@@ -1,4 +1,5 @@
 @inject ShoppingListService ShoppingListService
+@inject IServiceProvider ServiceProvider
 @inject ILogger<RecipeShoppingPreviewModal> Logger
 
 @if (IsVisible)
@@ -50,20 +51,27 @@
                 }
                 else
                 {
+                    var displayRows = DisplayRows;
+                    var selectedRowCount = displayRows.Count(IsRowSelected);
+
+                    <ShoppingImportQuantityModeControl Mode="quantityMode"
+                                                       Disabled="@isSubmitting"
+                                                       ModeChanged="HandleQuantityModeChanged" />
+
                     <div class="weekly-preview-summary-bar" aria-live="polite">
                         <span class="weekly-preview-summary-counts">
-                            <strong>@SelectedCount @(SelectedCount == 1 ? "vara att lägga till" : "varor att lägga till")</strong>
+                            <strong>@selectedRowCount @(selectedRowCount == 1 ? "vara att lägga till" : "varor att lägga till")</strong>
                         </span>
                         <div class="weekly-preview-selection-actions">
                             <button type="button"
                                     class="weekly-preview-link-btn weekly-preview-select-new-btn"
-                                    disabled="@(isSubmitting || SelectedCount == preview.TotalItemsCount)"
+                                    disabled="@(isSubmitting || selectedRowCount == displayRows.Count)"
                                     @onclick="SelectAllItems">
-                                Markera alla (@preview.TotalItemsCount)
+                                Markera alla (@displayRows.Count)
                             </button>
                             <button type="button"
                                     class="weekly-preview-link-btn weekly-preview-deselect-all-btn"
-                                    disabled="@(isSubmitting || SelectedCount == 0)"
+                                    disabled="@(isSubmitting || selectedRowCount == 0)"
                                     @onclick="DeselectAllItems">
                                 Avmarkera alla
                             </button>
@@ -73,14 +81,28 @@
                     <p class="weekly-preview-selection-hint">Avmarkera varor du redan har hemma eller inte behöver köpa.</p>
 
                     <ul class="weekly-preview-items-list weekly-preview-pending-list" aria-label="Ingredienser att lägga till">
-                        @foreach (var row in preview.Items)
+                        @foreach (var row in displayRows)
                         {
-                            @RenderPreviewItemRow(row)
+                            <ShoppingImportPreviewRow Row="row"
+                                                      IsSelected="@IsRowSelected(row)"
+                                                      IsSubmitting="isSubmitting"
+                                                      IsDetailsOpen="@expandedDetailKeys.Contains(row.RowKey)"
+                                                      IsGroupExpanded="@expandedGroupKeys.Contains(row.RowKey)"
+                                                      IncludeWeeklyMenuDetails="false"
+                                                      OnToggleSelection="HandleToggleSelection"
+                                                      OnToggleRowQuantity="HandleToggleRowQuantity"
+                                                      OnKeepSourceQuantity="HandleKeepSourceQuantity"
+                                                      OnToggleDetails="ToggleItemDetails"
+                                                      OnToggleGroupExpand="ToggleGroupExpand" />
                         }
                     </ul>
                 }
             </div>
 
+            @{
+                var footerRows = DisplayRows;
+                var footerSelectedCount = footerRows.Count(IsRowSelected);
+            }
             <div class="modal-actions-custom weekly-shopping-preview-footer">
                 <button type="button"
                         class="btn-secondary-custom weekly-preview-cancel-btn"
@@ -90,7 +112,7 @@
                 </button>
                 <button type="button"
                         class="btn-primary-custom weekly-preview-confirm-btn"
-                        disabled="@(isSubmitting || isLoadingPreview || preview == null || preview.Items.Count == 0 || SelectedCount == 0)"
+                        disabled="@(isSubmitting || isLoadingPreview || preview == null || preview.Items.Count == 0 || footerSelectedCount == 0)"
                         @onclick="HandleConfirmClickedAsync">
                     @if (isSubmitting)
                     {
@@ -98,7 +120,7 @@
                     }
                     else
                     {
-                        <span>🛒 Lägg till i inköpslistan (@SelectedCount)</span>
+                        <span>🛒 Lägg till i inköpslistan (@footerSelectedCount)</span>
                     }
                 </button>
             </div>
@@ -115,15 +137,27 @@
 
     private RecipeShoppingPreview? preview;
     private readonly HashSet<string> selectedKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> quantityAwareKeys = new(StringComparer.Ordinal);
     private readonly HashSet<string> expandedDetailKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<string> expandedGroupKeys = new(StringComparer.Ordinal);
     private readonly FeedbackState previewFeedback = new();
+    private ShoppingImportQuantityMode quantityMode = ShoppingImportQuantityMode.QuantityFree;
     private bool isLoadingPreview;
     private bool isSubmitting;
     private bool wasVisible;
     private int lastLoadedRecipeId;
     private int lastLoadedServings;
 
-    private int SelectedCount => selectedKeys.Count;
+    private IReadOnlyList<ShoppingImportDisplayRow> DisplayRows =>
+        preview == null
+            ? []
+            : ShoppingImportPreviewHelper.BuildDisplayRows(
+                preview.Items.Select(ShoppingImportPreviewHelper.FromRecipeItem),
+                quantityAwareKeys,
+                ResolveAggregator());
+
+    private bool IsRowSelected(ShoppingImportDisplayRow row) =>
+        row.Sources.Any(s => selectedKeys.Contains(s.PreviewItemKey));
 
     protected override async Task OnParametersSetAsync()
     {
@@ -133,12 +167,17 @@
             lastLoadedRecipeId = RecipeId;
             lastLoadedServings = Servings;
             expandedDetailKeys.Clear();
+            expandedGroupKeys.Clear();
+            quantityMode = ShoppingImportQuantityMode.QuantityFree;
+            quantityAwareKeys.Clear();
             await LoadPreviewAsync();
         }
         else if (!IsVisible && wasVisible)
         {
             wasVisible = false;
             expandedDetailKeys.Clear();
+            expandedGroupKeys.Clear();
+            quantityAwareKeys.Clear();
             previewFeedback.Clear();
         }
     }
@@ -159,6 +198,7 @@
         {
             preview = await ShoppingListService.BuildRecipeShoppingPreviewAsync(RecipeId, Servings);
             ApplyDefaultSelection(preview);
+            ApplyQuantityModeToAll(quantityMode);
         }
         catch (Exception ex)
         {
@@ -185,23 +225,74 @@
         }
     }
 
-    private void ToggleSelection(string previewKey, object? rawChecked)
+    private void HandleQuantityModeChanged(ShoppingImportQuantityMode newMode)
     {
-        bool isChecked = rawChecked switch
+        quantityMode = newMode;
+        ApplyQuantityModeToAll(newMode);
+    }
+
+    private void ApplyQuantityModeToAll(ShoppingImportQuantityMode mode)
+    {
+        quantityAwareKeys.Clear();
+        if (mode == ShoppingImportQuantityMode.WithQuantity && preview != null)
+        {
+            foreach (var item in preview.Items)
+            {
+                quantityAwareKeys.Add(item.PreviewItemKey);
+            }
+        }
+    }
+
+    private void HandleToggleSelection((ShoppingImportDisplayRow Row, object? RawChecked) args)
+    {
+        bool currentlySelected = IsRowSelected(args.Row);
+        bool isChecked = args.RawChecked switch
         {
             bool b => b,
             string s => string.Equals(s, "true", StringComparison.OrdinalIgnoreCase) || string.Equals(s, "on", StringComparison.OrdinalIgnoreCase),
-            _ => !selectedKeys.Contains(previewKey)
+            _ => !currentlySelected
         };
 
-        if (isChecked)
+        foreach (var src in args.Row.Sources)
         {
-            selectedKeys.Add(previewKey);
+            if (isChecked)
+            {
+                selectedKeys.Add(src.PreviewItemKey);
+            }
+            else
+            {
+                selectedKeys.Remove(src.PreviewItemKey);
+            }
+        }
+    }
+
+    private void HandleToggleRowQuantity(ShoppingImportDisplayRow row)
+    {
+        if (!IsRowSelected(row) || isSubmitting || !row.HasSourceQuantityOrUnit)
+            return;
+
+        if (row.IncludeQuantity)
+        {
+            foreach (var src in row.Sources)
+            {
+                quantityAwareKeys.Remove(src.PreviewItemKey);
+            }
         }
         else
         {
-            selectedKeys.Remove(previewKey);
+            foreach (var src in row.Sources)
+            {
+                quantityAwareKeys.Add(src.PreviewItemKey);
+            }
         }
+    }
+
+    private void HandleKeepSourceQuantity(string sourcePreviewKey)
+    {
+        if (isSubmitting)
+            return;
+
+        quantityAwareKeys.Add(sourcePreviewKey);
     }
 
     private void SelectAllItems()
@@ -220,7 +311,7 @@
 
     private async Task HandleConfirmClickedAsync()
     {
-        if (isSubmitting || isLoadingPreview || preview == null || SelectedCount == 0)
+        if (isSubmitting || isLoadingPreview || preview == null || selectedKeys.Count == 0)
             return;
 
         isSubmitting = true;
@@ -233,16 +324,22 @@
                 .Select(i => i.PreviewItemKey)
                 .ToList();
 
+            var quantityFreeKeysToConfirm = keysToConfirm
+                .Where(k => !quantityAwareKeys.Contains(k))
+                .ToList();
+
             var result = await ShoppingListService.ConfirmRecipeShoppingAdditionsAsync(
                 preview.RecipeId,
                 preview.TargetServings,
                 preview.PreviewStamp,
-                keysToConfirm);
+                keysToConfirm,
+                quantityFreeKeysToConfirm);
 
             if (result.IsConflict)
             {
                 preview = result.UpdatedPreview;
                 ApplyDefaultSelection(preview);
+                ApplyQuantityModeToAll(quantityMode);
                 previewFeedback.ShowWarning(result.Message ?? "Inköpslistan eller receptet har ändrats. Förhandsgranskningen har uppdaterats.");
                 return;
             }
@@ -281,138 +378,29 @@
         }
     }
 
-    private void ToggleItemDetails(string previewKey)
+    private void ToggleItemDetails(string rowKey)
     {
-        if (!expandedDetailKeys.Add(previewKey))
+        if (!expandedDetailKeys.Add(rowKey))
         {
-            expandedDetailKeys.Remove(previewKey);
+            expandedDetailKeys.Remove(rowKey);
         }
     }
 
-    private static bool HasItemDetails(RecipePreviewItemDto row)
+    private void ToggleGroupExpand(string rowKey)
     {
-        return !string.IsNullOrWhiteSpace(row.ExistingInUncheckedText)
-            || !string.IsNullOrWhiteSpace(row.ExistingInCheckedText)
-            || !string.IsNullOrWhiteSpace(row.ConflictWarning);
+        if (!expandedGroupKeys.Add(rowKey))
+        {
+            expandedGroupKeys.Remove(rowKey);
+        }
     }
 
-    private RenderFragment RenderPreviewItemRow(RecipePreviewItemDto row) => __builder =>
+    private ShoppingListAggregator ResolveAggregator()
     {
-        bool isChecked = selectedKeys.Contains(row.PreviewItemKey);
-        bool isDetailsOpen = expandedDetailKeys.Contains(row.PreviewItemKey);
-        bool hasConflictWarning = !string.IsNullOrWhiteSpace(row.ConflictWarning);
-        bool hasCheckedOverlap = !string.IsNullOrWhiteSpace(row.ExistingInCheckedText);
-        bool checkedShownInOverlapLine = hasCheckedOverlap
-            && row.ExistingOverlapSummary?.Contains("under Klart", StringComparison.Ordinal) == true;
-        bool hasDetails = HasItemDetails(row);
-        string detailsId = $"recipe-preview-details-{row.PreviewItemKey.GetHashCode():X}";
+        var existing = ServiceProvider.GetService<ShoppingListAggregator>();
+        if (existing != null)
+            return existing;
 
-        <li @key="row.PreviewItemKey"
-            class="weekly-preview-item-row @(isChecked ? "is-selected" : "is-unselected")"
-            data-preview-key="@row.PreviewItemKey"
-            data-ingredient-name="@row.Item.Name">
-            <div class="weekly-preview-item-top">
-                <label class="weekly-preview-item-label">
-                    <input type="checkbox"
-                           class="weekly-preview-checkbox"
-                           checked="@isChecked"
-                           disabled="@isSubmitting"
-                           @onchange="@(e => ToggleSelection(row.PreviewItemKey, e.Value))" />
-                    <div class="weekly-preview-item-content">
-                        <div class="weekly-preview-item-main">
-                            <div class="weekly-preview-item-text">
-                                @if (row.Item.Quantity.HasValue)
-                                {
-                                    <span class="weekly-preview-item-qty">@($"{FormatRange(row.Item.Quantity, row.Item.QuantityMax)} ")</span>
-                                }
-                                @if (!string.IsNullOrWhiteSpace(row.Item.Unit))
-                                {
-                                    <span class="weekly-preview-item-unit">@($"{row.Item.Unit.Trim()} ")</span>
-                                }
-                                <span class="weekly-preview-item-name">@row.Item.Name</span>
-                            </div>
-
-                            @if (hasConflictWarning)
-                            {
-                                <span class="weekly-preview-inline-warning"
-                                      title="@row.ConflictWarning"
-                                      aria-label="@($"Varning: {row.ConflictWarning}")">
-                                    ⚠️ Enhetsvarning
-                                </span>
-                            }
-                            else if (hasCheckedOverlap && !checkedShownInOverlapLine)
-                            {
-                                <span class="weekly-preview-inline-checked"
-                                      title="@($"Finns under Klart: {row.ExistingInCheckedText}")">
-                                    Finns i Klart
-                                </span>
-                            }
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(row.Item.Comment))
-                        {
-                            <div class="weekly-preview-item-comment">@row.Item.Comment</div>
-                        }
-
-                        @if (!string.IsNullOrWhiteSpace(row.ExistingOverlapSummary))
-                        {
-                            <div class="weekly-preview-item-overlap">@row.ExistingOverlapSummary</div>
-                        }
-                    </div>
-                </label>
-
-                @if (hasDetails)
-                {
-                    <button type="button"
-                            class="weekly-preview-info-btn @(isDetailsOpen ? "is-open" : "") @(hasConflictWarning ? "has-warning" : "")"
-                            aria-expanded="@isDetailsOpen.ToString().ToLowerInvariant()"
-                            aria-controls="@detailsId"
-                            aria-label="@($"Visa detaljer för {row.Item.Name}")"
-                            title="Visa detaljer"
-                            @onclick="@(() => ToggleItemDetails(row.PreviewItemKey))">
-                        <FluentIcon Value="@(new Icons.Regular.Size20.Info())" Color="Color.Custom" CustomColor="currentColor" />
-                    </button>
-                }
-            </div>
-
-            @if (isDetailsOpen && hasDetails)
-            {
-                <div id="@detailsId" class="weekly-preview-item-details" role="region" aria-label="@($"Detaljer för {row.Item.Name}")">
-                    @if (!string.IsNullOrWhiteSpace(row.ExistingInUncheckedText))
-                    {
-                        <div class="weekly-preview-detail-line">
-                            Finns i Att handla: @row.ExistingInUncheckedText
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(row.ExistingInCheckedText))
-                    {
-                        <div class="weekly-preview-detail-line">
-                            Finns under Klart: @row.ExistingInCheckedText (ändras ej)
-                        </div>
-                    }
-                    @if (!string.IsNullOrWhiteSpace(row.ConflictWarning))
-                    {
-                        <div class="weekly-preview-detail-line detail-warning">
-                            ⚠️ @row.ConflictWarning
-                        </div>
-                    }
-                </div>
-            }
-        </li>
-    };
-
-    private static string FormatRange(decimal? min, decimal? max)
-    {
-        if (!min.HasValue) return string.Empty;
-        if (!max.HasValue || max.Value == min.Value)
-            return FormatDecimal(min.Value);
-        return $"{FormatDecimal(min.Value)}–{FormatDecimal(max.Value)}";
-    }
-
-    private static string FormatDecimal(decimal value)
-    {
-        return value % 1 == 0
-            ? ((int)value).ToString()
-            : value.ToString("0.##", System.Globalization.CultureInfo.GetCultureInfo("sv-SE"));
+        var calc = ServiceProvider.GetService<ServingCalculator>() ?? new ServingCalculator();
+        return new ShoppingListAggregator(calc);
     }
 }

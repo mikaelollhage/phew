@@ -1,0 +1,181 @@
+@{
+    bool hasConflictWarning = !string.IsNullOrWhiteSpace(Row.ConflictWarning);
+    string warningDetailsId = $"preview-warning-{Row.RowKey.GetHashCode():X}";
+    string groupSourcesId = $"preview-group-{Row.RowKey.GetHashCode():X}";
+    bool canToggleQuantity = IsSelected && !IsSubmitting && Row.HasSourceQuantityOrUnit;
+}
+
+<li @key="Row.RowKey"
+    class="weekly-preview-item-row @(IsSelected ? "is-selected" : "is-unselected") @(Row.IsAlreadyAdded ? "is-already-added" : "") @(Row.IsGrouped ? "is-grouped" : "")"
+    data-preview-key="@Row.RowKey"
+    data-ingredient-name="@Row.DisplayName"
+    data-include-quantity="@Row.IncludeQuantity.ToString().ToLowerInvariant()">
+    <div class="weekly-preview-item-top">
+        <label class="weekly-preview-item-label">
+            <input type="checkbox"
+                   class="weekly-preview-checkbox"
+                   checked="@IsSelected"
+                   disabled="@IsSubmitting"
+                   @onchange="@(e => OnToggleSelection.InvokeAsync((Row, e.Value)))" />
+            <div class="weekly-preview-item-content">
+                <div class="weekly-preview-item-main">
+                    <div class="weekly-preview-item-text">
+                        @if (Row.IncludeQuantity)
+                        {
+                            @if (Row.Quantity.HasValue)
+                            {
+                                <span class="weekly-preview-item-qty">@($"{FormatRange(Row.Quantity, Row.QuantityMax)} ")</span>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Row.Unit))
+                            {
+                                <span class="weekly-preview-item-unit">@($"{Row.Unit.Trim()} ")</span>
+                            }
+                        }
+                        <span class="weekly-preview-item-name">@Row.DisplayName</span>
+                    </div>
+
+                    @if (Row.IsGrouped)
+                    {
+                        <button type="button"
+                                class="weekly-preview-group-badge @(IsGroupExpanded ? "is-open" : "")"
+                                aria-expanded="@IsGroupExpanded.ToString().ToLowerInvariant()"
+                                aria-controls="@groupSourcesId"
+                                aria-label="@($"Visa {Row.Sources.Count} förekomster av {Row.DisplayName}")"
+                                disabled="@IsSubmitting"
+                                @onclick="@(() => OnToggleGroupExpand.InvokeAsync(Row.RowKey))">
+                            <span>· @Row.Sources.Count förekomster</span>
+                            <span class="weekly-preview-chevron" aria-hidden="true">@(IsGroupExpanded ? "▾" : "▸")</span>
+                        </button>
+                    }
+                </div>
+            </div>
+        </label>
+
+        <div class="weekly-preview-item-actions">
+            @if (hasConflictWarning)
+            {
+                <button type="button"
+                        class="weekly-preview-warning-btn @(IsDetailsOpen ? "is-open" : "")"
+                        aria-expanded="@IsDetailsOpen.ToString().ToLowerInvariant()"
+                        aria-controls="@warningDetailsId"
+                        aria-label="@($"Visa enhetsvarning för {Row.DisplayName}")"
+                        title="Enhetsvarning – klicka för förklaring"
+                        @onclick="@(() => OnToggleDetails.InvokeAsync(Row.RowKey))">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Warning())" Color="Color.Custom" CustomColor="currentColor" />
+                </button>
+            }
+
+            <button type="button"
+                    class="weekly-preview-qty-icon-btn @(Row.IncludeQuantity ? "is-with-qty" : "is-qty-free")"
+                    aria-pressed="@Row.IncludeQuantity.ToString().ToLowerInvariant()"
+                    aria-label="@GetRowQuantityToggleAriaLabel()"
+                    title="@GetRowQuantityToggleTitle()"
+                    disabled="@(!canToggleQuantity)"
+                    @onclick="@(() => OnToggleRowQuantity.InvokeAsync(Row))">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Scales())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+        </div>
+    </div>
+
+    @if (Row.IsGrouped && IsGroupExpanded)
+    {
+        <div id="@groupSourcesId"
+             class="weekly-preview-group-sources"
+             role="region"
+             aria-label="@($"Förekomster av {Row.DisplayName}")">
+            <ul class="weekly-preview-group-sources-list">
+                @foreach (var src in Row.Sources)
+                {
+                    bool canToggleSrc = IsSelected && !IsSubmitting && src.HasSourceQuantityOrUnit;
+                    var rawText = FormatSourceItemText(src.Item);
+                    <li @key="src.PreviewItemKey"
+                        class="weekly-preview-group-source-item"
+                        data-source-key="@src.PreviewItemKey">
+                        <div class="weekly-preview-group-source-text">
+                            <span class="weekly-preview-group-source-raw">@rawText</span>
+                        </div>
+                        <button type="button"
+                                class="weekly-preview-qty-icon-btn is-compact is-qty-free"
+                                aria-pressed="false"
+                                aria-label="@($"Inkludera mängd och enhet för {rawText}")"
+                                title="Behåll mängd och enhet för denna förekomst"
+                                disabled="@(!canToggleSrc)"
+                                @onclick="@(() => OnKeepSourceQuantity.InvokeAsync(src.PreviewItemKey))">
+                            <FluentIcon Value="@(new Icons.Regular.Size20.Scales())" Color="Color.Custom" CustomColor="currentColor" />
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
+    @if (IsDetailsOpen && hasConflictWarning)
+    {
+        <div id="@warningDetailsId" class="weekly-preview-item-details" role="region" aria-label="@($"Enhetsvarning för {Row.DisplayName}")">
+            <div class="weekly-preview-detail-line detail-warning">
+                @Row.ConflictWarning
+            </div>
+        </div>
+    }
+</li>
+
+@code {
+    private static readonly ServingCalculator Formatter = new();
+
+    [Parameter, EditorRequired] public ShoppingImportDisplayRow Row { get; set; } = default!;
+    [Parameter] public bool IsSelected { get; set; }
+    [Parameter] public bool IsSubmitting { get; set; }
+    [Parameter] public bool IsDetailsOpen { get; set; }
+    [Parameter] public bool IsGroupExpanded { get; set; }
+    [Parameter] public bool IncludeWeeklyMenuDetails { get; set; }
+
+    [Parameter] public EventCallback<(ShoppingImportDisplayRow Row, object? RawChecked)> OnToggleSelection { get; set; }
+    [Parameter] public EventCallback<ShoppingImportDisplayRow> OnToggleRowQuantity { get; set; }
+    [Parameter] public EventCallback<string> OnKeepSourceQuantity { get; set; }
+    [Parameter] public EventCallback<string> OnToggleDetails { get; set; }
+    [Parameter] public EventCallback<string> OnToggleGroupExpand { get; set; }
+
+    private string GetRowQuantityToggleAriaLabel()
+    {
+        if (!Row.HasSourceQuantityOrUnit)
+            return $"{Row.DisplayName} saknar mängd och enhet";
+
+        return Row.IncludeQuantity
+            ? $"Mängd och enhet inkluderas för {Row.DisplayName}. Klicka för att importera utan mängd och enhet"
+            : $"Utan mängd och enhet för {Row.DisplayName}. Klicka för att inkludera mängd och enhet";
+    }
+
+    private string GetRowQuantityToggleTitle()
+    {
+        if (!Row.HasSourceQuantityOrUnit)
+            return "Ingrediensen saknar mängd och enhet i receptet";
+
+        if (!IsSelected)
+            return "Markera varan för att ändra mängdläge";
+
+        return Row.IncludeQuantity
+            ? "Mängd och enhet inkluderas – klicka för utan mängd"
+            : "Utan mängd – klicka för att inkludera mängd och enhet";
+    }
+
+    private static string FormatRange(decimal? min, decimal? max) =>
+        Formatter.FormatQuantityRange(min, max);
+
+    private static string FormatSourceItemText(ShoppingListItem item)
+    {
+        var parts = new List<string>();
+        if (item.Quantity.HasValue)
+        {
+            parts.Add(FormatRange(item.Quantity, item.QuantityMax));
+        }
+        if (!string.IsNullOrWhiteSpace(item.Unit))
+        {
+            parts.Add(item.Unit.Trim());
+        }
+        if (!string.IsNullOrWhiteSpace(item.Name))
+        {
+            parts.Add(item.Name.Trim());
+        }
+        return string.Join(" ", parts);
+    }
+}

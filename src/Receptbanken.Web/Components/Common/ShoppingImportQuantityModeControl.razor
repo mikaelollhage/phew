@@ -1,0 +1,40 @@
+<div class="weekly-preview-qty-mode-bar">
+    <span class="weekly-preview-qty-mode-label" id="@labelId">Importera mängder</span>
+    <div class="weekly-preview-qty-mode-group" role="radiogroup" aria-labelledby="@labelId">
+        <button type="button"
+                role="radio"
+                aria-checked="@(Mode == ShoppingImportQuantityMode.QuantityFree ? "true" : "false")"
+                class="weekly-preview-qty-mode-btn weekly-preview-qty-mode-free @(Mode == ShoppingImportQuantityMode.QuantityFree ? "is-active" : "")"
+                disabled="@Disabled"
+                @onclick="@(() => SelectModeAsync(ShoppingImportQuantityMode.QuantityFree))">
+            Utan mängd och enhet
+        </button>
+        <button type="button"
+                role="radio"
+                aria-checked="@(Mode == ShoppingImportQuantityMode.WithQuantity ? "true" : "false")"
+                class="weekly-preview-qty-mode-btn weekly-preview-qty-mode-with @(Mode == ShoppingImportQuantityMode.WithQuantity ? "is-active" : "")"
+                disabled="@Disabled"
+                @onclick="@(() => SelectModeAsync(ShoppingImportQuantityMode.WithQuantity))">
+            Med mängd och enhet
+        </button>
+    </div>
+</div>
+
+@code {
+    private readonly string labelId = $"qty-mode-label-{Guid.NewGuid():N}";
+
+    [Parameter] public ShoppingImportQuantityMode Mode { get; set; } = ShoppingImportQuantityMode.QuantityFree;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<ShoppingImportQuantityMode> ModeChanged { get; set; }
+
+    private async Task SelectModeAsync(ShoppingImportQuantityMode newMode)
+    {
+        if (Disabled || Mode == newMode)
+            return;
+
+        if (ModeChanged.HasDelegate)
+        {
+            await ModeChanged.InvokeAsync(newMode);
+        }
+    }
+}

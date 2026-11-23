@@ -179,6 +179,53 @@ public class ShoppingListAggregator
     }
 
     /// <summary>
+    /// Returns the canonical ingredient key for conservative grouping and Swedish alphabetical sorting.
+    /// </summary>
+    public string GetCanonicalIngredientKey(string? name, string? comment = null)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        return AnalyzeIdentity(name, comment).CanonicalKey;
+    }
+
+    /// <summary>
+    /// Formats an ingredient name for standalone quantity-free display (capitalized first letter).
+    /// </summary>
+    public string FormatQuantityFreeName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        return CapitalizeFirstChar(name.Trim());
+    }
+
+    /// <summary>
+    /// Creates a quantity-free copy of a shopping list item (null quantity, null max, null unit).
+    /// </summary>
+    public ShoppingListItem ToQuantityFreeItem(ShoppingListItem source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        var displayName = FormatQuantityFreeName(source.Name);
+        return new ShoppingListItem
+        {
+            Id = source.Id,
+            RecipeId = source.RecipeId,
+            Name = displayName,
+            Quantity = null,
+            QuantityMax = null,
+            Unit = null,
+            Comment = source.Comment,
+            Department = source.Department,
+            IsChecked = source.IsChecked,
+            SortOrder = source.SortOrder,
+            CreatedAt = source.CreatedAt,
+            RawText = FormatRawText(null, null, null, displayName)
+        };
+    }
+
+    /// <summary>
     /// Returns a deterministic key for a normalized shopping list item representing its canonical ingredient,
     /// unit family, and package size qualifier.
     /// </summary>
