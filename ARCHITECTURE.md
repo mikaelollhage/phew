@@ -1,8 +1,8 @@
-# Receptbanken — Arkitektur och Teknisk Specifikation
+# PHEW! — Arkitektur och Teknisk Specifikation
 
 ## 1. Systemöversikt
 
-**Receptbanken** är en komplett, självhostad webbapplikation för personlig recepthantering. Applikationen är utvecklad från grunden i **C# och .NET 10 LTS** med **Blazor Web App (Interactive Server)** och **Microsoft Fluent UI Blazor**, backad av **SQLite** via **Entity Framework Core**.
+**PHEW!** är en komplett, självhostad webbapplikation för personlig recepthantering. Applikationen är utvecklad från grunden i **C# och .NET 10 LTS** med **Blazor Web App (Interactive Server)** och **Microsoft Fluent UI Blazor**, backad av **SQLite** via **Entity Framework Core**.
 
 Systemet är optimerat för ett modernt, betrott hemnätverk (t.ex. på en Ubuntu Linux-hemserver via Docker), kräver inga externa databasservrar, inga molnabonnemang och **inga externa AI-tjänster**. All receptimport, ingredienstolkning och portionsberäkning sker helt deterministiskt och lokalt.
 
@@ -19,16 +19,16 @@ graph TD
 
     subgraph AppHost ["ASP.NET Core Web Host (.NET 10 LTS)"]
         SignalR["SignalR Circuit (Antiforgery-skyddad)"]
-        subgraph WebLayer ["Receptbanken.Web"]
+        subgraph WebLayer ["Phew.Web"]
             Pages["Blazor Pages & Components"]
             Services["UI Services & Notifieringar"]
         end
-        subgraph CoreLayer ["Receptbanken.Core"]
+        subgraph CoreLayer ["Phew.Core"]
             Domain["Domänmodeller (Recipe, Ingredient, Step, m.fl.)"]
             Parser["Svensk Ingredienstolk & Portionsberäknare"]
             Aggregator["Inköpsliste-aggregering"]
         end
-        subgraph InfraLayer ["Receptbanken.Infrastructure"]
+        subgraph InfraLayer ["Phew.Infrastructure"]
             Importer["Receptimportör (AngleSharp, JSON-LD)"]
             Ssrf["Stärkt SSRF-skydd (DNS Rebinding, IPv4-mapped IPv6)"]
             FileStorage["Lokal Bildlagring & Validering"]
@@ -38,7 +38,7 @@ graph TD
     end
 
     subgraph Storage ["Persistenta Docker-volymer (/app/data)"]
-        DB[(receptbanken.db<br/>SQLite WAL-läge)]
+        DB[(phew.db<br/>SQLite WAL-läge)]
         Images["/app/data/images/<br/>Receptbilder (.webp)"]
         Backups["/app/data/backups/<br/>Exporterade .zip-arkiv"]
     end
@@ -85,15 +85,15 @@ graph TD
 För att hålla arkitekturen pragmatisk och fri från onödig abstraktion (såsom generiska repositorier över EF Core) struktureras koden i **tre kärnprojekt** och **två testprojekt**:
 
 ```
-Receptbanken/
-├── Receptbanken.sln
+phew/
+├── Phew.sln
 ├── Dockerfile
 ├── docker-compose.yml
 ├── ARCHITECTURE.md
 ├── PROJECT_PLAN.md
 ├── README.md
 ├── src/
-│   ├── Receptbanken.Core/                  # Domänmodeller, enums, affärsregler, svensk tolk
+│   ├── Phew.Core/                  # Domänmodeller, enums, affärsregler, svensk tolk
 │   │   ├── Models/                         # Recipe, Ingredient, InstructionStep, Category, ShoppingListItem
 │   │   ├── Enums/                          # UnitType, ImportSource
 │   │   ├── Services/
@@ -102,7 +102,7 @@ Receptbanken/
 │   │   │   └── ShoppingListAggregator.cs   # Sammanfogning av kompatibla ingredienser
 │   │   └── Interfaces/                     # IImageStorageService, IRecipeImporter, IBackupService
 │   │
-│   ├── Receptbanken.Infrastructure/        # EF Core, databas, lagring, webbskrapning, backup
+│   ├── Phew.Infrastructure/        # EF Core, databas, lagring, webbskrapning, backup
 │   │   ├── Data/
 │   │   │   ├── AppDbContext.cs             # EF Core DbContext med SQLite-konfiguration
 │   │   │   └── Configurations/             # EntityTypeConfigurations (fluent mapping)
@@ -122,7 +122,7 @@ Receptbanken/
 │   │   └── Backup/
 │   │       └── ZipBackupService.cs         # Transaktionell backup med filsystemsåterställning & limits
 │   │
-│   └── Receptbanken.Web/                   # Blazor Web App (Interactive Server), UI & Routing
+│   └── Phew.Web/                   # Blazor Web App (Interactive Server), UI & Routing
 │       ├── Components/
 │       │   ├── Layout/                     # MainLayout.razor, NavMenu.razor, AppHeader.razor
 │       │   ├── Recipes/                    # RecipeCard.razor, RecipeGrid.razor, ServingAdjuster.razor,
@@ -147,12 +147,12 @@ Receptbanken/
 │       └── appsettings.json                # Konfiguration (datasökvägar, storleksgränser)
 │
 └── tests/
-    ├── Receptbanken.Tests/                 # Enhets- och integrationstester
+    ├── Phew.Tests/                 # Enhets- och integrationstester
     │   ├── Core/                           # Tester för SwedishIngredientParser, ServingCalculator, m.fl.
     │   ├── Infrastructure/                 # EF Core SQLite-tester, ZipBackup transaktionstest, SSRF-tester
     │   ├── Fixtures/                       # Sparade HTML/JSON-LD-fixturer (ICA, Arla, Köket, Tasteline)
     │   └── Components/                     # bUnit-komponenttester för Blazor UI
-    └── Receptbanken.E2E/                   # Playwright webbläsartester för kritiska användarflöden
+    └── Phew.E2E/                   # Playwright webbläsartester för kritiska användarflöden
 ```
 
 ---
@@ -297,7 +297,7 @@ För att förhindra Zip Bomb-attacker och DoS vid uppackning tillämpas strikta 
 Återställning garanterar atomicitet över både databasen och filsystemet:
 1. Extrahera arkivet till en isolerad temporär katalog (`/app/data/temp/restore_{guid}/`).
 2. Validera manifest, schemaversion och filbegränsningar.
-3. Skapa en temporär skuggkopia av befintlig `receptbanken.db` samt befintlig `images/`-katalog (`/app/data/temp/backup_pre_restore_{guid}/`).
+3. Skapa en temporär skuggkopia av befintlig `phew.db` samt befintlig `images/`-katalog (`/app/data/temp/backup_pre_restore_{guid}/`).
 4. Öppna en EF Core-databastransaktion (`await using var transaction = await context.Database.BeginTransactionAsync()`).
 5. Utför databasuppdateringarna (ersätt eller slå ihop).
 6. Vid framgångsrik databasuppdatering:
@@ -642,7 +642,7 @@ Eftersom applikationen är avsedd för hemnätverk utan traditionell inloggning 
 Säkerhetskopiering skapar ett portabelt `.zip`-arkiv som kan flyttas mellan servrar:
 
 ```
-receptbanken-backup-2026-10-25.zip
+phew-backup-2026-10-25.zip
 ├── manifest.json       # Metadata om exporten
 ├── data.json           # Komplett relationsdata (recept, ingredienser, steg, kategorier)
 └── images/             # Alla bildfiler som refereras i databasen
@@ -681,12 +681,12 @@ För att garantera att **inga användardata, recept eller bilder försvinner** v
 version: '3.8'
 
 services:
-  receptbanken:
-    image: receptbanken:latest
+  phew:
+    image: phew:latest
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: receptbanken
+    container_name: phew
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -695,15 +695,15 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - Storage__DataPath=/app/data
     volumes:
-      - receptbanken-data:/app/data
+      - phew-data:/app/data
 
 volumes:
-  receptbanken-data:
+  phew-data:
     driver: local
 ```
 
 Inom `/app/data` skapas automatiskt följande struktur:
-- `/app/data/receptbanken.db` — SQLite-databasfilen.
+- `/app/data/phew.db` — SQLite-databasfilen.
 - `/app/data/images/` — Sparade receptbilder.
 - `/app/data/backups/` — Exporterade säkerhetskopior.
 
@@ -758,7 +758,7 @@ graph TD
 | :--- | :--- | :--- |
 | **Ändrad HTML-struktur på receptsajter** | Medel / Medel | Förlita sig primärt på standardiserad Schema.org JSON-LD som webbplatser sällan ändrar eftersom deras Google-rankning beror på den. **Obligatorisk förhandsgranskning och manuell redigering** före sparning säkerställer att användaren alltid har sista ordet. |
 | **SSRF-attacker via URL-import** | Medel / Hög | Anpassad `SocketsHttpHandler` med IP-validering mot loopback, lokala subnät och moln-metadata på anslutningsnivå före varje HTTP-förfrågan och vid varje omdirigering. |
-| **Dataförlust vid container-uppdatering** | Låg / Kritisk | Dedikerad extern volymmontering för `/app/data` (`receptbanken.db` och `images/`). Databasen ligger aldrig i containerns tillfälliga filsystem. Automatiska EF Core-migreringar vid start. |
+| **Dataförlust vid container-uppdatering** | Låg / Kritisk | Dedikerad extern volymmontering för `/app/data` (`phew.db` och `images/`). Databasen ligger aldrig i containerns tillfälliga filsystem. Automatiska EF Core-migreringar vid start. |
 | **Generisk "Enterprise"-känsla i UI** | Hög / Medel | Skräddarsydd mörk CSS ("Dark Culinary Theme") med varma terrakotta- och bärnstensdetaljer, mjuka skuggor, rundade hörn, och generöst med bildutrymme som döljer Fluent UI:s typiska kontorsestetik. |
 | **Skärmen slocknar under matlagning** | Hög / Medel | Implementering av Screen Wake Lock API via Blazor JS Interop i matlagningsläget, så att surfplattan eller telefonen hålls vaken automatiskt. |
 | **Komplexa eller ostandardiserade mått** | Medel / Låg | Konservativ ingredienstolkning. Om mått eller enhet inte med säkerhet kan identifieras sparas hela texten som råsträng utan att hitta på felaktiga värden. |

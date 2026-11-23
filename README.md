@@ -1,6 +1,6 @@
-# Receptbanken 🍳
+# PHEW! 🍳
 
-**Receptbanken** är en modern, komplett och självhostad webbapplikation för personlig recepthantering. 
+**PHEW! — Family life, sorted.** är en modern, komplett och självhostad webbapplikation för hushållets recept, veckomeny, inköpslista, att göra-listor och familjekalender.
 
 Applikationen är byggd i **C# och .NET 10 LTS** med **Blazor Web App (Interactive Server)**, `IDbContextFactory<AppDbContext>`, **Microsoft Fluent UI Blazor** och en robust **SQLite-databas** hanterad via **Entity Framework Core**.
 
@@ -28,7 +28,7 @@ Den är utformad för att köras på en personlig Ubuntu Linux-hemserver (eller 
 - 👨‍🍳 **Matlagningsläge (Cooking Mode)**: Fullskärmsvy för mobil/surfplatta med **ett steg i taget**, stor läsbar text, utdragbar ingredienspanel och **Screen Wake Lock** (håller skärmen tänd under matlagningen).
 - 💾 **Transaktionell Säkerhetskopiering**: Exportera hela din receptbank till ett portabelt `.zip`-arkiv. Återställning med skydd mot Zip Bomb (dekomprimeringsgräns 500 MB, max 5 000 filer), Zip Slip, och atomär återställning som rullar tillbaka både SQLite-transaktionen och filsystemet vid minsta fel.
 - ⚡ **Högpresterande DbContext-hantering**: Byggt med `IDbContextFactory<AppDbContext>` för kortlivade databaskontexter i Blazor Server utan samtidighetsproblem eller minnesläckor.
-- 🐳 **Docker & Persistent lagring**: Databasen (`receptbanken.db`), bildkatalogen och backuper lagras i externa volymer så att container-uppdateringar aldrig raderar användardata.
+- 🐳 **Docker & Persistent lagring**: Databasen (`phew.db`), bildkatalogen och backuper lagras i externa volymer så att container-uppdateringar aldrig raderar användardata.
 
 ---
 
@@ -56,14 +56,13 @@ Den är utformad för att köras på en personlig Ubuntu Linux-hemserver (eller 
 Lösningen är organiserad i en ren, pragmatisk och lättunderhållen projektstruktur:
 
 ```
-Receptbanken/
+phew/
 ├── src/
-│   ├── Receptbanken.Core/           # Domänmodeller, gränssnitt, svensk ingredienstolk, portionsberäkning
-│   ├── Receptbanken.Infrastructure/ # EF Core, SQLite, lokal bildlagring, SSRF-skyddad webbimportör, zip-backup
-│   └── Receptbanken.Web/            # Blazor Interactive Server, sidor, komponenter och anpassat tema
+│   ├── Phew.Core/           # Domänmodeller, gränssnitt, svensk ingredienstolk, portionsberäkning
+│   ├── Phew.Infrastructure/ # EF Core, SQLite, lokal bildlagring, SSRF-skyddad webbimportör, zip-backup
+│   └── Phew.Web/            # Blazor Interactive Server, sidor, komponenter och anpassat tema
 └── tests/
-    ├── Receptbanken.Tests/          # xUnit enhets- och integrationstester med riktig SQLite och HTML-fixturer
-    └── Receptbanken.E2E/            # Playwright webbläsartester för hela användarresor
+    └── Phew.Tests/          # xUnit enhets- och integrationstester med riktig SQLite, bUnit och HTML-fixturer
 ```
 
 ---
@@ -80,28 +79,28 @@ Receptbanken/
 - Ubuntu Server 24.04 LTS (`x86_64`)
 - Docker Engine och Docker Compose (`docker compose version`)
 - SSH-nyckelautentisering konfigurerad för din användare (som tillhör gruppen `docker`)
-- Målkatalogen `/opt/receptbanken` skapad och ägd av din SSH-användare:
+- Målkatalogen `/opt/phew` skapad och ägd av din SSH-användare:
   ```bash
-  sudo mkdir -p /opt/receptbanken && sudo chown -R $USER:$USER /opt/receptbanken
+  sudo mkdir -p /opt/phew && sudo chown -R $USER:$USER /opt/phew
   ```
 
 ### Kör lokalt med .NET CLI
 ```bash
 # Klona eller navigera till projektmappen
-cd Receptbanken
+cd phew
 
 # Återställ paket och bygg lösningen
 dotnet build
 
 # Kör webbapplikationen
-dotnet run --project src/Receptbanken.Web
+dotnet run --project src/Phew.Web
 ```
 Öppna webbläsaren på `http://localhost:5000` (eller den port som terminalen visar).
 
 ### Köra tester
 ```bash
 # Kör alla enhets- och integrationstester
-dotnet test tests/Receptbanken.Tests
+dotnet test tests/Phew.Tests
 ```
 
 ---
@@ -120,17 +119,23 @@ Kopiera `.deploy.env.example` till `.deploy.env` i projektets rotkatalog (filen 
 SERVER_HOST=home-server
 SERVER_USER=mikaelollhage
 SERVER_PORT=22
-DEPLOY_PATH=/opt/receptbanken
+DEPLOY_PATH=/opt/phew
 APP_PORT=8080
-VOLUME_NAME=receptbanken-data
+VOLUME_NAME=phew-data
 ```
 
-### 2. Första installation (`-FirstInstall`)
-Vid allra första installationen på Ubuntu-servern (när varken containern `receptbanken` eller volymen `receptbanken-data` finns ännu) måste växeln `-FirstInstall` anges:
+### 2. Första installation (`-FirstInstall`) & Migrering från Receptbanken
+Vid allra första installationen på Ubuntu-servern (när varken containern `phew` eller volymen `phew-data` finns ännu) måste växeln `-FirstInstall` anges:
 ```powershell
 .\scripts\deploy.ps1 -FirstInstall
 ```
 Detta förhindrar att en vanlig uppdatering av misstag skapar en ny, tom datavolym om man skulle råka peka mot fel värd eller volymnamn.
+
+**Viktigt vid migrering från tidigare Receptbanken-installation:**
+- **Ny volym & ZIP-återställning:** PHEW! använder en egen datavolym (`phew-data`) och databas (`phew.db`). Befintlig data importeras efter uppstart via **Säkerhetskopia** (`/backup`) med en `.zip`-backup vars `manifest.json` har `"application": "Phew"`.
+- **Bevarande av gammal installation:** Den tidigare Receptbanken-containern och volymen (`receptbanken-data`) lämnas orörda för manuell rollback.
+- **Portkonflikt:** Om den gamla containern fortfarande lyssnar på port `8080` avbryter `-FirstInstall` med ett tydligt felmeddelande — stoppa den gamla containern separat eller ange en ledig `-AppPort` vid teststart.
+- **PWA & Pushnotiser:** Byte av internt värdnamn (`phew.ollhage.home`) skapar ett nytt webbläsar-origin. Användare behöver installera om PWA-appen och återaktivera kalenderns pushnotiser på sina enheter.
 
 ### 3. Vanlig uppdatering
 För alla efterföljande uppdateringar kör du:
@@ -140,11 +145,11 @@ För alla efterföljande uppdateringar kör du:
 Skriptet utför då i ordning:
 1. Kör `dotnet build -c Release` och `dotnet test -c Release` på Windows.
 2. Paketerar endast nödvändiga källkods- och projektfiler till ett rent `.tar.gz`-arkiv (exkluderar `bin`, `obj`, `.git`, `.env`, databaser, bilder och hemligheter) och verifierar arkivets innehåll.
-3. Överför arkivet via SCP till `/opt/receptbanken/builds/<version>/` på Ubuntu.
-4. Bygger `receptbanken:<version>` på Ubuntu (`docker build --platform linux/amd64`) **medan den befintliga containern fortsätter köras**.
-5. Stoppar den gamla containern kontrollerat, skapar en rå volymbackup av `receptbanken-data`, verifierar SHA-256-kontrollsumman och säkerställer att `receptbanken.db` finns i arkivet.
-6. Uppdaterar `IMAGE_TAG` och startar den nya versionen med `docker compose up -d --no-build`.
-7. Verifierar containerns hälsostatus och rensar den temporära byggkatalogen.
+3. Överför arkivet och kandidat-Compose-filen via SCP till `/opt/phew/builds/<version>/` på Ubuntu.
+4. Bygger `phew:<version>` på Ubuntu (`docker build --platform linux/amd64`) **medan den befintliga containern fortsätter köras**.
+5. Stoppar den gamla containern kontrollerat, skapar en rå volymbackup av `phew-data`, verifierar SHA-256-kontrollsumman och säkerställer att `phew.db` finns i arkivet.
+6. Promoverar `docker-compose.yml`, uppdaterar `IMAGE_TAG` och startar den nya versionen med `docker compose -p phew up -d --no-build`.
+7. Verifierar containerns hälsostatus (återställer föregående `docker-compose.yml` vid fel) och rensar den temporära byggkatalogen.
 
 Du kan när som helst förhandsgranska flödet och testa arkivskapandet utan att ansluta till servern med:
 ```powershell
@@ -152,41 +157,42 @@ Du kan när som helst förhandsgranska flödet och testa arkivskapandet utan att
 ```
 
 ### 4. Persistent datalagring och Backup
-Den namngivna volymen `receptbanken-data` monteras till `/app/data` och bevarar:
-- `receptbanken.db` (samt WAL/SHM-filer vid drift)
+Den namngivna volymen `phew-data` monteras till `/app/data` och bevarar:
+- `phew.db` (samt WAL/SHM-filer vid drift)
 - `images/recipes/` (uppladdade och importerade receptbilder i WebP-format)
 - `keys/` (ASP.NET Core DataProtection-nycklar)
 
-Vid varje uppdatering sparas verifierade backuper i `/opt/receptbanken/backups/` på Ubuntu-servern:
-- `volume-<version>.tar.gz` + `volume-<version>.tar.gz.sha256` (komplett råkopia av `receptbanken-data` efter kontrollerat containerstopp)
+Vid varje uppdatering sparas verifierade backuper i `/opt/phew/backups/` på Ubuntu-servern:
+- `volume-<version>.tar.gz` + `volume-<version>.tar.gz.sha256` (komplett råkopia av `phew-data` efter kontrollerat containerstopp)
 - `app-<version>.zip` (portabel applikationsbackup från `/api/backup/export`)
 De senaste 10 verifierade backup-uppsättningarna behålls automatiskt.
 
 ### 5. Återställning / Rollback (`scripts/rollback.ps1`)
+Rollback påverkar **endast** PHEW!-installationen (`phew`, `phew-data`, `/opt/phew`) och rör aldrig eventuella kvarvarande Receptbanken-resurser:
 - **Standardrollback (endast Docker-image, lämnar databas och bilder orörda):**
   ```powershell
   .\scripts\rollback.ps1
   ```
 - **Fullständig återställning av både Docker-image och datavolym från backup:**
-  Kräver uttrycklig bekräftelse (`ATERSTALL`) och skapar först en extra säkerhetskopia (`pre-rollback-<timestamp>.tar.gz`) av aktuellt datatillstånd:
+  Kräver uttrycklig bekräftelse (`RESTORE`) och skapar först en extra säkerhetskopia (`pre-rollback-<timestamp>.tar.gz`) av aktuellt datatillstånd:
   ```powershell
   .\scripts\rollback.ps1 -RestoreData
   ```
 
 ### 6. Hälsokontroll (Healthcheck)
 - **HTTP-endpoint (`GET /health`):** Verifierar att webbservern svarar och att SQLite-databasen går att ansluta till och läsa (`SELECT 1;`). Returnerar HTTP `200 OK` vid frisk tjänst och `503 Service Unavailable` vid fel.
-- **Container-prob (`--healthcheck`):** `dotnet Receptbanken.Web.dll --healthcheck` anropar `/health` internt och används av Dockers `HEALTHCHECK` utan externa beroenden av `curl` eller `wget`.
+- **Container-prob (`--healthcheck`):** `dotnet Phew.Web.dll --healthcheck` anropar `/health` internt och används av Dockers `HEALTHCHECK` utan externa beroenden av `curl` eller `wget`.
 - Om en databasmigrering vid uppstart skulle misslyckas avbryter applikationen omedelbart uppstarten så att en trasig instans aldrig rapporteras som frisk.
 
 ### 7. Felsökning
 - **PowerShell ExecutionPolicy på Windows:** Om Windows blockerar körning av `.ps1`-skript, kör antingen `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` eller anropa skriptet med `powershell -ExecutionPolicy Bypass -File .\scripts\deploy.ps1`.
 - **Kontrollera containerloggar på Ubuntu:**
   ```bash
-  ssh mikaelollhage@home-server "docker logs --tail 100 receptbanken"
+  ssh mikaelollhage@home-server "docker logs --tail 100 phew"
   ```
 - **Kontrollera hälsostatus och volym på Ubuntu:**
   ```bash
-  ssh mikaelollhage@home-server "docker ps --filter name=receptbanken && docker volume inspect receptbanken-data"
+  ssh mikaelollhage@home-server "docker ps --filter name=phew && docker volume inspect phew-data"
   ```
 
 ---

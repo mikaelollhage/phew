@@ -1,0 +1,390 @@
+@page "/installningar"
+@using System.Globalization
+@implements IDisposable
+@inject FamilyMemberService FamilyMemberService
+@inject ILogger<SettingsPage> Logger
+
+<PageTitle>Inställningar — PHEW!</PageTitle>
+
+@{
+    var activeMembers = allMembers
+        .Where(m => m.IsActive)
+        .OrderBy(m => m.Name, SwedishNameComparer)
+        .ThenBy(m => m.Id)
+        .ToList();
+}
+
+<ContextualFeedback State="familySuccessFeedback"
+                    Floating="true"
+                    CssClass="settings-success-toast" />
+
+<div class="settings-page-container">
+    <div class="page-header settings-page-header">
+        <h1 class="page-title">⚙️ Inställningar</h1>
+    </div>
+
+    <div class="settings-sections-grid">
+        <section class="detail-card settings-card settings-family-card" aria-label="Familjemedlemmar">
+            <div class="settings-card-header">
+                <h2 class="detail-card-title">👥 Familjemedlemmar (@activeMembers.Count)</h2>
+            </div>
+
+            <form class="settings-add-member-form" @onsubmit="AddMemberAsync">
+                <input id="settings-new-member-input"
+                       type="text"
+                       class="form-input-custom"
+                       maxlength="@FamilyMember.MaxNameLength"
+                       placeholder="Lägg till familjemedlem..."
+                       aria-label="Namn på ny familjemedlem"
+                       @bind="NewMemberName"
+                       @bind:event="oninput"
+                       disabled="@isBusy" />
+                <button type="submit"
+                        id="settings-add-member-btn"
+                        class="btn-primary-custom settings-icon-btn settings-add-member-btn"
+                        title="Lägg till familjemedlem"
+                        aria-label="Lägg till familjemedlem"
+                        disabled="@(isBusy || string.IsNullOrWhiteSpace(newMemberName))">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.PersonAdd())" Color="Color.Custom" CustomColor="currentColor" />
+                </button>
+            </form>
+
+            <ContextualFeedback State="familyErrorFeedback" CssClass="settings-family-feedback" />
+
+            @if (isLoading)
+            {
+                <div class="settings-loading-state">
+                    <FluentProgressRing />
+                </div>
+            }
+            else if (activeMembers.Count == 0)
+            {
+                <p class="settings-empty-state">Inga familjemedlemmar ännu.</p>
+            }
+            else
+            {
+                <div class="settings-member-list" role="list" aria-label="Familjemedlemmar">
+                    @foreach (var member in activeMembers)
+                    {
+                        var isEditing = editingMemberId == member.Id;
+
+                        <div @key="member.Id"
+                             class="settings-member-row @(isEditing ? "is-editing" : "")"
+                             role="listitem"
+                             data-member-id="@member.Id">
+                            @if (isEditing)
+                            {
+                                <form class="settings-member-edit-form" @onsubmit="SaveRenameAsync">
+                                    <div class="settings-member-edit-row">
+                                        <input type="text"
+                                               class="form-input-custom settings-member-edit-input"
+                                               maxlength="@FamilyMember.MaxNameLength"
+                                               aria-label="@($"Nytt namn för {member.Name}")"
+                                               @bind="EditMemberName"
+                                               @bind:event="oninput"
+                                               @onkeydown="HandleEditKeyDown"
+                                               disabled="@isBusy" />
+                                        <div class="settings-member-edit-actions">
+                                            <button type="submit"
+                                                    class="btn-primary-custom settings-icon-btn settings-member-save-btn"
+                                                    title="Spara"
+                                                    aria-label="@($"Spara nytt namn för {member.Name}")"
+                                                    disabled="@(isBusy || string.IsNullOrWhiteSpace(editingName))">
+                                                <FluentIcon Value="@(new Icons.Regular.Size20.Checkmark())" Color="Color.Custom" CustomColor="currentColor" />
+                                            </button>
+                                            <button type="button"
+                                                    class="btn-secondary-custom settings-icon-btn settings-member-cancel-btn"
+                                                    title="Avbryt"
+                                                    aria-label="Avbryt namnbyte"
+                                                    disabled="@isBusy"
+                                                    @onclick="CancelEdit">
+                                                <FluentIcon Value="@(new Icons.Regular.Size20.Dismiss())" Color="Color.Custom" CustomColor="currentColor" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <ContextualFeedback State="renameErrorFeedback" CssClass="settings-inline-error" />
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="settings-member-name">@member.Name</span>
+                                <div class="settings-member-actions">
+                                    <button type="button"
+                                            class="btn-secondary-custom settings-icon-btn settings-member-edit-btn"
+                                            title="Byt namn"
+                                            aria-label="@($"Byt namn på {member.Name}")"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => StartEdit(member))">
+                                        <FluentIcon Value="@(new Icons.Regular.Size20.Edit())" Color="Color.Custom" CustomColor="currentColor" />
+                                    </button>
+                                    <button type="button"
+                                            class="btn-danger-custom settings-icon-btn settings-member-delete-btn"
+                                            title="Ta bort"
+                                            aria-label="@($"Ta bort {member.Name}")"
+                                            disabled="@isBusy"
+                                            @onclick="@(() => PromptDelete(member))">
+                                        <FluentIcon Value="@(new Icons.Regular.Size20.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="detail-card settings-card settings-notifications-card" aria-label="Notiser">
+            <div class="settings-card-header">
+                <h2 class="detail-card-title">🔔 Notiser</h2>
+                <p class="settings-section-desc">
+                    Notisinställningarna gäller bara den här enheten och webbläsaren, inte globalt för alla familjemedlemmar.
+                </p>
+            </div>
+
+            <CalendarPushSettingsCard @ref="_pushSettingsCard"
+                                      OnSuccessFeedbackShown="HandlePushSuccessFeedbackShown" />
+        </section>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@(memberToDelete != null)"
+               Title="Ta bort familjemedlem permanent"
+               Message="@GetDeleteConfirmationMessage()"
+               ConfirmText="Ja, ta bort permanent"
+               CancelText="Avbryt"
+               Variant="ConfirmDialogVariant.Danger"
+               OnConfirm="ConfirmDeleteAsync"
+               OnCancel="@(() => memberToDelete = null)" />
+
+@code {
+    private static readonly StringComparer SwedishNameComparer =
+        StringComparer.Create(CultureInfo.GetCultureInfo("sv-SE"), ignoreCase: true);
+
+    private List<FamilyMember> allMembers = new();
+    private bool isLoading = true;
+    private bool isBusy;
+    private bool _isDisposed;
+
+    private string newMemberName = string.Empty;
+    private string NewMemberName
+    {
+        get => newMemberName;
+        set
+        {
+            newMemberName = value;
+            if (familyErrorFeedback.HasMessage)
+            {
+                familyErrorFeedback.Clear();
+            }
+        }
+    }
+
+    private int? editingMemberId;
+    private string editingName = string.Empty;
+    private string EditMemberName
+    {
+        get => editingName;
+        set
+        {
+            editingName = value;
+            if (renameErrorFeedback.HasMessage)
+            {
+                renameErrorFeedback.Clear();
+            }
+        }
+    }
+
+    private FamilyMember? memberToDelete;
+    private CalendarPushSettingsCard? _pushSettingsCard;
+    private readonly FeedbackState familyErrorFeedback = new();
+    private readonly FeedbackState renameErrorFeedback = new();
+    private readonly FeedbackState familySuccessFeedback = new();
+
+    private void HandlePushSuccessFeedbackShown()
+    {
+        familySuccessFeedback.Clear();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        FamilyMemberService.OnChanged += HandleFamilyMembersChanged;
+        await LoadMembersAsync();
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        try
+        {
+            allMembers = await FamilyMemberService.GetAllAsync(includeInactive: false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid hämtning av familjemedlemmar.");
+            familyErrorFeedback.ShowError("Kunde inte ladda familjemedlemmar.");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (isBusy || string.IsNullOrWhiteSpace(newMemberName))
+            return;
+
+        isBusy = true;
+        familyErrorFeedback.Clear();
+
+        try
+        {
+            var created = await FamilyMemberService.CreateAsync(newMemberName);
+            newMemberName = string.Empty;
+            await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
+            familySuccessFeedback.ShowSuccess($"Familjemedlemmen \"{created.Name}\" lades till.");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+        {
+            familyErrorFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid skapande av familjemedlem.");
+            familyErrorFeedback.ShowError("Kunde inte lägga till familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void StartEdit(FamilyMember member)
+    {
+        editingMemberId = member.Id;
+        editingName = member.Name;
+        familyErrorFeedback.Clear();
+        renameErrorFeedback.Clear();
+    }
+
+    private void CancelEdit()
+    {
+        editingMemberId = null;
+        editingName = string.Empty;
+        renameErrorFeedback.Clear();
+    }
+
+    private void HandleEditKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            CancelEdit();
+        }
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        if (isBusy || !editingMemberId.HasValue)
+            return;
+
+        isBusy = true;
+        renameErrorFeedback.Clear();
+
+        try
+        {
+            var updated = await FamilyMemberService.RenameAsync(editingMemberId.Value, editingName);
+            editingMemberId = null;
+            editingName = string.Empty;
+            await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
+            familySuccessFeedback.ShowSuccess($"Namnet uppdaterades till \"{updated.Name}\".");
+        }
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or KeyNotFoundException)
+        {
+            renameErrorFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid namnbyte av familjemedlem.");
+            renameErrorFeedback.ShowError("Kunde inte byta namn på familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void PromptDelete(FamilyMember member)
+    {
+        familyErrorFeedback.Clear();
+        memberToDelete = member;
+    }
+
+    private string GetDeleteConfirmationMessage()
+    {
+        if (memberToDelete == null)
+            return string.Empty;
+
+        return $"Vill du ta bort '{memberToDelete.Name}' permanent? Medlemmen tas bort för gott, och framtida kopplingar till kalenderhändelser samt individuella receptbetyg kommer också att tas bort när dessa funktioner finns. Själva kalenderhändelserna och recepten finns kvar. Detta kan inte ångras utan att återställa en säkerhetskopia.";
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (memberToDelete == null || isBusy)
+            return;
+
+        var target = memberToDelete;
+        memberToDelete = null;
+        isBusy = true;
+        familyErrorFeedback.Clear();
+
+        try
+        {
+            await FamilyMemberService.DeleteAsync(target.Id);
+            if (editingMemberId == target.Id)
+            {
+                CancelEdit();
+            }
+            await LoadMembersAsync();
+            _pushSettingsCard?.ClearSuccessFeedback();
+            familySuccessFeedback.ShowSuccess($"\"{target.Name}\" togs bort permanent.");
+        }
+        catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException)
+        {
+            familyErrorFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid permanent borttagning av familjemedlem.");
+            familyErrorFeedback.ShowError("Kunde inte ta bort familjemedlemmen.");
+        }
+        finally
+        {
+            isBusy = false;
+        }
+    }
+
+    private void HandleFamilyMembersChanged(long _version)
+    {
+        if (_isDisposed)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            await LoadMembersAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_isDisposed)
+            return;
+
+        _isDisposed = true;
+        FamilyMemberService.OnChanged -= HandleFamilyMembersChanged;
+    }
+}

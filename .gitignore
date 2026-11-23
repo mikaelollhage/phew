@@ -484,7 +484,7 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
-# Receptbanken   lokal konfiguration och data
+# PHEW! lokal konfiguration och data
 .deploy.env
 *.db
 *.db-shm

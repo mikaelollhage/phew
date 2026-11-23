@@ -1,13 +1,13 @@
 <#
 .SYNOPSIS
-    Rolls back Receptbanken on Ubuntu Server 24.04 LTS to the previous Docker image
+    Rolls back PHEW! on Ubuntu Server 24.04 LTS to the previous Docker image
     (and optionally, only when explicitly requested, restores the data volume from backup).
     Requires no Docker installation on Windows.
 
 .DESCRIPTION
     Safety principles:
     - Standard execution (without -RestoreData) restores ONLY the previous Docker image.
-      The SQLite database, images, and DataProtection keys in 'receptbanken-data' are untouched.
+      The SQLite database, images, and DataProtection keys in 'phew-data' are untouched.
     - If -RestoreData is specified, a clear warning and confirmation are required, after which
       an extra safety backup (pre-rollback-<timestamp>.tar.gz) of the current data state is
       created and verified with SHA-256 before the volume is restored.
@@ -82,14 +82,15 @@ if ($ServerPort -le 0) {
     $ServerPort = if ($config["SERVER_PORT"]) { [int]$config["SERVER_PORT"] } else { 22 }
 }
 if (-not $DeployPath) {
-    $DeployPath = if ($config["DEPLOY_PATH"]) { $config["DEPLOY_PATH"] } else { "/opt/receptbanken" }
+    $DeployPath = if ($config["DEPLOY_PATH"]) { $config["DEPLOY_PATH"] } else { "/opt/phew" }
 }
 if ($AppPort -le 0) {
     $AppPort = if ($config["APP_PORT"]) { [int]$config["APP_PORT"] } else { 8080 }
 }
 if (-not $VolumeName) {
-    $VolumeName = if ($config["VOLUME_NAME"]) { $config["VOLUME_NAME"] } else { "receptbanken-data" }
+    $VolumeName = if ($config["VOLUME_NAME"]) { $config["VOLUME_NAME"] } else { "phew-data" }
 }
+$VapidSubject = if ($config["VAPID_SUBJECT"]) { $config["VAPID_SUBJECT"].Trim() } else { "" }
 
 # Strict parameter validation
 if ([string]::IsNullOrWhiteSpace($ServerHost) -or [string]::IsNullOrWhiteSpace($ServerUser)) {
@@ -159,7 +160,7 @@ function Invoke-RemoteBash {
 }
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host " Receptbanken - Rollback / Recovery" -ForegroundColor Cyan
+Write-Host " PHEW! - Rollback / Recovery" -ForegroundColor Cyan
 Write-Host " Target Host : $SshTarget (port $ServerPort)"
 Write-Host " Deploy Path : $DeployPath"
 Write-Host " Data Volume : $VolumeName"
@@ -188,7 +189,7 @@ if ($DryRun) {
     Write-Step "[DRY-RUN] Summary of planned rollback steps:"
     $plannedTag = if ($TargetTag) { $TargetTag } else { "<from $DeployPath/.previous_version>" }
     Write-Host " 1. Connect via SSH to $SshTarget and identify previous image tag ($plannedTag)"
-    Write-Host " 2. Verify that Docker image 'receptbanken:$plannedTag' and volume '$VolumeName' exist on server"
+    Write-Host " 2. Verify that Docker image 'phew:$plannedTag' and volume '$VolumeName' exist on server"
     if ($RestoreData) {
         $plannedBackup = if ($BackupTimestamp) { "volume-$BackupTimestamp.tar.gz" } else { "<latest verified volume-*.tar.gz>" }
         Write-Host " 3. [RestoreData] Check free disk space and stop container cleanly"
@@ -198,7 +199,7 @@ if ($DryRun) {
     else {
         Write-Host " 3. Leave data volume '$VolumeName' completely untouched (no database restore)"
     }
-    Write-Host " 6. Update $DeployPath/.env with IMAGE_TAG=$plannedTag and run 'docker compose -p receptbanken up -d --no-build'"
+    Write-Host " 6. Update $DeployPath/.env with IMAGE_TAG=$plannedTag (preserving VAPID_SUBJECT) and run 'docker compose -p phew up -d --no-build'"
     Write-Host " 7. Verify Docker healthcheck and /health"
     Write-Success "Rollback dry-run completed without errors. No local Docker required."
     exit 0
@@ -253,7 +254,7 @@ if ($TargetTag -notmatch '^[a-zA-Z0-9_.-]+$') {
     Fail-Rollback "Invalid TargetTag '$TargetTag'."
 }
 
-$TargetImage = "receptbanken:$TargetTag"
+$TargetImage = "phew:$TargetTag"
 Write-Step "Verifying that Docker image '$TargetImage' is available on server..."
 $verifyImgScript = @"
 set -e
@@ -265,7 +266,7 @@ echo "IMAGE_OK"
 "@
 $imgResult = Invoke-RemoteBash -Script $verifyImgScript -AllowFailure
 if ($imgResult.ExitCode -ne 0 -or $imgResult.Output -notmatch "IMAGE_OK") {
-    Fail-Rollback "Docker image '$TargetImage' was not found on server. Check available images with 'docker images receptbanken' on the server."
+    Fail-Rollback "Docker image '$TargetImage' was not found on server. Check available images with 'docker images phew' on the server."
 }
 Write-Success "Docker image '$TargetImage' is available on server."
 
@@ -291,7 +292,7 @@ set -e
 BACKUP_DIR="$DeployPath/backups"
 TARGET_ARCHIVE="$backupFile"
 
-# 1. Verify target backup archive exists, is non-empty, passes sha256 if present, and contains receptbanken.db
+# 1. Verify target backup archive exists, is non-empty, passes sha256 if present, and contains phew.db
 if [ ! -s "`$TARGET_ARCHIVE" ]; then
     echo "ERR_TARGET_BACKUP_MISSING:`$TARGET_ARCHIVE"
     exit 20
@@ -304,7 +305,7 @@ if [ -f "`$TARGET_ARCHIVE.sha256" ]; then
     }
 fi
 
-tar -tzf "`$TARGET_ARCHIVE" | grep -E '(^\./|^)receptbanken\.db$' >/dev/null 2>&1 || {
+tar -tzf "`$TARGET_ARCHIVE" | grep -E '(^\./|^)phew\.db$' >/dev/null 2>&1 || {
     echo "ERR_TARGET_BACKUP_NO_DB"
     exit 22
 }
@@ -317,8 +318,8 @@ if [ -z "`$FREE_KB" ] || [ "`$FREE_KB" -lt 1048576 ]; then
 }
 
 # 3. Stop running container cleanly so SQLite WAL flushes
-if docker container inspect receptbanken >/dev/null 2>&1; then
-    docker stop -t 15 receptbanken >/dev/null 2>&1 || true
+if docker container inspect phew >/dev/null 2>&1; then
+    docker stop -t 15 phew >/dev/null 2>&1 || true
 fi
 
 # 4. Take mandatory pre-rollback backup of current volume state and verify SHA-256
@@ -365,16 +366,22 @@ $switchScript = @"
 set -e
 cd "$DeployPath"
 
-docker tag "$TargetImage" "receptbanken:latest"
+docker tag "$TargetImage" "phew:latest"
+
+EFFECTIVE_VAPID_SUBJECT="$VapidSubject"
+if [ -z "`$EFFECTIVE_VAPID_SUBJECT" ] && [ -f "$DeployPath/.env" ]; then
+    EFFECTIVE_VAPID_SUBJECT=`$(grep -E '^VAPID_SUBJECT=' "$DeployPath/.env" | tail -n 1 | cut -d= -f2- || true)
+fi
 
 cat > "$DeployPath/.env" <<EOF
 IMAGE_TAG=$TargetTag
 APP_PORT=$AppPort
+VAPID_SUBJECT=`$EFFECTIVE_VAPID_SUBJECT
 EOF
 
 echo "$TargetTag" > "$DeployPath/.current_version"
 
-docker compose -p receptbanken -f "$DeployPath/docker-compose.yml" --env-file "$DeployPath/.env" up -d --no-build
+docker compose -p phew -f "$DeployPath/docker-compose.yml" --env-file "$DeployPath/.env" up -d --no-build
 "@
 
 $null = Invoke-RemoteBash -Script $switchScript
@@ -387,20 +394,20 @@ set -e
 MAX_ATTEMPTS=25
 ATTEMPT=1
 while [ `$ATTEMPT -le `$MAX_ATTEMPTS ]; do
-    RUNNING=`$(docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null || echo "false")
-    STATUS=`$(docker container inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' receptbanken 2>/dev/null || echo "missing")
+    RUNNING=`$(docker container inspect -f '{{.State.Running}}' phew 2>/dev/null || echo "false")
+    STATUS=`$(docker container inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' phew 2>/dev/null || echo "missing")
     if [ "`$RUNNING" = "true" ] && [ "`$STATUS" = "healthy" ]; then
         echo "HEALTHY_OK"
         exit 0
     fi
-    if [ "`$RUNNING" = "true" ] && docker exec receptbanken dotnet Receptbanken.Web.dll --healthcheck >/dev/null 2>&1; then
+    if [ "`$RUNNING" = "true" ] && docker exec phew dotnet Phew.Web.dll --healthcheck >/dev/null 2>&1; then
         echo "HEALTHY_OK"
         exit 0
     fi
     sleep 2
     ATTEMPT=`$((ATTEMPT + 1))
 done
-docker logs --tail 50 receptbanken 2>&1 || true
+docker logs --tail 50 phew 2>&1 || true
 exit 31
 "@
 

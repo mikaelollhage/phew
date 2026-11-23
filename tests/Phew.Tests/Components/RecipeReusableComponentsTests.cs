@@ -1,0 +1,666 @@
+using Bunit;
+using FluentAssertions;
+using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.FluentUI.AspNetCore.Components;
+using Phew.Core.Interfaces;
+using Phew.Core.Models;
+using Phew.Core.Services;
+using Phew.Infrastructure.Services;
+using Phew.Tests.Infrastructure;
+using Phew.Web.Components.Pages;
+using Phew.Web.Components.Recipes;
+using Phew.Web.Services;
+
+namespace Phew.Tests.Components;
+
+public class RecipeReusableComponentsTests : TestContext
+{
+    public RecipeReusableComponentsTests()
+    {
+        Services.AddFluentUIComponents();
+        JSInterop.Mode = JSRuntimeMode.Loose;
+    }
+
+    [Fact]
+    public void RecipeBasicInfoFields_ShouldRenderConsistentLabelsAndPlaceholders()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Klassisk Lasagne",
+            Description = "En krämig och god lasagne med köttfärssås.",
+            PrepTimeMinutes = 20,
+            CookTimeMinutes = 45,
+            Servings = 6,
+            ServingsUnit = "portioner",
+            SourceUrl = "https://example.com/lasagne"
+        };
+
+        var cut = RenderComponent<RecipeBasicInfoFields>(parameters => parameters
+            .Add(p => p.Recipe, recipe)
+            .Add(p => p.IdPrefix, "test"));
+
+        // Labels
+        cut.Markup.Should().Contain("Titel");
+        cut.Markup.Should().Contain("Beskrivning");
+        cut.Markup.Should().Contain("Förberedelsetid");
+        cut.Markup.Should().Contain("Tillagningstid");
+        cut.Markup.Should().Contain("Portioner");
+        cut.Markup.Should().Contain("Portionsenhet");
+        cut.Markup.Should().Contain("Ursprunglig källänk");
+
+        // When fields have text/values, no asterisks should be rendered
+        cut.FindAll(".required-asterisk").Should().BeEmpty();
+
+        // Layout classes
+        cut.FindAll(".recipe-meta-fields").Should().ContainSingle();
+        cut.FindAll(".recipe-meta-row").Should().HaveCount(4);
+        cut.FindAll(".recipe-meta-suffix").Select(s => s.TextContent.Trim()).Should().Equal("min", "min");
+        cut.FindAll(".form-row").Should().ContainSingle();
+
+        // Values rendered
+        cut.Markup.Should().Contain("Klassisk Lasagne");
+        cut.Markup.Should().Contain("https://example.com/lasagne");
+    }
+
+    [Fact]
+    public void RecipeBasicInfoFields_ShouldRenderRedAsteriskOnlyWhenEmpty()
+    {
+        var emptyRecipe = new Recipe
+        {
+            Title = "",
+            Servings = 0,
+            ServingsUnit = "portioner"
+        };
+
+        var cut = RenderComponent<RecipeBasicInfoFields>(parameters => parameters
+            .Add(p => p.Recipe, emptyRecipe)
+            .Add(p => p.IdPrefix, "test"));
+
+        // Both empty title and empty/zero servings should show the red asterisk
+        var asterisks = cut.FindAll(".required-asterisk");
+        asterisks.Should().HaveCount(2);
+        foreach (var ast in asterisks)
+        {
+            ast.TextContent.Trim().Should().Be("*");
+            ast.GetAttribute("style").Should().Contain("var(--rb-danger)");
+        }
+
+        // Fill in Title -> asterisk disappears for Title
+        emptyRecipe.Title = "Min nya soppa";
+        cut.Render();
+        cut.FindAll(".required-asterisk").Should().HaveCount(1);
+
+        // Fill in Servings -> asterisk disappears for Servings
+        emptyRecipe.Servings = 4;
+        cut.Render();
+        cut.FindAll(".required-asterisk").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecipeBasicInfoFields_ShouldTwoWayBindValues()
+    {
+        var recipe = new Recipe
+        {
+            Title = "Starttitel",
+            Servings = 2,
+            ServingsUnit = "portioner"
+        };
+
+        var cut = RenderComponent<RecipeBasicInfoFields>(parameters => parameters
+            .Add(p => p.Recipe, recipe)
+            .Add(p => p.IdPrefix, "bind"));
+
+        recipe.Title = "Uppdaterad titel";
+        recipe.Servings = 8;
+        recipe.PrepTimeMinutes = 15;
+        recipe.CookTimeMinutes = 30;
+        recipe.SourceUrl = "https://example.com/ny-url";
+
+        cut.Render();
+
+        cut.Markup.Should().Contain("Uppdaterad titel");
+        cut.Markup.Should().Contain("https://example.com/ny-url");
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_ShouldRenderSpecifiedPlaceholdersAndLabels()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 2.5m,
+            Unit = "dl",
+            Name = "vetemjöl",
+            Comment = "gärna eko",
+            Preparation = "siktat",
+            GroupHeader = "Sås"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Placeholders check
+        cut.Markup.Should().Contain("placeholder=\"Mängd\"");
+        cut.Markup.Should().Contain("placeholder=\"Enhet\"");
+        cut.Markup.Should().Contain("placeholder=\"Råvara *\"");
+        cut.Markup.Should().Contain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
+        cut.Markup.Should().Contain("placeholder=\"Beredning (t.ex. hackad)\"");
+        cut.Markup.Should().NotContain("placeholder=\"Grupp (valfritt)\"");
+
+        // Standalone remove button must not be rendered on ingredient rows
+        cut.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+        cut.FindAll(".ingredient-editor-fields").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_ShouldBindIngredientCommentAndFields()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 1,
+            Unit = "burk",
+            Name = "krossade tomater",
+            Comment = "à 400 g"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        cut.Markup.Should().Contain("krossade tomater");
+        cut.Markup.Should().Contain("à 400 g");
+
+        ingredient.Comment = "à 500 g finhackade";
+        cut.Render();
+        cut.Markup.Should().Contain("à 500 g finhackade");
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_ShouldDisplayAndEditQuantityIntervals()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 0.5m,
+            QuantityMax = 1.0m,
+            Unit = "tsk",
+            Name = "chiliflakes"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Renders fraction interval ½–1
+        cut.Markup.Should().Contain("½–1");
+
+        // Editing via text field updates model Quantity and QuantityMax
+        var qtyInput = cut.Find("fluent-text-field");
+
+        // Simulate user typing a decimal range
+        qtyInput.Change("1-2");
+        ingredient.Quantity.Should().Be(1m);
+        ingredient.QuantityMax.Should().Be(2m);
+
+        // Simulate user typing a single number
+        qtyInput.Change("3");
+        ingredient.Quantity.Should().Be(3m);
+        ingredient.QuantityMax.Should().BeNull();
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_ShouldAddAndRemoveRows()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { Name = "Mjölk", Quantity = 5, Unit = "dl" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser")
+            .Add(p => p.AddButtonText, "Lägg till ingrediens"));
+
+        cut.FindAll(".ingredient-editor-row").Should().HaveCount(1);
+
+        // Click Add
+        var addBtn = cut.Find(".ingredient-add-btn");
+        addBtn.Click();
+
+        ingredients.Should().HaveCount(2);
+        cut.FindAll(".ingredient-editor-row").Should().HaveCount(2);
+        cut.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+
+        // Open contextual menu on second row and delete via menu item
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+        var menuDeleteBtn = cut.Find(".ingredient-menu-remove-btn");
+        menuDeleteBtn.ClassList.Should().Contain("is-danger");
+        menuDeleteBtn.TextContent.Trim().Should().Be("Ta bort ingrediens");
+        menuDeleteBtn.QuerySelector("svg").Should().NotBeNull();
+        menuDeleteBtn.Click();
+
+        cut.FindAll(".ingredient-row-menu-popover").Should().BeEmpty();
+        ingredients.Should().HaveCount(1);
+        cut.FindAll(".ingredient-editor-row").Should().HaveCount(1);
+        ingredients[0].Name.Should().Be("Mjölk");
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_WithTitleFormatter_ShouldUpdateCountDynamically()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { Name = "Ägg", Quantity = 2, Unit = "st" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.TitleFormatter, count => $"Tolkade ingredienser ({count})")
+            .Add(p => p.HeadingLevel, 3));
+
+        cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade ingredienser (1)");
+
+        cut.Find(".ingredient-add-btn").Click();
+        cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade ingredienser (2)");
+    }
+
+    [Fact]
+    public void RecipeEdit_RendersSharedBasicInfoAndIngredientEditor()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var imageStorage = new MockImageStorageService();
+        var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
+        var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
+
+        Services.AddScoped<AppNotificationService>();
+        Services.AddSingleton<IImageStorageService>(imageStorage);
+        Services.AddSingleton(recipeService);
+        Services.AddSingleton(categoryService);
+
+        var cut = RenderComponent<RecipeEdit>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindComponent<RecipeBasicInfoFields>().Should().NotBeNull();
+            var ingredientEditor = cut.FindComponent<RecipeIngredientEditor>();
+            ingredientEditor.Should().NotBeNull();
+            ingredientEditor.FindAll(".ingredient-editor-row").Should().ContainSingle();
+            ingredientEditor.FindAll(".ingredient-remove-btn").Should().BeEmpty();
+            ingredientEditor.FindAll(".ingredient-drag-handle").Should().ContainSingle();
+            ingredientEditor.FindAll(".ingredient-row-menu-btn").Should().ContainSingle();
+        });
+    }
+
+    [Fact]
+    public async Task RecipeEdit_SaveRecipe_ReconstructsRawTextWithComment()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var imageStorage = new MockImageStorageService();
+        var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
+        var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
+
+        Services.AddScoped<AppNotificationService>();
+        Services.AddSingleton<IImageStorageService>(imageStorage);
+        Services.AddSingleton(recipeService);
+        Services.AddSingleton(categoryService);
+
+        var cut = RenderComponent<RecipeEdit>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindComponent<RecipeBasicInfoFields>().Should().NotBeNull();
+        });
+
+        // Set Title
+        var basicInfo = cut.FindComponent<RecipeBasicInfoFields>();
+        basicInfo.Instance.Recipe!.Title = "Test Recept";
+
+        // Edit the single initial ingredient
+        var ingredient = basicInfo.Instance.Recipe.Ingredients[0];
+        ingredient.Quantity = 1;
+        ingredient.Unit = "burk";
+        ingredient.Name = "krossade tomater";
+        ingredient.Comment = "à 400 g";
+        ingredient.Preparation = "silade";
+        ingredient.RawText = ""; // Empty to trigger reconstruction on save
+
+        // Trigger save
+        var saveBtn = cut.FindAll("button.btn-primary-custom").First();
+        await cut.InvokeAsync(() => saveBtn.Click());
+
+        // Verify ingredient RawText was reconstructed with comment and prep
+        ingredient.RawText.Should().Be("1 burk krossade tomater (à 400 g), silade");
+
+        // Verify recipe was saved to DB
+        var savedRecipes = await recipeService.GetRecipesAsync();
+        savedRecipes.Should().ContainSingle(r => r.Title == "Test Recept");
+    }
+
+    [Fact]
+    public void RecipeInstructionRow_ShouldRenderSpecifiedPlaceholdersAndStepNumber()
+    {
+        var step = new InstructionStep
+        {
+            GroupHeader = "Förberedelse",
+            InstructionText = "Sätt ugnen på 200 grader."
+        };
+
+        var cut = RenderComponent<RecipeInstructionRow>(parameters => parameters
+            .Add(p => p.Step, step)
+            .Add(p => p.StepNumber, 3));
+
+        cut.Find(".step-number").TextContent.Trim().Should().Be("3");
+        cut.Markup.Should().Contain("placeholder=\"Sektionsrubrik (valfritt)\"");
+        cut.Markup.Should().Contain("placeholder=\"Beskriv vad som ska göras i detta steg...\"");
+        cut.Markup.Should().Contain("Förberedelse");
+        cut.Markup.Should().Contain("Sätt ugnen på 200 grader.");
+        cut.FindAll(".instruction-editor-row").Should().ContainSingle();
+        cut.FindAll(".instruction-remove-btn").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void RecipeInstructionEditor_ShouldAddAndRemoveSteps_AndPreserveOrder()
+    {
+        var instructions = new List<InstructionStep>
+        {
+            new() { InstructionText = "Steg ett" },
+            new() { InstructionText = "Steg två" }
+        };
+
+        var cut = RenderComponent<RecipeInstructionEditor>(parameters => parameters
+            .Add(p => p.Instructions, instructions)
+            .Add(p => p.Title, "Instruktioner"));
+
+        cut.FindAll(".instruction-editor-row").Should().HaveCount(2);
+        cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2");
+
+        // Add step via compact add row
+        cut.Find(".instruction-add-input").Input("Steg tre");
+        cut.Find(".instruction-add-btn").Click();
+        instructions.Should().HaveCount(3);
+        instructions[2].InstructionText.Should().Be("Steg tre");
+        cut.FindAll(".instruction-editor-row").Should().HaveCount(3);
+        cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2", "3");
+
+        // Remove the first step (index 0) via row contextual menu
+        cut.FindAll(".instruction-row-menu-btn").ElementAt(0).Click();
+        cut.Find(".instruction-remove-btn").Click();
+
+        instructions.Should().HaveCount(2);
+        instructions[0].InstructionText.Should().Be("Steg två");
+        instructions[1].InstructionText.Should().Be("Steg tre");
+        cut.FindAll(".instruction-editor-row").Should().HaveCount(2);
+        // The remaining steps should now be numbered 1, 2
+        cut.FindAll(".step-number").Select(e => e.TextContent.Trim()).Should().Equal("1", "2");
+    }
+
+    [Fact]
+    public void RecipeInstructionEditor_WithTitleFormatter_ShouldUpdateCountDynamically()
+    {
+        var instructions = new List<InstructionStep>
+        {
+            new() { InstructionText = "Koka upp vatten" }
+        };
+
+        var cut = RenderComponent<RecipeInstructionEditor>(parameters => parameters
+            .Add(p => p.Instructions, instructions)
+            .Add(p => p.TitleFormatter, count => $"Tolkade instruktionssteg ({count})")
+            .Add(p => p.HeadingLevel, 3));
+
+        cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade instruktionssteg (1)");
+
+        cut.Find(".instruction-add-input").Input("Lägg i pasta");
+        cut.Find(".instruction-add-btn").Click();
+        cut.Find("h3.form-section-title").TextContent.Trim().Should().Be("Tolkade instruktionssteg (2)");
+    }
+
+    [Fact]
+    public void RecipeCategorySelector_ShouldHandleEmptyList_AndRenderMessage()
+    {
+        var cut = RenderComponent<RecipeCategorySelector>(parameters => parameters
+            .Add(p => p.Categories, new List<CategoryWithCountDto>())
+            .Add(p => p.Title, "Kategorier"));
+
+        cut.Markup.Should().Contain("Inga kategorier finns tillgängliga.");
+        cut.Markup.Should().Contain("/kategorier");
+    }
+
+    [Fact]
+    public void RecipeCategorySelector_ShouldToggleCategories_AndInvokeCallback()
+    {
+        var categories = new List<CategoryWithCountDto>
+        {
+            new() { Id = 1, Name = "Vardag", ColorHex = "#e07a5f" },
+            new() { Id = 2, Name = "Fest", ColorHex = "#10b981" }
+        };
+        var selected = new HashSet<int> { 1 };
+        ISet<int>? updatedSelection = null;
+
+        var cut = RenderComponent<RecipeCategorySelector>(parameters => parameters
+            .Add(p => p.Categories, categories)
+            .Add(p => p.SelectedCategoryIds, selected)
+            .Add(p => p.SelectedCategoryIdsChanged, EventCallback.Factory.Create<ISet<int>>(this, s => updatedSelection = s)));
+
+        // Initial state: Cat 1 active, Cat 2 inactive
+        var badges = cut.FindAll("button.category-badge");
+        badges.ElementAt(0).ClassList.Should().Contain("active");
+        badges.ElementAt(1).ClassList.Should().NotContain("active");
+
+        // Click Cat 2 to select
+        cut.FindAll("button.category-badge").ElementAt(1).Click();
+
+        selected.Should().Contain(2);
+        updatedSelection.Should().Contain(2);
+
+        // Click Cat 1 to unselect
+        cut.FindAll("button.category-badge").ElementAt(0).Click();
+        selected.Should().NotContain(1);
+    }
+
+    [Fact]
+    public void RecipeCategorySelector_RendersWithoutCheckmarkAndPreservesDotColors()
+    {
+        var categories = new List<CategoryWithCountDto>
+        {
+            new() { Id = 1, Name = "Vardag", ColorHex = "#e07a5f" },
+            new() { Id = 2, Name = "Fest", ColorHex = "#10b981" }
+        };
+        var selected = new HashSet<int> { 1 };
+
+        var cut = RenderComponent<RecipeCategorySelector>(parameters => parameters
+            .Add(p => p.Categories, categories)
+            .Add(p => p.SelectedCategoryIds, selected));
+
+        cut.FindAll(".recipe-category-selector").Should().HaveCount(1);
+
+        var badges = cut.FindAll("button.category-badge");
+        badges.Should().HaveCount(2);
+
+        // Selected badge has no checkmark/icon, keeps active class + aria-pressed, and preserves dot color
+        var selectedBadge = badges.ElementAt(0);
+        selectedBadge.ClassList.Should().Contain("active");
+        selectedBadge.GetAttribute("aria-pressed").Should().Be("true");
+        selectedBadge.QuerySelectorAll("svg").Should().BeEmpty();
+        selectedBadge.QuerySelector(".category-dot")?.GetAttribute("style").Should().Contain("#e07a5f");
+
+        // Unselected badge has no checkmark/icon and preserves dot color
+        var unselectedBadge = badges.ElementAt(1);
+        unselectedBadge.ClassList.Should().NotContain("active");
+        unselectedBadge.GetAttribute("aria-pressed").Should().Be("false");
+        unselectedBadge.QuerySelectorAll("svg").Should().BeEmpty();
+        unselectedBadge.QuerySelector(".category-dot")?.GetAttribute("style").Should().Contain("#10b981");
+    }
+
+    [Fact]
+    public async Task RecipeEdit_SaveRecipe_PreservesCategoriesSelectedViaCategorySelector()
+    {
+        using var dbFactory = new TestDbContextFactory();
+        var imageStorage = new MockImageStorageService();
+        var recipeService = new RecipeService(dbFactory, imageStorage, NullLogger<RecipeService>.Instance);
+        var categoryService = new CategoryService(dbFactory, NullLogger<CategoryService>.Instance);
+
+        var createdCat = await categoryService.CreateCategoryAsync(new Category { Name = "Middagar", ColorHex = "#123456" });
+
+        Services.AddScoped<AppNotificationService>();
+        Services.AddSingleton<IImageStorageService>(imageStorage);
+        Services.AddSingleton(recipeService);
+        Services.AddSingleton(categoryService);
+
+        var cut = RenderComponent<RecipeEdit>();
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindComponent<RecipeCategorySelector>().Should().NotBeNull();
+            cut.FindComponent<RecipeInstructionEditor>().Should().NotBeNull();
+        });
+
+        // Set title
+        var basicInfo = cut.FindComponent<RecipeBasicInfoFields>();
+        basicInfo.Instance.Recipe!.Title = "Middagsrecept";
+
+        // Select the created category via selector pill
+        var catPill = cut.FindComponent<RecipeCategorySelector>().Find("button.category-badge");
+        catPill.Click();
+
+        // Save
+        var saveBtn = cut.FindAll("button.btn-primary-custom").First();
+        await cut.InvokeAsync(() => saveBtn.Click());
+
+        // Verify recipe in DB has category
+        var recipes = await recipeService.GetRecipesAsync();
+        var saved = recipes.Single(r => r.Title == "Middagsrecept");
+        var fullRecipe = await recipeService.GetRecipeByIdAsync(saved.Id);
+        fullRecipe!.RecipeCategories.Should().ContainSingle(rc => rc.CategoryId == createdCat.Id);
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_WhenOptionalFieldsEmpty_ShouldCollapseByDefaultAndExpandOnToggle()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 2m,
+            Unit = "dl",
+            Name = "grädde"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Optional fields should be collapsed initially
+        cut.FindAll(".ingredient-optional-fields").Should().BeEmpty();
+        cut.Markup.Should().NotContain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
+        cut.Markup.Should().NotContain("placeholder=\"Beredning (t.ex. hackad)\"");
+
+        var toggle = cut.Find(".ingredient-optional-toggle");
+        toggle.GetAttribute("aria-expanded").Should().Be("false");
+        toggle.TextContent.Trim().Should().Be("Fler fält");
+        toggle.QuerySelector(".ingredient-optional-chevron svg").Should().NotBeNull();
+        toggle.ClassList.Should().NotContain("has-values");
+
+        // Expanding exposes both optional fields and preserves state across parent rerenders
+        toggle.Click();
+
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("placeholder=\"Kommentar (t.ex. à 200 g)\"");
+        cut.Markup.Should().Contain("placeholder=\"Beredning (t.ex. hackad)\"");
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+        cut.Find(".ingredient-optional-toggle").TextContent.Trim().Should().Be("Dölj fält");
+
+        // Re-rendering with the same ingredient reference must not collapse expanded fields
+        cut.Render();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+    }
+
+    [Fact]
+    public void RecipeIngredientRow_WhenOptionalFieldsHaveData_ShouldExpandInitiallyAndPreserveOnCollapseReopenAndRerender()
+    {
+        var ingredient = new Ingredient
+        {
+            Quantity = 1m,
+            Unit = "st",
+            Name = "lök",
+            Preparation = "finhackad"
+        };
+
+        var cut = RenderComponent<RecipeIngredientRow>(parameters => parameters
+            .Add(p => p.Ingredient, ingredient));
+
+        // Nonempty optional field should cause automatic expansion on initial render
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("finhackad");
+        cut.Find(".ingredient-optional-toggle").GetAttribute("aria-expanded").Should().Be("true");
+
+        // Parent rerender must keep it expanded
+        cut.Render();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+
+        // Enter comment as well, then collapse
+        var optionalFields = cut.FindAll(".ingredient-optional-fields fluent-text-field");
+        optionalFields.Should().HaveCount(2);
+        optionalFields.ElementAt(0).Change("gul");
+
+        cut.Find(".ingredient-optional-toggle").Click();
+
+        // Collapsed state preserves values and indicates saved optional data exists
+        cut.FindAll(".ingredient-optional-fields").Should().BeEmpty();
+        ingredient.Comment.Should().Be("gul");
+        ingredient.Preparation.Should().Be("finhackad");
+
+        var collapsedToggle = cut.Find(".ingredient-optional-toggle");
+        collapsedToggle.GetAttribute("aria-expanded").Should().Be("false");
+        collapsedToggle.ClassList.Should().Contain("has-values");
+        collapsedToggle.GetAttribute("aria-label").Should().Contain("innehåller");
+        cut.FindAll(".ingredient-optional-indicator").Should().ContainSingle();
+
+        // Reopening restores both values
+        collapsedToggle.Click();
+        cut.FindAll(".ingredient-optional-fields").Should().ContainSingle();
+        cut.Markup.Should().Contain("gul");
+        cut.Markup.Should().Contain("finhackad");
+    }
+
+    [Fact]
+    public void RecipeIngredientEditor_ReorderingAndMovingBetweenSections_ShouldPreserveOptionalValuesAndExpansionState()
+    {
+        var first = new Ingredient { Quantity = 2m, Unit = "dl", Name = "mjöl", GroupHeader = "Deg" };
+        var second = new Ingredient
+        {
+            Quantity = 1m,
+            Unit = "tsk",
+            Name = "salt",
+            Comment = "flingsalt",
+            GroupHeader = "Sås"
+        };
+        var ingredients = new List<Ingredient> { first, second };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // First row is collapsed (empty optional fields); second row is expanded (nonempty comment)
+        var toggles = cut.FindAll(".ingredient-optional-toggle");
+        toggles.Should().HaveCount(2);
+        toggles.ElementAt(0).GetAttribute("aria-expanded").Should().Be("false");
+        toggles.ElementAt(1).GetAttribute("aria-expanded").Should().Be("true");
+
+        // Expand first row manually and fill preparation
+        toggles.ElementAt(0).Click();
+        var firstOptionalInputs = cut.FindAll(".ingredient-editor-row").ElementAt(0).QuerySelectorAll(".ingredient-optional-fields fluent-text-field");
+        firstOptionalInputs.ElementAt(1).Change("siktat");
+
+        // Move second ingredient ("salt" in "Sås") up into "Deg" via contextual menu
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(3).Click(); // items: [Deg section, mjöl, Sås section, salt]
+        cut.Find(".ingredient-move-up-btn").Click();
+
+        // Now "salt" is above "Sås" section (inside "Deg"), and both rows keep their expansion state & data
+        second.GroupHeader.Should().Be("Deg");
+        second.Comment.Should().Be("flingsalt");
+        first.Preparation.Should().Be("siktat");
+
+        var rowsAfterMove = cut.FindAll(".ingredient-editor-row");
+        rowsAfterMove.Should().HaveCount(2);
+        rowsAfterMove.ElementAt(0).QuerySelector(".ingredient-optional-toggle")!.GetAttribute("aria-expanded").Should().Be("true");
+        rowsAfterMove.ElementAt(1).QuerySelector(".ingredient-optional-toggle")!.GetAttribute("aria-expanded").Should().Be("true");
+        cut.Markup.Should().Contain("siktat");
+        cut.Markup.Should().Contain("flingsalt");
+    }
+}

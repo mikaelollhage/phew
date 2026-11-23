@@ -1,10 +1,10 @@
 services:
-  receptbanken:
-    image: receptbanken:${IMAGE_TAG:-latest}
+  phew:
+    image: phew:${IMAGE_TAG:-latest}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: receptbanken
+    container_name: phew
     restart: unless-stopped
     stop_grace_period: 15s
     ports:
@@ -15,19 +15,19 @@ services:
       - Storage__DataPath=/app/data
       - Security__EnableHttpsRedirection=false
       - TZ=Europe/Stockholm
-      - Push__Vapid__Subject=${VAPID_SUBJECT:-mailto:noreply@receptbanken.local}
+      - Push__Vapid__Subject=${VAPID_SUBJECT:-mailto:noreply@phew.local}
     volumes:
-      # Persistent volume for SQLite database (receptbanken.db), images, and DataProtection keys
-      - receptbanken-data:/app/data
+      # Persistent volume for SQLite database (phew.db), images, and DataProtection keys
+      - phew-data:/app/data
     healthcheck:
-      test: ["CMD", "dotnet", "Receptbanken.Web.dll", "--healthcheck"]
+      test: ["CMD", "dotnet", "Phew.Web.dll", "--healthcheck"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 15s
 
 volumes:
-  receptbanken-data:
-    name: receptbanken-data
+  phew-data:
+    name: phew-data
 
 

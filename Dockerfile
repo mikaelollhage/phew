@@ -4,19 +4,19 @@ WORKDIR /src
 
 # Copy solution and project files for layer-cached restore
 COPY Directory.Build.props ./
-COPY Receptbanken.sln ./
-COPY src/Receptbanken.Core/Receptbanken.Core.csproj src/Receptbanken.Core/
-COPY src/Receptbanken.Infrastructure/Receptbanken.Infrastructure.csproj src/Receptbanken.Infrastructure/
-COPY src/Receptbanken.Web/Receptbanken.Web.csproj src/Receptbanken.Web/
+COPY Phew.sln ./
+COPY src/Phew.Core/Phew.Core.csproj src/Phew.Core/
+COPY src/Phew.Infrastructure/Phew.Infrastructure.csproj src/Phew.Infrastructure/
+COPY src/Phew.Web/Phew.Web.csproj src/Phew.Web/
 
-RUN dotnet restore src/Receptbanken.Web/Receptbanken.Web.csproj
+RUN dotnet restore src/Phew.Web/Phew.Web.csproj
 
 # Copy source code, publish, and verify critical static web assets exist
 COPY src/ src/
-RUN dotnet publish src/Receptbanken.Web/Receptbanken.Web.csproj -c Release -o /app/publish /p:UseAppHost=false && \
+RUN dotnet publish src/Phew.Web/Phew.Web.csproj -c Release -o /app/publish /p:UseAppHost=false && \
     test -f /app/publish/wwwroot/_framework/blazor.web.js && \
-    test -f /app/publish/wwwroot/Receptbanken.Web.styles.css && \
-    test -f /app/publish/Receptbanken.Web.staticwebassets.endpoints.json
+    test -f /app/publish/wwwroot/Phew.Web.styles.css && \
+    test -f /app/publish/Phew.Web.staticwebassets.endpoints.json
 
 # Stage 2: Runtime (.NET 10 ASP.NET Core Linux container)
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
@@ -35,8 +35,8 @@ EXPOSE 8080
 VOLUME ["/app/data"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD ["dotnet", "Receptbanken.Web.dll", "--healthcheck"]
+    CMD ["dotnet", "Phew.Web.dll", "--healthcheck"]
 
 USER app
-ENTRYPOINT ["dotnet", "Receptbanken.Web.dll"]
+ENTRYPOINT ["dotnet", "Phew.Web.dll"]
 

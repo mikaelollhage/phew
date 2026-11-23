@@ -1,0 +1,63 @@
+@namespace Phew.Web.Components.Recipes
+
+@if (Step != null)
+{
+    <div class="instruction-editor-row" data-step-number="@StepNumber">
+        <div class="step-number">@StepNumber</div>
+        <div class="instruction-editor-fields">
+            <FluentTextField @bind-Value="Step.GroupHeader"
+                             Immediate="true"
+                             ImmediateDelay="250"
+                             Placeholder="Sektionsrubrik (valfritt)"
+                             AriaLabel="@($"Sektionsrubrik för steg {StepNumber}")"
+                             Style="width: 100%;" />
+            <FluentTextArea Id="@TextAreaId"
+                            @bind-Value="Step.InstructionText"
+                            Immediate="true"
+                            ImmediateDelay="250"
+                            Placeholder="Beskriv vad som ska göras i detta steg..."
+                            AriaLabel="@($"Instruktion för steg {StepNumber}")"
+                            Style="width: 100%;"
+                            Rows="2" />
+        </div>
+        <div class="instruction-row-actions">
+            @if (RowActions != null)
+            {
+                @RowActions
+            }
+            else
+            {
+                <button type="button" class="btn-danger-custom instruction-remove-btn"
+                        @onclick="HandleRemove" title="Ta bort steg" aria-label="@($"Ta bort steg {StepNumber}")">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                </button>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public InstructionStep? Step { get; set; }
+
+    [Parameter]
+    public int StepNumber { get; set; }
+
+    [Parameter]
+    public string? TextAreaId { get; set; }
+
+    [Parameter]
+    public RenderFragment? RowActions { get; set; }
+
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+
+    private async Task HandleRemove()
+    {
+        if (OnRemove.HasDelegate)
+        {
+            await OnRemove.InvokeAsync();
+        }
+    }
+}
+

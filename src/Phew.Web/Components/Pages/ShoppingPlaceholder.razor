@@ -1,0 +1,1621 @@
+@page "/inkopslista"
+@implements IAsyncDisposable
+@inject ShoppingListService ShoppingListService
+@inject RecipeService RecipeService
+@inject ServingCalculator ServingCalculator
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime JSRuntime
+@inject ILogger<ShoppingPlaceholder> Logger
+
+<PageTitle>Inköpslista — PHEW!</PageTitle>
+
+@{
+    var uncheckedItems = items.Where(x => !x.IsChecked).ToList();
+    var checkedItems = items.Where(x => x.IsChecked).ToList();
+}
+
+<div class="shopping-page-container @(isShoppingMode ? "is-shopping-mode" : "")">
+    @if (isShoppingMode)
+    {
+        <div class="shopping-mode-topbar" role="region" aria-label="Handlingsläge">
+            <div class="shopping-mode-topbar-info">
+                <h1 class="shopping-mode-title">🛒 Inköpslista</h1>
+                <span class="shopping-mode-count" aria-live="polite">
+                    <strong>@uncheckedItems.Count</strong> kvar att handla
+                </span>
+            </div>
+            <button type="button"
+                    id="shopping-exit-mode-btn"
+                    class="btn-secondary-custom shopping-mode-exit-btn"
+                    @onclick="ExitShoppingModeAsync">
+                ✕ Avsluta handlingsläge
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="page-header shopping-page-header">
+            <div>
+                <h1 class="page-title">🛒 Inköpslista</h1>
+                @if (items.Count > 0)
+                {
+                    <p class="shopping-header-counts" aria-live="polite">
+                        <strong>@uncheckedItems.Count</strong> kvar att handla · <span>@checkedItems.Count klara</span>
+                    </p>
+                }
+                else
+                {
+                    <p class="page-subtitle shopping-page-subtitle">Sammanställ råvaror från dina recept eller lägg till egna varor.</p>
+                }
+            </div>
+
+            <div class="shopping-header-actions">
+                <button type="button"
+                        id="shopping-enter-mode-btn"
+                        class="btn-primary-custom shopping-mode-enter-btn"
+                        @onclick="EnterShoppingModeAsync">
+                    <span>🛒 Handla</span>
+                </button>
+
+                @if (items.Count > 0)
+                {
+                    <button type="button"
+                            class="btn-danger-custom shopping-clear-all-btn"
+                            @onclick="@(() => showClearAllConfirm = true)">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Error" />
+                        <span>Töm hela listan</span>
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    <ConfirmDialog IsVisible="showClearAllConfirm"
+                   Title="Töm inköpslistan"
+                   Message="Är du säker på att du vill ta bort alla varor från inköpslistan?"
+                   ConfirmText="Ja, töm listan"
+                   CancelText="Avbryt"
+                   OnConfirm="ConfirmClearAll"
+                   OnCancel="@(() => showClearAllConfirm = false)" />
+
+    <WeeklyMenuShoppingPreview IsVisible="showWeeklyMenuPreview"
+                               InitialWeekDate="weeklyMenuPreviewDate"
+                               ReferenceToday="GetReferenceToday()"
+                               AllowWeekNavigation="true"
+                               OnCancel="@(() => showWeeklyMenuPreview = false)"
+                               OnConfirmed="HandleWeeklyMenuAdditionsConfirmedAsync" />
+
+    <RecipePickerModal IsVisible="showRecipePicker"
+                       Recipes="recipes"
+                       Categories="categories"
+                       SelectedRecipeId="selectedRecipe?.Id"
+                       AllowClear="false"
+                       Title="Välj recept att handla för"
+                       OnSelected="HandleRecipePicked"
+                       OnCancel="CloseRecipePicker" />
+
+    <RecipeShoppingPreviewModal IsVisible="showRecipePreview"
+                               RecipeId="selectedRecipe?.Id ?? 0"
+                               Servings="selectedRecipeServings"
+                               OnCancel="@(() => showRecipePreview = false)"
+                               OnConfirmed="HandleRecipeShoppingAdditionsConfirmedAsync" />
+
+    <div class="detail-card shopping-quick-add-card">
+        <div class="shopping-quick-add-row">
+            <input id="shopping-manual-input"
+                   @ref="manualInputElement"
+                   type="text"
+                   class="form-input-custom shopping-manual-input"
+                   placeholder="Lägg till vara, t.ex. 1,5 l mjölk..."
+                   enterkeyhint="done"
+                   aria-label="Lägg till vara manuellt"
+                   @bind="ManualInput"
+                   @bind:event="oninput"
+                   @onkeydown="HandleManualKeyDown" />
+            <button type="button"
+                    id="shopping-add-manual-btn"
+                    class="btn-primary-custom shopping-add-btn"
+                    @onclick="AddManualItem">
+                + Lägg till
+            </button>
+        </div>
+
+        <ContextualFeedback State="manualAddFeedback" CssClass="shopping-manual-feedback" />
+
+        @if (!isShoppingMode)
+        {
+            <div class="shopping-recipe-expander">
+                <div class="shopping-source-toggles-row">
+                    <button type="button"
+                            id="shopping-recipe-toggle-btn"
+                            class="btn-secondary-custom shopping-recipe-toggle"
+                            aria-haspopup="dialog"
+                            @onclick="OpenRecipePicker">
+                        <span>📖 Lägg till från recept</span>
+                    </button>
+
+                    <button type="button"
+                            id="shopping-weekly-menu-btn"
+                            class="btn-secondary-custom shopping-weekly-menu-toggle"
+                            aria-haspopup="dialog"
+                            @onclick="OpenWeeklyMenuPreview">
+                        <span>📅 Lägg till från veckomeny</span>
+                    </button>
+                </div>
+
+                @if (selectedRecipe != null)
+                {
+                    <div class="shopping-recipe-panel shopping-recipe-selected-panel" role="region" aria-label="Valt recept">
+                        <div class="shopping-selected-recipe-header">
+                            <span class="shopping-selected-recipe-title">
+                                🥘 <strong>@selectedRecipe.Title</strong>
+                            </span>
+                            <button type="button"
+                                    id="shopping-change-recipe-btn"
+                                    class="btn-secondary-custom shopping-change-recipe-btn"
+                                    disabled="@showRecipePreview"
+                                    @onclick="OpenRecipePicker">
+                                Byt recept…
+                            </button>
+                        </div>
+
+                        <div class="form-group shopping-servings-group">
+                            <label class="form-label" for="shopping-recipe-servings">Antal portioner att handla för</label>
+                            <div class="shopping-servings-input-wrap">
+                                <input id="shopping-recipe-servings"
+                                       type="number"
+                                       min="1"
+                                       max="100"
+                                       class="form-input-custom shopping-recipe-servings-input"
+                                       disabled="@showRecipePreview"
+                                       @bind="selectedRecipeServings" />
+                                <span class="shopping-servings-unit">@selectedRecipe.ServingsUnit</span>
+                            </div>
+                        </div>
+
+                        <div class="shopping-selected-recipe-actions">
+                            <button type="button"
+                                    id="shopping-add-recipe-btn"
+                                    class="btn-primary-custom shopping-add-recipe-submit"
+                                    disabled="@showRecipePreview"
+                                    @onclick="OpenRecipePreview">
+                                <span>🛒 Lägg till ingredienser…</span>
+                            </button>
+                            <button type="button"
+                                    id="shopping-cancel-recipe-btn"
+                                    class="btn-secondary-custom shopping-cancel-recipe-btn"
+                                    disabled="@showRecipePreview"
+                                    @onclick="CancelSelectedRecipe">
+                                Avbryt
+                            </button>
+                        </div>
+                    </div>
+                }
+
+                <ContextualFeedback State="recipeAddFeedback" Floating="@recipeAddFeedback.IsSuccess" CssClass="shopping-recipe-feedback" />
+            </div>
+        }
+    </div>
+
+    <div class="detail-card shopping-list-card">
+        <div class="detail-card-title shopping-section-header">
+            <span>Att handla (@uncheckedItems.Count)</span>
+            @if (items.Count > 0)
+            {
+                <span class="shopping-section-subcount">
+                    @checkedItems.Count av @items.Count klara
+                </span>
+            }
+        </div>
+
+        @if (openMenuItemId.HasValue)
+        {
+            <div class="ingredient-row-menu-backdrop shopping-row-menu-backdrop"
+                 @onclick="CloseRowMenu"
+                 @onclick:stopPropagation="true"></div>
+        }
+
+        <ContextualFeedback State="listFeedback" CssClass="shopping-list-feedback" />
+        <ContextualFeedback State="undoCheckFeedback"
+                            Floating="true"
+                            CssClass="shopping-undo-feedback"
+                            ActionText="Ångra"
+                            OnAction="UndoLastCheckedItemAsync" />
+
+        @if (isLoading)
+        {
+            <div class="shopping-loading-wrap">
+                <FluentProgressRing />
+            </div>
+        }
+        else if (items.Count == 0)
+        {
+            <div class="shopping-empty-state">
+                <div class="shopping-empty-icon" aria-hidden="true">🛍️</div>
+                <p class="shopping-empty-title">Inköpslistan är tom</p>
+                <p class="shopping-empty-desc">Skriv in en vara i fältet ovan eller lägg till ingredienser direkt från ett recept.</p>
+            </div>
+        }
+        else
+        {
+            @if (uncheckedItems.Count == 0)
+            {
+                <div class="shopping-all-checked-banner" role="status">
+                    <span>🎉 Alla varor i listan är klara!</span>
+                </div>
+            }
+            else
+            {
+                <ul class="ingredient-list shopping-items-list shopping-unchecked-list" aria-label="Att handla">
+                    @for (int idx = 0; idx < uncheckedItems.Count; idx++)
+                    {
+                        var itemIndex = idx;
+                        var item = uncheckedItems[itemIndex];
+                        var rowDragClass = GetRowDragCssClass(item.Id, itemIndex, uncheckedItems);
+
+                        <li @key="item.Id"
+                            class="ingredient-item shopping-item-row @(!isShoppingMode && editingItemId == item.Id ? "is-editing" : "") @rowDragClass"
+                            data-item-id="@item.Id"
+                            @ondragover="@(() => HandleDragOverItem(item.Id))"
+                            @ondragover:preventDefault="true"
+                            @ondragenter="@(() => HandleDragEnterItem(item.Id))"
+                            @ondragleave="@(() => HandleDragLeaveItem(item.Id))"
+                            @ondrop="@(() => HandleDropOnItemAsync(item.Id))">
+                            @if (!isShoppingMode && editingItemId == item.Id)
+                            {
+                                <div class="shopping-edit-panel">
+                                    <div class="shopping-edit-fields">
+                                        <input type="text"
+                                               inputmode="decimal"
+                                               class="form-input-custom shopping-edit-qty"
+                                               placeholder="Mängd"
+                                               aria-label="Mängd"
+                                               @bind="editQuantityText"
+                                               @bind:event="oninput"
+                                               @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
+                                        <input type="text"
+                                               class="form-input-custom shopping-edit-unit"
+                                               placeholder="Enhet"
+                                               aria-label="Enhet"
+                                               @bind="editUnit"
+                                               @bind:event="oninput"
+                                               @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
+                                        <input type="text"
+                                               class="form-input-custom shopping-edit-name"
+                                               placeholder="Vara"
+                                               aria-label="Varans namn"
+                                               @bind="editName"
+                                               @bind:event="oninput"
+                                               @onkeydown="@(e => HandleEditKeyDown(e, item.Id))" />
+                                    </div>
+                                    <div class="shopping-edit-actions">
+                                        <button type="button"
+                                                class="btn-primary-custom shopping-save-edit-btn"
+                                                @onclick="@(() => SaveEdit(item.Id))">
+                                            Spara
+                                        </button>
+                                        <button type="button"
+                                                class="btn-secondary-custom shopping-cancel-edit-btn"
+                                                @onclick="CancelEdit">
+                                            Avbryt
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="shopping-row-main-line">
+                                    <div class="shopping-row-drag">
+                                        <button type="button"
+                                                class="shopping-drag-handle @(reorderMenuOpenItemId == item.Id ? "is-reorder-active" : "")"
+                                                draggable="true"
+                                                title="@($"Dra för att flytta {item.Name}")"
+                                                aria-label="@($"Dra för att flytta {item.Name}")"
+                                                @ondragstart="@(() => HandleDragStartItem(item.Id))"
+                                                @ondragend="HandleDragEndAsync"
+                                                @onclick="@(() => ToggleReorderMenu(item.Id))"
+                                                @onclick:stopPropagation="true"
+                                                @onkeydown="@(e => HandleDragHandleKeyDownAsync(e, item.Id))">
+                                            ⠿
+                                        </button>
+                                    </div>
+                                    <div class="shopping-row-check-target"
+                                         role="checkbox"
+                                         aria-checked="false"
+                                         tabindex="0"
+                                         aria-label="@($"Markera {item.RawText} som klar")"
+                                         @onclick="@(() => SetItemChecked(item, true))"
+                                         @onkeydown="@(e => HandleRowKeyDown(e, item, true))">
+                                        <div class="shopping-item-body">
+                                            <div class="shopping-item-text">
+                                                @if (item.Quantity.HasValue)
+                                                {
+                                                    <span class="shopping-item-qty">@($"{ServingCalculator.FormatQuantityRange(item.Quantity, item.QuantityMax)} ")</span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(item.Unit))
+                                                {
+                                                    <span class="shopping-item-unit">@($"{item.Unit.Trim()} ")</span>
+                                                }
+                                                <span class="shopping-item-name">@item.Name</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="shopping-row-actions">
+                                        @RenderUncheckedRowMenu(item, itemIndex, uncheckedItems.Count)
+                                    </div>
+                                </div>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (checkedItems.Count > 0)
+            {
+                <div class="shopping-checked-section">
+                    <div class="shopping-checked-header">
+                        <h3 class="shopping-checked-title">
+                            Klart (@checkedItems.Count)
+                        </h3>
+                        @if (!isShoppingMode)
+                        {
+                            <button type="button"
+                                    class="btn-secondary-custom shopping-clear-checked-btn"
+                                    @onclick="ClearCheckedItems">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.CheckmarkCircle())" Color="Color.Neutral" />
+                                <span>Rensa klara (@checkedItems.Count)</span>
+                            </button>
+                        }
+                    </div>
+                    <ul class="ingredient-list shopping-items-list shopping-checked-list" aria-label="Klart">
+                        @foreach (var item in checkedItems)
+                        {
+                            <li @key="item.Id"
+                                class="ingredient-item checked shopping-item-row"
+                                data-item-id="@item.Id">
+                                <div class="shopping-row-check-target"
+                                     role="checkbox"
+                                     aria-checked="true"
+                                     tabindex="0"
+                                     aria-label="@($"Återställ {item.RawText} till att handla")"
+                                     @onclick="@(() => SetItemChecked(item, false))"
+                                     @onkeydown="@(e => HandleRowKeyDown(e, item, false))">
+                                    <div class="shopping-item-body">
+                                        <span class="shopping-checked-text">@item.RawText</span>
+                                    </div>
+                                </div>
+                                @if (!isShoppingMode)
+                                {
+                                    <div class="shopping-row-actions">
+                                        @RenderCheckedRowMenu(item)
+                                    </div>
+                                }
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<ShoppingListItem> items = new();
+    private List<Recipe> recipes = new();
+    private List<Category> categories = new();
+    private bool isLoading = true;
+    private bool isShoppingMode = false;
+    private bool showClearAllConfirm = false;
+    private bool showRecipePicker = false;
+    private bool showRecipePreview = false;
+    private bool showWeeklyMenuPreview = false;
+    private Recipe? selectedRecipe;
+    private int selectedRecipeServings = 4;
+    private DateOnly weeklyMenuPreviewDate;
+    private bool _isDisposed;
+    private bool _isDragging;
+    private bool _hasPendingRealtimeUpdate;
+    private long _lastLoadedVersion;
+    private long _lastLoadedOrderingVersion;
+    private long? _dragStartOrderingVersion;
+    private DotNetObjectReference<ShoppingPlaceholder>? _dotNetRef;
+    private ElementReference manualInputElement;
+
+    private string manualInput = string.Empty;
+    private string ManualInput
+    {
+        get => manualInput;
+        set
+        {
+            manualInput = value;
+            if (manualAddFeedback.HasMessage)
+            {
+                manualAddFeedback.Clear();
+            }
+        }
+    }
+
+
+    private int? editingItemId;
+    private string editQuantityText = string.Empty;
+    private string? editUnit;
+    private string editName = string.Empty;
+    private string? editComment;
+
+    private int? undoCheckedItemId;
+    private ShoppingListItem? undoDeletedItemSnapshot;
+    private int? draggedItemId;
+    private int? dragOverItemId;
+    private bool _draggedItemHadReorderOpen;
+    private int? reorderMenuOpenItemId;
+    private int? openMenuItemId;
+    private int? _pendingFocusItemId;
+    private int? _pendingScrollItemId;
+    private string? _pendingMenuButtonFocusId;
+
+    private readonly FeedbackState manualAddFeedback = new();
+    private readonly FeedbackState recipeAddFeedback = new();
+    private readonly FeedbackState listFeedback = new();
+    private readonly FeedbackState undoCheckFeedback = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        ShoppingListService.OnChanged += HandleShoppingListChanged;
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isDisposed)
+        {
+            try
+            {
+                _dotNetRef = DotNetObjectReference.Create(this);
+                await JSRuntime.InvokeVoidAsync("phew.registerShoppingSyncListeners", _dotNetRef);
+                await JSRuntime.InvokeVoidAsync("phew.registerRowMenuHost", _dotNetRef);
+            }
+            catch
+            {
+                // Ignored when running in test host or if circuit disconnects before JS interop completes.
+            }
+        }
+
+        if (!string.IsNullOrEmpty(_pendingMenuButtonFocusId) && !_isDisposed)
+        {
+            var focusElementId = _pendingMenuButtonFocusId;
+            _pendingMenuButtonFocusId = null;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.focusElement", focusElementId);
+            }
+            catch
+            {
+                // Ignored when running in test host or if circuit disconnects before JS interop completes.
+            }
+        }
+
+        if (_pendingFocusItemId.HasValue && !_isDisposed)
+        {
+            var focusTarget = _pendingFocusItemId.Value;
+            _pendingFocusItemId = null;
+            _pendingScrollItemId = null;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.focusAndScrollShoppingItemHandle", focusTarget);
+            }
+            catch
+            {
+                // Ignored when running in test host or if circuit disconnects before JS interop completes.
+            }
+        }
+        else if (_pendingScrollItemId.HasValue && !_isDisposed)
+        {
+            var scrollTarget = _pendingScrollItemId.Value;
+            _pendingScrollItemId = null;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.scrollShoppingItemIntoViewIfNeeded", scrollTarget);
+            }
+            catch
+            {
+                // Ignored when running in test host or if circuit disconnects before JS interop completes.
+            }
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        _lastLoadedVersion = ShoppingListService.CurrentVersion;
+        _lastLoadedOrderingVersion = ShoppingListService.CurrentOrderingVersion;
+        items = await ShoppingListService.GetItemsAsync();
+        recipes = await RecipeService.GetRecipesAsync();
+        try
+        {
+            var categoryService = ServiceProvider.GetService(typeof(CategoryService)) as CategoryService;
+            if (categoryService != null)
+            {
+                var categoryDtos = await categoryService.GetCategoriesAsync();
+                categories = categoryDtos
+                    .Select(c => new Category { Id = c.Id, Name = c.Name, ColorHex = c.ColorHex })
+                    .ToList();
+            }
+            else
+            {
+                categories = recipes
+                    .SelectMany(r => r.RecipeCategories)
+                    .Select(rc => rc.Category)
+                    .Where(c => c != null)
+                    .GroupBy(c => c!.Id)
+                    .Select(g => g.First()!)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Kunde inte läsa in kategorier för receptväljaren i inköpslistan.");
+        }
+        isLoading = false;
+    }
+
+    private async Task ReloadItemsAsync()
+    {
+        _lastLoadedVersion = ShoppingListService.CurrentVersion;
+        _lastLoadedOrderingVersion = ShoppingListService.CurrentOrderingVersion;
+        items = await ShoppingListService.GetItemsAsync();
+
+        if (editingItemId.HasValue && items.All(x => x.Id != editingItemId.Value || x.IsChecked))
+        {
+            editingItemId = null;
+        }
+
+        if (reorderMenuOpenItemId.HasValue && items.All(x => x.Id != reorderMenuOpenItemId.Value || x.IsChecked))
+        {
+            reorderMenuOpenItemId = null;
+        }
+
+        if (openMenuItemId.HasValue &&
+            (items.All(x => x.Id != openMenuItemId.Value) ||
+             (isShoppingMode && items.Any(x => x.Id == openMenuItemId.Value && x.IsChecked))))
+        {
+            openMenuItemId = null;
+        }
+
+        if (undoCheckedItemId.HasValue)
+        {
+            var undoTarget = items.FirstOrDefault(x => x.Id == undoCheckedItemId.Value);
+            if (undoTarget == null || !undoTarget.IsChecked)
+            {
+                undoCheckedItemId = null;
+                undoCheckFeedback.Clear();
+            }
+        }
+        else if (undoDeletedItemSnapshot != null)
+        {
+            if (items.Any(x => x.Id == undoDeletedItemSnapshot.Id))
+            {
+                undoDeletedItemSnapshot = null;
+                undoCheckFeedback.Clear();
+            }
+        }
+    }
+
+    private void HandleShoppingListChanged(long newVersion)
+    {
+        if (_isDisposed)
+            return;
+
+        _ = InvokeAsync(async () =>
+        {
+            if (_isDisposed || newVersion <= _lastLoadedVersion)
+                return;
+
+            // Freeze DOM re-rendering while an active drag gesture is in progress (DEL F7).
+            if (_isDragging)
+            {
+                _hasPendingRealtimeUpdate = true;
+                return;
+            }
+
+            try
+            {
+                await ReloadItemsAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex) when (!_isDisposed)
+            {
+                Logger.LogWarning(ex, "Kunde inte uppdatera inköpslistan vid realtidshändelse.");
+            }
+        });
+    }
+
+    private async Task EnterShoppingModeAsync()
+    {
+        isShoppingMode = true;
+        editingItemId = null;
+        openMenuItemId = null;
+        showRecipePicker = false;
+        showRecipePreview = false;
+        selectedRecipe = null;
+        showWeeklyMenuPreview = false;
+        showClearAllConfirm = false;
+
+        try
+        {
+            await JSRuntime.InvokeAsync<bool>("phew.requestWakeLock");
+        }
+        catch
+        {
+            // Optional progressive enhancement; never required for shopping mode (DEL C6).
+        }
+    }
+
+    private async Task ExitShoppingModeAsync()
+    {
+        isShoppingMode = false;
+
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("phew.releaseWakeLock");
+        }
+        catch
+        {
+            // Ignore if Wake Lock is unsupported or unavailable.
+        }
+    }
+
+    private string GetRowDragCssClass(int itemId, int itemIndex, List<ShoppingListItem> uncheckedItems)
+    {
+        var classes = new List<string>(3);
+        if (draggedItemId == itemId)
+        {
+            classes.Add("is-dragging");
+        }
+
+        if (dragOverItemId == itemId && draggedItemId.HasValue && draggedItemId.Value != itemId)
+        {
+            classes.Add("drag-over");
+            var sourceIndex = uncheckedItems.FindIndex(x => x.Id == draggedItemId.Value);
+            if (sourceIndex > itemIndex)
+            {
+                classes.Add("drag-over-above");
+            }
+            else if (sourceIndex >= 0 && sourceIndex < itemIndex)
+            {
+                classes.Add("drag-over-below");
+            }
+        }
+
+        return string.Join(" ", classes);
+    }
+
+    private void HandleDragStartItem(int itemId)
+    {
+        openMenuItemId = null;
+        _isDragging = true;
+        draggedItemId = itemId;
+        dragOverItemId = null;
+        _dragStartOrderingVersion = _lastLoadedOrderingVersion;
+        _draggedItemHadReorderOpen = (reorderMenuOpenItemId == itemId);
+    }
+
+    private void HandleDragOverItem(int itemId)
+    {
+        if (draggedItemId.HasValue && draggedItemId.Value != itemId)
+        {
+            dragOverItemId = itemId;
+        }
+    }
+
+    private void HandleDragEnterItem(int itemId)
+    {
+        if (draggedItemId.HasValue && draggedItemId.Value != itemId)
+        {
+            dragOverItemId = itemId;
+        }
+    }
+
+    private void HandleDragLeaveItem(int itemId)
+    {
+        if (dragOverItemId == itemId)
+        {
+            dragOverItemId = null;
+        }
+    }
+
+    private async Task HandleDropOnItemAsync(int targetItemId)
+    {
+        if (!draggedItemId.HasValue)
+            return;
+
+        var sourceItemId = draggedItemId.Value;
+        await DropItemOnTargetAsync(sourceItemId, targetItemId);
+    }
+
+    private async Task HandleDragEndAsync()
+    {
+        _isDragging = false;
+        draggedItemId = null;
+        dragOverItemId = null;
+        _dragStartOrderingVersion = null;
+        _draggedItemHadReorderOpen = false;
+
+        if (_hasPendingRealtimeUpdate)
+        {
+            _hasPendingRealtimeUpdate = false;
+            await ReloadItemsAsync();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnTouchDragStartAsync(int itemId)
+    {
+        if (_isDisposed)
+            return Task.CompletedTask;
+
+        openMenuItemId = null;
+        _isDragging = true;
+        draggedItemId = itemId;
+        dragOverItemId = null;
+        _dragStartOrderingVersion = _lastLoadedOrderingVersion;
+        _draggedItemHadReorderOpen = (reorderMenuOpenItemId == itemId);
+        return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnTouchDropAsync(int sourceItemId, int targetItemId)
+    {
+        if (_isDisposed)
+            return;
+
+        await InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            await DropItemOnTargetAsync(sourceItemId, targetItemId);
+            StateHasChanged();
+        });
+    }
+
+    [JSInvokable]
+    public async Task OnTouchDragCancelAsync()
+    {
+        if (_isDisposed)
+            return;
+
+        await InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            await HandleDragEndAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task DropItemOnTargetAsync(int sourceItemId, int targetItemId)
+    {
+        var expectedVersion = _dragStartOrderingVersion ?? _lastLoadedOrderingVersion;
+        var hadReorderOpen = _draggedItemHadReorderOpen;
+        _isDragging = false;
+        draggedItemId = null;
+        dragOverItemId = null;
+        _dragStartOrderingVersion = null;
+        _draggedItemHadReorderOpen = false;
+        _hasPendingRealtimeUpdate = false;
+
+        if (sourceItemId == targetItemId)
+        {
+            await ReloadItemsAsync();
+            return;
+        }
+
+        var uncheckedList = items.Where(x => !x.IsChecked).ToList();
+        var targetIndex = uncheckedList.FindIndex(x => x.Id == targetItemId);
+        if (targetIndex < 0)
+        {
+            reorderMenuOpenItemId = null;
+            await ReloadItemsAsync();
+            return;
+        }
+
+        await ExecuteMoveItemAsync(sourceItemId, targetIndex, expectedVersion, hadReorderOpen);
+    }
+
+    private static string GetMenuButtonId(int itemId) => $"shopping-row-menu-btn-{itemId}";
+
+    private RenderFragment RenderUncheckedRowMenu(ShoppingListItem item, int itemIndex, int uncheckedCount) => __builder =>
+    {
+        var isMenuOpen = openMenuItemId == item.Id;
+        var itemLabel = string.IsNullOrWhiteSpace(item.Name) ? "vara" : item.Name;
+
+        <div class="ingredient-row-menu-anchor shopping-row-menu-anchor @(isMenuOpen ? "is-open" : "")"
+             @onkeydown="@(e => HandleMenuKeyDown(e, item.Id))"
+             @onclick:stopPropagation="true">
+            <button type="button"
+                    id="@GetMenuButtonId(item.Id)"
+                    class="btn-secondary-custom ingredient-row-menu-btn shopping-row-menu-btn @(isMenuOpen ? "is-active" : "")"
+                    title="Radåtgärder"
+                    aria-label="@($"Åtgärder för {itemLabel}")"
+                    aria-haspopup="menu"
+                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                    @onclick="@(() => ToggleRowMenu(item.Id))"
+                    @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+
+            @if (isMenuOpen)
+            {
+                <div class="ingredient-row-menu-popover shopping-row-menu-popover"
+                     role="menu"
+                     aria-label="@($"Åtgärder för {itemLabel}")"
+                     @onclick:stopPropagation="true">
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-move-up-btn"
+                            disabled="@(itemIndex == 0)"
+                            aria-label="@($"Flytta {itemLabel} uppåt")"
+                            @onclick="@(() => MoveItemByOffsetAsync(item.Id, -1, fromMenu: true))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↑</span>
+                        <span>Flytta upp</span>
+                    </button>
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-move-down-btn"
+                            disabled="@(itemIndex >= uncheckedCount - 1)"
+                            aria-label="@($"Flytta {itemLabel} nedåt")"
+                            @onclick="@(() => MoveItemByOffsetAsync(item.Id, 1, fromMenu: true))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">↓</span>
+                        <span>Flytta ned</span>
+                    </button>
+                    @if (!isShoppingMode)
+                    {
+                        <FluentDivider Role="DividerRole.Separator" Class="ingredient-row-menu-separator" />
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item shopping-menu-edit-btn"
+                                @onclick="@(() => StartEdit(item))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Edit())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Redigera</span>
+                        </button>
+                        <button type="button"
+                                role="menuitem"
+                                class="ingredient-row-menu-item shopping-menu-delete-btn is-danger"
+                                @onclick="@(() => DeleteItem(item.Id))">
+                            <span class="ingredient-row-menu-icon" aria-hidden="true">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                            </span>
+                            <span>Ta bort</span>
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private RenderFragment RenderCheckedRowMenu(ShoppingListItem item) => __builder =>
+    {
+        var isMenuOpen = openMenuItemId == item.Id;
+        var itemLabel = string.IsNullOrWhiteSpace(item.RawText) ? item.Name : item.RawText;
+
+        <div class="ingredient-row-menu-anchor shopping-row-menu-anchor @(isMenuOpen ? "is-open" : "")"
+             @onkeydown="@(e => HandleMenuKeyDown(e, item.Id))"
+             @onclick:stopPropagation="true">
+            <button type="button"
+                    id="@GetMenuButtonId(item.Id)"
+                    class="btn-secondary-custom ingredient-row-menu-btn shopping-row-menu-btn @(isMenuOpen ? "is-active" : "")"
+                    title="Radåtgärder"
+                    aria-label="@($"Åtgärder för {itemLabel}")"
+                    aria-haspopup="menu"
+                    aria-expanded="@(isMenuOpen ? "true" : "false")"
+                    @onclick="@(() => ToggleRowMenu(item.Id))"
+                    @onclick:stopPropagation="true">
+                <FluentIcon Value="@(new Icons.Regular.Size16.MoreHorizontal())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+
+            @if (isMenuOpen)
+            {
+                <div class="ingredient-row-menu-popover shopping-row-menu-popover"
+                     role="menu"
+                     aria-label="@($"Åtgärder för {itemLabel}")"
+                     @onclick:stopPropagation="true">
+                    <button type="button"
+                            role="menuitem"
+                            class="ingredient-row-menu-item shopping-menu-delete-btn is-danger"
+                            @onclick="@(() => DeleteItem(item.Id))">
+                        <span class="ingredient-row-menu-icon" aria-hidden="true">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" />
+                        </span>
+                        <span>Ta bort</span>
+                    </button>
+                </div>
+            }
+        </div>
+    };
+
+    private async Task ToggleRowMenu(int itemId)
+    {
+        reorderMenuOpenItemId = null;
+        openMenuItemId = openMenuItemId == itemId ? null : itemId;
+        if (openMenuItemId.HasValue && _dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.closeOtherRowMenus", _dotNetRef);
+            }
+            catch
+            {
+                // Ignore when JS runtime is unavailable (e.g. unit tests).
+            }
+        }
+    }
+
+    private void CloseRowMenu()
+    {
+        openMenuItemId = null;
+    }
+
+    [JSInvokable]
+    public Task CloseRowMenuAsync()
+    {
+        if (_isDisposed || !openMenuItemId.HasValue)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(() =>
+        {
+            if (_isDisposed)
+            {
+                return;
+            }
+
+            openMenuItemId = null;
+            StateHasChanged();
+        });
+    }
+
+    private void HandleMenuKeyDown(KeyboardEventArgs e, int itemId)
+    {
+        if (e.Key == "Escape" && openMenuItemId == itemId)
+        {
+            openMenuItemId = null;
+            _pendingMenuButtonFocusId = GetMenuButtonId(itemId);
+        }
+    }
+
+    private void ToggleReorderMenu(int itemId)
+    {
+        openMenuItemId = null;
+        reorderMenuOpenItemId = reorderMenuOpenItemId == itemId ? null : itemId;
+    }
+
+    private async Task HandleDragHandleKeyDownAsync(KeyboardEventArgs e, int itemId)
+    {
+        if (e.Key == "ArrowUp")
+        {
+            if (reorderMenuOpenItemId == itemId)
+            {
+                await MoveItemByOffsetAsync(itemId, -1, fromKeyboard: true);
+            }
+        }
+        else if (e.Key == "ArrowDown")
+        {
+            if (reorderMenuOpenItemId == itemId)
+            {
+                await MoveItemByOffsetAsync(itemId, 1, fromKeyboard: true);
+            }
+        }
+        else if (e.Key == "Escape" && reorderMenuOpenItemId == itemId)
+        {
+            reorderMenuOpenItemId = null;
+        }
+    }
+
+    private async Task MoveItemByOffsetAsync(int itemId, int offset, bool fromKeyboard = false, bool fromMenu = false)
+    {
+        var uncheckedList = items.Where(x => !x.IsChecked).ToList();
+        var currentIndex = uncheckedList.FindIndex(x => x.Id == itemId);
+        if (currentIndex < 0)
+            return;
+
+        var targetIndex = currentIndex + offset;
+        if (targetIndex < 0 || targetIndex >= uncheckedList.Count)
+            return;
+
+        bool preserveReorderOpen = !fromMenu && editingItemId != itemId;
+        bool moved = await ExecuteMoveItemAsync(itemId, targetIndex, _lastLoadedOrderingVersion, preserveReorderOpen);
+        if (!moved && fromMenu)
+        {
+            openMenuItemId = null;
+        }
+        if (moved && preserveReorderOpen && reorderMenuOpenItemId == itemId)
+        {
+            if (fromKeyboard)
+            {
+                _pendingFocusItemId = itemId;
+                _pendingScrollItemId = itemId;
+            }
+            else
+            {
+                _pendingFocusItemId = null;
+                _pendingScrollItemId = itemId;
+            }
+        }
+        else if (moved && fromMenu)
+        {
+            _pendingScrollItemId = itemId;
+        }
+    }
+
+    private async Task<bool> ExecuteMoveItemAsync(
+        int itemId,
+        int targetIndex,
+        long expectedOrderingVersion,
+        bool preserveReorderOpen)
+    {
+        listFeedback.Clear();
+        try
+        {
+            var result = await ShoppingListService.MoveItemAsync(itemId, targetIndex, expectedOrderingVersion);
+            reorderMenuOpenItemId = preserveReorderOpen &&
+                (result.Status == ShoppingListReorderStatus.Success || result.Status == ShoppingListReorderStatus.NoChange)
+                ? itemId
+                : null;
+
+            await ReloadItemsAsync();
+
+            if (result.IsConflict)
+            {
+                listFeedback.ShowWarning(result.ErrorMessage ?? "Ordningen ändrades på en annan enhet. Listan har uppdaterats.");
+                return false;
+            }
+            else if (result.Status == ShoppingListReorderStatus.InvalidOperation)
+            {
+                listFeedback.ShowWarning(result.ErrorMessage ?? "Kunde inte ändra varans plats eftersom listan har ändrats.");
+                return false;
+            }
+
+            return result.Status == ShoppingListReorderStatus.Success;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid omsortering av vara {ItemId} i inköpslistan.", itemId);
+            reorderMenuOpenItemId = null;
+            await ReloadItemsAsync();
+            listFeedback.ShowError("Kunde inte spara den nya sorteringsordningen. Försök igen.");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Invoked from browser visibility/online/reconnect listeners when the mobile device
+    /// wakes up or regains its connection, ensuring the latest server state is displayed.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnClientResumedAsync()
+    {
+        if (_isDisposed)
+            return;
+
+        await InvokeAsync(async () =>
+        {
+            if (_isDisposed)
+                return;
+
+            try
+            {
+                await ReloadItemsAsync();
+                StateHasChanged();
+            }
+            catch (Exception ex) when (!_isDisposed)
+            {
+                Logger.LogWarning(ex, "Kunde inte läsa om inköpslistan vid återanslutning.");
+            }
+        });
+    }
+
+    private void OpenRecipePicker()
+    {
+        openMenuItemId = null;
+        recipeAddFeedback.Clear();
+        showRecipePicker = true;
+    }
+
+    private void ToggleRecipePicker() => OpenRecipePicker();
+
+    private void CloseRecipePicker()
+    {
+        showRecipePicker = false;
+    }
+
+    private void HandleRecipePicked(Recipe recipe)
+    {
+        showRecipePicker = false;
+        selectedRecipe = recipe;
+        selectedRecipeServings = recipe.Servings > 0 ? recipe.Servings : 4;
+        recipeAddFeedback.Clear();
+    }
+
+    private void CancelSelectedRecipe()
+    {
+        selectedRecipe = null;
+        showRecipePreview = false;
+        recipeAddFeedback.Clear();
+    }
+
+    private DateOnly GetReferenceToday()
+    {
+        var dateProvider = ServiceProvider.GetService(typeof(ILocalDateProvider)) as ILocalDateProvider;
+        return dateProvider?.GetLocalToday() ?? DateOnly.FromDateTime(DateTime.Today);
+    }
+
+    private void OpenWeeklyMenuPreview()
+    {
+        openMenuItemId = null;
+        recipeAddFeedback.Clear();
+        listFeedback.Clear();
+        weeklyMenuPreviewDate = GetReferenceToday();
+        showWeeklyMenuPreview = true;
+    }
+
+    private async Task HandleWeeklyMenuAdditionsConfirmedAsync(WeeklyMenuShoppingConfirmResult result)
+    {
+        showWeeklyMenuPreview = false;
+        await ReloadItemsAsync();
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
+        if (!string.IsNullOrWhiteSpace(result.Message))
+        {
+            recipeAddFeedback.ShowSuccess(result.Message);
+        }
+        else
+        {
+            recipeAddFeedback.ShowSuccess($"{result.AddedItemsCount} varor lades till från veckomenyn.");
+        }
+    }
+
+
+    private async Task HandleManualKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(manualInput))
+        {
+            await AddManualItem();
+        }
+    }
+
+    private async Task HandleRowKeyDown(KeyboardEventArgs e, ShoppingListItem item, bool targetChecked)
+    {
+        if (e.Key is " " or "Spacebar" or "Enter")
+        {
+            await SetItemChecked(item, targetChecked);
+        }
+    }
+
+    private async Task HandleEditKeyDown(KeyboardEventArgs e, int itemId)
+    {
+        if (e.Key == "Enter")
+        {
+            await SaveEdit(itemId);
+        }
+        else if (e.Key == "Escape")
+        {
+            CancelEdit();
+        }
+    }
+
+    private async Task AddManualItem()
+    {
+        if (string.IsNullOrWhiteSpace(manualInput))
+            return;
+
+        openMenuItemId = null;
+        manualAddFeedback.Clear();
+        listFeedback.Clear();
+        try
+        {
+            await ShoppingListService.AddManualItemAsync(manualInput);
+            manualInput = string.Empty;
+            await ReloadItemsAsync();
+
+            try
+            {
+                await manualInputElement.FocusAsync();
+            }
+            catch
+            {
+                // Ignore if focus is not supported in test environment.
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            manualAddFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid manuellt tillägg i inköpslistan.");
+            manualAddFeedback.ShowError("Kunde inte lägga till varan i inköpslistan. Försök igen.");
+        }
+    }
+
+    private void OpenRecipePreview()
+    {
+        if (selectedRecipe == null)
+            return;
+
+        if (selectedRecipeServings < 1 || selectedRecipeServings > 100)
+        {
+            recipeAddFeedback.ShowError("Ange ett giltigt antal portioner (1–100).");
+            return;
+        }
+
+        recipeAddFeedback.Clear();
+        showRecipePreview = true;
+    }
+
+    private async Task HandleRecipeShoppingAdditionsConfirmedAsync(RecipeShoppingConfirmResult result)
+    {
+        showRecipePreview = false;
+        var recipeTitle = selectedRecipe?.Title ?? "Receptet";
+        var servings = selectedRecipeServings;
+        var servingsUnit = selectedRecipe?.ServingsUnit ?? "portioner";
+        selectedRecipe = null;
+        await ReloadItemsAsync();
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
+        recipeAddFeedback.ShowSuccess(result.Message ?? $"{result.AddedItemsCount} ingredienser från \"{recipeTitle}\" ({servings} {servingsUnit}) lades till i inköpslistan.");
+    }
+
+    private async Task SetItemChecked(ShoppingListItem item, bool isChecked)
+    {
+        openMenuItemId = null;
+        listFeedback.Clear();
+        try
+        {
+            var itemName = item.Name;
+            var itemId = item.Id;
+            var existed = await ShoppingListService.SetCheckedAsync(itemId, isChecked);
+            await ReloadItemsAsync();
+
+            if (!existed)
+            {
+                if (undoCheckedItemId == itemId)
+                {
+                    undoCheckedItemId = null;
+                    undoCheckFeedback.Clear();
+                }
+                listFeedback.ShowWarning("Varan fanns inte längre kvar i inköpslistan.");
+                return;
+            }
+
+            if (isChecked)
+            {
+                if (recipeAddFeedback.IsSuccess)
+                {
+                    recipeAddFeedback.Clear();
+                }
+                undoDeletedItemSnapshot = null;
+                undoCheckedItemId = itemId;
+                undoCheckFeedback.ShowSuccess($"\"{itemName}\" markerad som klar.");
+            }
+            else if (undoCheckedItemId == itemId)
+            {
+                undoCheckedItemId = null;
+                undoCheckFeedback.Clear();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid markering av vara i inköpslistan.");
+            listFeedback.ShowError("Kunde inte uppdatera varan. Kontrollera anslutningen och försök igen.");
+        }
+    }
+
+    private async Task UndoLastCheckedItemAsync()
+    {
+        if (undoDeletedItemSnapshot != null)
+        {
+            var snapshotToRestore = undoDeletedItemSnapshot;
+            undoDeletedItemSnapshot = null;
+            undoCheckedItemId = null;
+            undoCheckFeedback.Clear();
+            listFeedback.Clear();
+
+            try
+            {
+                var restored = await ShoppingListService.RestoreDeletedItemAsync(snapshotToRestore);
+                await ReloadItemsAsync();
+
+                if (!restored)
+                {
+                    listFeedback.ShowWarning("Varan kunde inte återställas.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Fel vid ångra borttagning av vara i inköpslistan.");
+                listFeedback.ShowError("Kunde inte återställa varan. Försök igen.");
+            }
+
+            return;
+        }
+
+        if (!undoCheckedItemId.HasValue)
+            return;
+
+        var idToRestore = undoCheckedItemId.Value;
+        undoCheckedItemId = null;
+        undoCheckFeedback.Clear();
+        listFeedback.Clear();
+
+        try
+        {
+            var existed = await ShoppingListService.SetCheckedAsync(idToRestore, false);
+            await ReloadItemsAsync();
+
+            if (!existed)
+            {
+                listFeedback.ShowWarning("Varan fanns inte längre kvar i inköpslistan.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid ångra avbockning i inköpslistan.");
+            listFeedback.ShowError("Kunde inte återställa varan. Försök igen.");
+        }
+    }
+
+    private void StartEdit(ShoppingListItem item)
+    {
+        listFeedback.Clear();
+        reorderMenuOpenItemId = null;
+        openMenuItemId = null;
+        editingItemId = item.Id;
+        editQuantityText = ServingCalculator.FormatQuantityRange(item.Quantity, item.QuantityMax);
+        editUnit = item.Unit;
+        editName = item.Name;
+        editComment = item.Comment;
+    }
+
+    private void CancelEdit()
+    {
+        openMenuItemId = null;
+        editingItemId = null;
+        listFeedback.Clear();
+    }
+
+    private async Task SaveEdit(int id)
+    {
+        openMenuItemId = null;
+        if (string.IsNullOrWhiteSpace(editName))
+        {
+            listFeedback.ShowError("Ange ett namn på varan.");
+            return;
+        }
+
+        if (!TryParseEditQuantityRange(editQuantityText, out var parsedQty, out var parsedQtyMax))
+        {
+            listFeedback.ShowError("Ange en giltig mängd (t.ex. 2 eller 1–2).");
+            return;
+        }
+
+        listFeedback.Clear();
+        try
+        {
+            var updated = await ShoppingListService.UpdateItemAsync(
+                id,
+                parsedQty,
+                parsedQtyMax,
+                editUnit,
+                editName,
+                editComment);
+            editingItemId = null;
+            await ReloadItemsAsync();
+
+            if (!updated)
+            {
+                listFeedback.ShowWarning("Varan kunde inte uppdateras eftersom den har tagits bort.");
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            listFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid uppdatering av vara i inköpslistan.");
+            listFeedback.ShowError("Kunde inte spara ändringen. Försök igen.");
+        }
+    }
+
+    private static bool TryParseEditQuantityRange(string? rawText, out decimal? quantity, out decimal? quantityMax)
+    {
+        quantity = null;
+        quantityMax = null;
+
+        if (string.IsNullOrWhiteSpace(rawText))
+            return true;
+
+        var trimmed = rawText.Trim();
+        var rangeParts = trimmed.Split(new[] { '–', '—', '-' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (rangeParts.Length == 2)
+        {
+            if (TryParseSingleDecimal(rangeParts[0], out var minVal) &&
+                TryParseSingleDecimal(rangeParts[1], out var maxVal) &&
+                minVal >= 0 && maxVal >= minVal)
+            {
+                quantity = minVal;
+                quantityMax = maxVal > minVal ? maxVal : null;
+                return true;
+            }
+            return false;
+        }
+
+        if (rangeParts.Length == 1 && TryParseSingleDecimal(rangeParts[0], out var singleVal) && singleVal >= 0)
+        {
+            quantity = singleVal;
+            quantityMax = null;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryParseSingleDecimal(string text, out decimal value)
+    {
+        var normalized = text.Trim().Replace(',', '.');
+        return decimal.TryParse(
+            normalized,
+            System.Globalization.NumberStyles.Number,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out value);
+    }
+
+    private async Task DeleteItem(int id)
+    {
+        listFeedback.Clear();
+        try
+        {
+            var existingItem = items.FirstOrDefault(x => x.Id == id);
+            var snapshot = existingItem == null
+                ? null
+                : new ShoppingListItem
+                {
+                    Id = existingItem.Id,
+                    RecipeId = existingItem.RecipeId,
+                    RawText = existingItem.RawText,
+                    Quantity = existingItem.Quantity,
+                    QuantityMax = existingItem.QuantityMax,
+                    Unit = existingItem.Unit,
+                    Name = existingItem.Name,
+                    Comment = existingItem.Comment,
+                    IsChecked = existingItem.IsChecked,
+                    SortOrder = existingItem.SortOrder,
+                    Department = existingItem.Department,
+                    CreatedAt = existingItem.CreatedAt
+                };
+
+            if (editingItemId == id)
+            {
+                editingItemId = null;
+            }
+            if (reorderMenuOpenItemId == id)
+            {
+                reorderMenuOpenItemId = null;
+            }
+            openMenuItemId = null;
+            if (undoCheckedItemId == id)
+            {
+                undoCheckedItemId = null;
+                undoCheckFeedback.Clear();
+            }
+
+            var deleted = await ShoppingListService.DeleteItemAsync(id);
+            await ReloadItemsAsync();
+
+            if (deleted && snapshot != null)
+            {
+                if (recipeAddFeedback.IsSuccess)
+                {
+                    recipeAddFeedback.Clear();
+                }
+                undoCheckedItemId = null;
+                undoDeletedItemSnapshot = snapshot;
+                undoCheckFeedback.ShowSuccess($"\"{snapshot.Name}\" borttagen.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid borttagning av vara från inköpslistan.");
+            listFeedback.ShowError("Kunde inte ta bort varan. Försök igen.");
+        }
+    }
+
+    private async Task ClearCheckedItems()
+    {
+        openMenuItemId = null;
+        listFeedback.Clear();
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
+        try
+        {
+            await ShoppingListService.ClearCheckedItemsAsync();
+            await ReloadItemsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid rensning av köpta varor i inköpslistan.");
+            listFeedback.ShowError("Kunde inte rensa klara varor. Försök igen.");
+        }
+    }
+
+    private async Task ConfirmClearAll()
+    {
+        showClearAllConfirm = false;
+        editingItemId = null;
+        reorderMenuOpenItemId = null;
+        openMenuItemId = null;
+        undoCheckedItemId = null;
+        undoDeletedItemSnapshot = null;
+        undoCheckFeedback.Clear();
+        listFeedback.Clear();
+        try
+        {
+            await ShoppingListService.ClearAllItemsAsync();
+            await ReloadItemsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid tömning av inköpslistan.");
+            listFeedback.ShowError("Kunde inte tömma inköpslistan. Försök igen.");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_isDisposed)
+            return;
+
+        _isDisposed = true;
+        ShoppingListService.OnChanged -= HandleShoppingListChanged;
+
+        var dotNetRef = _dotNetRef;
+        _dotNetRef = null;
+
+        try
+        {
+            if (isShoppingMode)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("phew.releaseWakeLock");
+                }
+                catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+                {
+                }
+            }
+
+            if (dotNetRef != null)
+            {
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("phew.unregisterShoppingSyncListeners");
+                    await JSRuntime.InvokeVoidAsync("phew.unregisterRowMenuHost", dotNetRef);
+                }
+                catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+                {
+                }
+            }
+        }
+        finally
+        {
+            dotNetRef?.Dispose();
+        }
+    }
+}

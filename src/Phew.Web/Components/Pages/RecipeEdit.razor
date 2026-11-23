@@ -1,0 +1,340 @@
+@page "/recept/ny"
+@page "/recept/{Id:int}/redigera"
+@inject RecipeService RecipeService
+@inject CategoryService CategoryService
+@inject IImageStorageService ImageStorageService
+@inject NavigationManager Navigation
+@inject ILogger<RecipeEdit> Logger
+
+<PageTitle>@(IsEditing ? $"Redigera {model.Title}" : "Skapa nytt recept") — PHEW!</PageTitle>
+
+@if (isLoading)
+{
+    <div style="display: flex; justify-content: center; padding: 60px;">
+        <FluentProgressRing />
+    </div>
+}
+else if (recipeNotFound)
+{
+    <div class="empty-state" role="alert">
+        <span class="empty-state-icon">🔍</span>
+        <div class="empty-state-title">Receptet hittades inte</div>
+        <p class="empty-state-desc">Receptet du försöker redigera verkar ha tagits bort eller finns inte.</p>
+        <a href="/recept" class="btn-primary-custom">Tillbaka till receptsamlingen</a>
+    </div>
+}
+else
+{
+    <div class="page-header recipe-edit-header">
+        <div>
+            <h1 class="page-title">@(IsEditing ? "Redigera recept" : "Skapa nytt recept")</h1>
+            <p class="page-subtitle">Fyll i ingredienser, tillagningstid och instruktioner.</p>
+        </div>
+        <div style="display: flex; gap: 12px;">
+            <button type="button" class="btn-secondary-custom" @onclick="Cancel">Avbryt</button>
+            <button type="button" class="btn-primary-custom" @onclick="() => SaveRecipe(FeedbackPlacement.Top)" disabled="@isSaving">
+                @(isSaving ? "Sparar..." : (IsEditing ? "Spara ändringar" : "Spara recept"))
+            </button>
+        </div>
+    </div>
+
+    @if (saveFeedback.Placement == FeedbackPlacement.Top)
+    {
+        <ContextualFeedback State="saveFeedback" CssClass="recipe-save-feedback recipe-save-feedback-top" />
+    }
+
+    <div class="recipe-edit-sections">
+        <div class="form-section">
+            <h2 class="form-section-title">Grunduppgifter</h2>
+            <RecipeBasicInfoFields Recipe="model"
+                                   IdPrefix="edit"
+                                   ShowValidationErrors="showValidationErrors"
+                                   OnValidationStateChanged="HandleValidationStateChanged" />
+        </div>
+
+        <div class="form-section">
+            <h2 class="form-section-title">Receptbild</h2>
+            <div class="recipe-image-editor">
+                @if (!string.IsNullOrWhiteSpace(model.ImagePath))
+                {
+                    <div class="recipe-image-preview">
+                        <img src="@($"/{model.ImagePath}")" alt="Förhandsvisning av receptbild" class="recipe-image-preview-img" />
+                    </div>
+
+                    <div class="recipe-image-actions">
+                        <label class="btn-secondary-custom recipe-image-replace-label" for="recipe-image-upload">
+                            <InputFile id="recipe-image-upload"
+                                       class="image-upload-input"
+                                       OnChange="HandleImageFileSelected"
+                                       accept=".jpg,.jpeg,.png,.webp"
+                                       aria-label="Byt receptbild" />
+                            <FluentIcon Value="@(new Icons.Regular.Size16.ArrowUpload())" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                            <span>Byt bild</span>
+                        </label>
+                        <button type="button"
+                                class="btn-danger-custom recipe-image-remove-btn"
+                                @onclick="RemoveImage"
+                                aria-label="Ta bort bild">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.Delete())" Color="Color.Custom" CustomColor="currentColor" aria-hidden="true" />
+                            <span>Ta bort bild</span>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <label class="image-upload-dropzone recipe-image-empty-dropzone" for="recipe-image-upload">
+                        <InputFile id="recipe-image-upload"
+                                   class="image-upload-input"
+                                   OnChange="HandleImageFileSelected"
+                                   accept=".jpg,.jpeg,.png,.webp"
+                                   aria-label="Välj receptbild att ladda upp" />
+                        <FluentIcon Value="@(new Icons.Regular.Size24.ArrowUpload())" Color="Color.Neutral" aria-hidden="true" />
+                        <span class="recipe-image-empty-title">Lägg till bild</span>
+                        <span class="recipe-image-empty-hint">JPG, PNG eller WebP (max 10 MB)</span>
+                    </label>
+                }
+
+                @if (isUploadingImage)
+                {
+                    <div class="recipe-image-uploading" role="status" aria-live="polite">
+                        <FluentProgressRing Style="width: 20px; height: 20px;" />
+                        <span>Bearbetar och optimerar bild...</span>
+                    </div>
+                }
+
+                <ContextualFeedback State="imageUploadFeedback" Floating="@imageUploadFeedback.IsSuccess" CssClass="image-upload-feedback" />
+            </div>
+        </div>
+
+        <RecipeCategorySelector Categories="availableCategories"
+                                SelectedCategoryIds="selectedCategoryIds"
+                                Title="Kategorier"
+                                HeadingLevel="2" />
+
+        <RecipeIngredientEditor Ingredients="model.Ingredients"
+                                Title="Ingredienser"
+                                HeadingLevel="2"
+                                HelpText='Lägg till sektioner (t.ex. "Pajdeg") och dra med ⠿ för att ordna.'
+                                AddButtonText="Lägg till ingrediens"
+                                ShowAddIcon="true" />
+
+        <RecipeInstructionEditor Instructions="model.Instructions"
+                                 Title="Instruktioner"
+                                 HeadingLevel="2"
+                                 AddButtonText="Lägg till steg"
+                                 ShowAddIcon="true" />
+
+        <div class="form-section">
+            <h2 class="form-section-title">Anteckningar & Tips</h2>
+            <FluentTextArea @bind-Value="model.Notes" Label="Egna tips, serveringsförslag eller vinmatchningar"
+                             Placeholder="Skriv dina personliga råd här..." Style="width: 100%;" Rows="3" />
+        </div>
+
+        @if (saveFeedback.Placement == FeedbackPlacement.Bottom)
+        {
+            <ContextualFeedback State="saveFeedback" CssClass="recipe-save-feedback recipe-save-feedback-bottom" />
+        }
+
+        <div class="recipe-edit-bottom-actions">
+            <button type="button" class="btn-secondary-custom" @onclick="Cancel">Avbryt</button>
+            <button type="button" class="btn-primary-custom" @onclick="() => SaveRecipe(FeedbackPlacement.Bottom)" disabled="@isSaving">
+                @(isSaving ? "Sparar..." : (IsEditing ? "Spara ändringar" : "Spara recept"))
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    private bool IsEditing => Id.HasValue && Id.Value > 0;
+
+    private Recipe model = new();
+    private List<CategoryWithCountDto> availableCategories = new();
+    private HashSet<int> selectedCategoryIds = new();
+
+    private bool isLoading = true;
+    private bool recipeNotFound = false;
+    private bool isSaving = false;
+    private bool isUploadingImage = false;
+    private bool showValidationErrors = false;
+
+    private readonly FeedbackState imageUploadFeedback = new();
+    private readonly FeedbackState saveFeedback = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        recipeNotFound = false;
+        availableCategories = await CategoryService.GetCategoriesAsync();
+
+        if (IsEditing)
+        {
+            var existing = await RecipeService.GetRecipeByIdAsync(Id!.Value);
+            if (existing != null)
+            {
+                model = existing;
+                selectedCategoryIds = new HashSet<int>(existing.RecipeCategories.Select(rc => rc.CategoryId));
+            }
+            else
+            {
+                recipeNotFound = true;
+            }
+        }
+        else
+        {
+            model = new Recipe
+            {
+                Servings = 1,
+                ServingsUnit = "portioner",
+                Ingredients = new List<Ingredient>
+                {
+                    new() { Name = string.Empty }
+                },
+                Instructions = new List<InstructionStep>
+                {
+                    new() { InstructionText = string.Empty }
+                }
+            };
+        }
+
+        isLoading = false;
+    }
+
+    private void HandleValidationStateChanged()
+    {
+        if (showValidationErrors && RecipeFormValidator.Validate(model).Count == 0)
+        {
+            showValidationErrors = false;
+            saveFeedback.Clear();
+        }
+    }
+
+    private async Task HandleImageFileSelected(InputFileChangeEventArgs e)
+    {
+        if (e.FileCount == 0) return;
+
+        var file = e.File;
+        if (file == null) return;
+
+        imageUploadFeedback.Clear();
+
+        if (!ImageStorageService.IsValidImageExtension(file.Name))
+        {
+            imageUploadFeedback.ShowError("Ogiltigt bildformat. Vänligen välj en JPG-, PNG- eller WebP-bild.");
+            return;
+        }
+
+        if (file.Size > 10 * 1024 * 1024)
+        {
+            imageUploadFeedback.ShowError("Bildfilen är för stor. Max 10 MB tillåts.");
+            return;
+        }
+
+        try
+        {
+            isUploadingImage = true;
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var savedPath = await ImageStorageService.SaveImageAsync(stream, file.Name);
+            model.ImagePath = savedPath;
+            imageUploadFeedback.ShowSuccess("Bilden har laddats upp och sparats!");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid bilduppladdning i receptredigering.");
+            imageUploadFeedback.ShowError("Bilden kunde inte laddas upp. Försök med en annan bildfil.");
+        }
+        finally
+        {
+            isUploadingImage = false;
+        }
+    }
+
+    private void RemoveImage()
+    {
+        model.ImagePath = null;
+        imageUploadFeedback.Clear();
+    }
+
+    private async Task SaveRecipe(FeedbackPlacement placement = FeedbackPlacement.Top)
+    {
+        var validationErrors = RecipeFormValidator.Validate(model);
+        if (validationErrors.Count > 0)
+        {
+            showValidationErrors = true;
+            saveFeedback.ShowError(string.Join(" ", validationErrors), "Kontrollera uppgifterna", placement);
+            return;
+        }
+
+        showValidationErrors = false;
+        saveFeedback.Clear();
+
+        // Clean up empty ingredient and instruction rows
+        model.Ingredients = model.Ingredients
+            .Where(i => !string.IsNullOrWhiteSpace(i.Name) || !string.IsNullOrWhiteSpace(i.RawText))
+            .ToList();
+
+        // Ensure RawText is filled
+        foreach (var ing in model.Ingredients)
+        {
+            if (string.IsNullOrWhiteSpace(ing.RawText))
+            {
+                var culture = System.Globalization.CultureInfo.GetCultureInfo("sv-SE");
+                var qty = ing.Quantity.HasValue
+                    ? (ing.QuantityMax.HasValue && ing.QuantityMax.Value > ing.Quantity.Value
+                        ? $"{ing.Quantity.Value.ToString("0.##", culture)}–{ing.QuantityMax.Value.ToString("0.##", culture)} "
+                        : $"{ing.Quantity.Value.ToString("0.##", culture)} ")
+                    : "";
+                var unit = !string.IsNullOrWhiteSpace(ing.Unit) ? $"{ing.Unit.Trim()} " : "";
+                var comment = !string.IsNullOrWhiteSpace(ing.Comment) ? $" ({ing.Comment.Trim()})" : "";
+                var prep = !string.IsNullOrWhiteSpace(ing.Preparation) ? $", {ing.Preparation.Trim()}" : "";
+                ing.RawText = $"{qty}{unit}{ing.Name.Trim()}{comment}{prep}".Trim();
+            }
+        }
+
+        model.Instructions = model.Instructions
+            .Where(s => !string.IsNullOrWhiteSpace(s.InstructionText))
+            .ToList();
+
+        // Auto-extract source host if URL provided
+        if (!string.IsNullOrWhiteSpace(model.SourceUrl) && string.IsNullOrWhiteSpace(model.SourceHost))
+        {
+            if (Uri.TryCreate(model.SourceUrl, UriKind.Absolute, out var uri))
+            {
+                model.SourceHost = uri.Host.Replace("www.", "");
+            }
+        }
+
+        try
+        {
+            isSaving = true;
+
+            if (IsEditing)
+            {
+                await RecipeService.UpdateRecipeAsync(model, selectedCategoryIds.ToList());
+                Navigation.NavigateTo($"/recept/{model.Id}?saved=true");
+            }
+            else
+            {
+                var created = await RecipeService.CreateRecipeAsync(model, selectedCategoryIds.ToList());
+                Navigation.NavigateTo($"/recept/{created.Id}?saved=true");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid sparning av recept.");
+            saveFeedback.ShowError("Kunde inte spara receptet. Kontrollera uppgifterna och försök igen.", placement: placement);
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void Cancel()
+    {
+        if (IsEditing)
+            Navigation.NavigateTo($"/recept/{Id}");
+        else
+            Navigation.NavigateTo("/recept");
+    }
+}

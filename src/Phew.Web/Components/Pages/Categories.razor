@@ -1,0 +1,260 @@
+@page "/kategorier"
+@inject CategoryService CategoryService
+@inject ILogger<Categories> Logger
+
+<PageTitle>Kategorier — PHEW!</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">🏷️ Kategorier</h1>
+        <p class="page-subtitle">Organisera dina recept med anpassade taggar och färger.</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 32px; align-items: start;">
+    <div class="form-section">
+        <h2 class="form-section-title">
+            @(editingCategoryId.HasValue ? "Redigera kategori" : "Skapa ny kategori")
+        </h2>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+            <FluentTextField @bind-Value="FormName" Immediate="true" Label="Kategorinamn" Placeholder="t.ex. Snabblunch, Helgmiddag" Style="width: 100%;" />
+
+            <div>
+                <label style="display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--rb-text-secondary);">
+                    Välj färgkod
+                </label>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;" role="group" aria-label="Välj färgkod">
+                    @foreach (var color in presetColors)
+                    {
+                        var isSelected = formColor == color;
+                        <button type="button"
+                                @onclick="@(() => formColor = color)"
+                                class="category-color-swatch @(isSelected ? "selected" : "")"
+                                style="width: 32px; height: 32px; border-radius: 50%; background-color: @color; cursor: pointer; border: 2px solid @(isSelected ? "#fff" : "transparent"); box-shadow: @(isSelected ? "0 0 0 2px var(--rb-accent)" : "none"); padding: 0;"
+                                title="@color"
+                                aria-label="@($"Välj färg {color}")"
+                                aria-pressed="@(isSelected ? "true" : "false")">
+                        </button>
+                    }
+                    <input type="color"
+                           @bind="formColor"
+                           title="Anpassad färgkod"
+                           aria-label="Välj anpassad färgkod"
+                           style="background: none; border: 1px solid var(--rb-border); border-radius: 4px; width: 36px; height: 36px; cursor: pointer;" />
+                </div>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(formName))
+            {
+                <div style="margin-top: 8px;">
+                    <span style="font-size: 13px; color: var(--rb-text-muted); display: block; margin-bottom: 6px;">Förhandsvisning:</span>
+                    <CategoryBadge Name="@formName" ColorHex="@formColor" />
+                </div>
+            }
+
+            <ContextualFeedback State="formFeedback" Floating="@formFeedback.IsSuccess" CssClass="category-form-feedback" />
+
+            <div style="display: flex; gap: 10px; margin-top: 8px;">
+                <button type="button" class="btn-primary-custom" @onclick="SaveCategory" disabled="@string.IsNullOrWhiteSpace(formName)">
+                    @(editingCategoryId.HasValue ? "Spara ändringar" : "Lägg till kategori")
+                </button>
+                @if (editingCategoryId.HasValue)
+                {
+                    <button type="button" class="btn-secondary-custom" @onclick="CancelEdit">
+                        Avbryt
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="detail-card">
+        <h2 class="detail-card-title">Befintliga kategorier (@categories.Count)</h2>
+
+        <ContextualFeedback State="listFeedback" Floating="@listFeedback.IsSuccess" CssClass="category-list-feedback" />
+
+        @if (isLoading)
+        {
+            <FluentProgressRing />
+        }
+        else if (categories.Count == 0)
+        {
+            <p style="color: var(--rb-text-muted); font-size: 14px;">Inga kategorier skapade än.</p>
+        }
+        else
+        {
+            <div class="category-list">
+                @foreach (var cat in categories)
+                {
+                    <div class="category-row">
+                        <div class="category-row-info">
+                            <div class="category-row-header">
+                                <span class="category-dot category-row-dot" style="background-color: @cat.ColorHex;"></span>
+                                <span class="category-row-name">@cat.Name</span>
+                            </div>
+                            <span class="category-row-count">(@cat.RecipeCount recept)</span>
+                        </div>
+                        <div class="category-row-actions">
+                            <button type="button" class="btn-secondary-custom btn-sm" @onclick="@(() => StartEdit(cat))">
+                                Redigera
+                            </button>
+                            <button type="button" class="btn-danger-custom btn-sm" @onclick="@(() => PromptDeleteCategory(cat))">
+                                Radera
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@(categoryToDelete != null)"
+               Title="Radera kategori"
+               Message="@(categoryToDelete != null ? $"Är du säker på att du vill radera kategorin '{categoryToDelete.Name}'?" : "")"
+               ConfirmText="Ja, radera"
+               CancelText="Avbryt"
+               OnConfirm="ConfirmDeleteCategory"
+               OnCancel="@(() => categoryToDelete = null)" />
+
+@code {
+    private List<CategoryWithCountDto> categories = new();
+    private bool isLoading = true;
+
+    private int? editingCategoryId = null;
+    private string formName = string.Empty;
+    private string FormName
+    {
+        get => formName;
+        set
+        {
+            formName = value;
+            if (formFeedback.HasMessage && formFeedback.Severity == FeedbackSeverity.Error)
+            {
+                formFeedback.Clear();
+            }
+        }
+    }
+    private string formColor = "#e07a5f";
+    private CategoryWithCountDto? categoryToDelete = null;
+
+    private readonly FeedbackState formFeedback = new();
+    private readonly FeedbackState listFeedback = new();
+
+    private readonly List<string> presetColors = new()
+    {
+        "#e07a5f", "#f2a65a", "#e76f51", "#2a9d8f", "#264653", "#e9c46a", "#8ab17d", "#9d4edd", "#3a86ff"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCategories();
+    }
+
+    private async Task LoadCategories()
+    {
+        isLoading = true;
+        categories = await CategoryService.GetCategoriesAsync();
+        isLoading = false;
+    }
+
+    private void StartEdit(CategoryWithCountDto cat)
+    {
+        formFeedback.Clear();
+        editingCategoryId = cat.Id;
+        formName = cat.Name;
+        formColor = cat.ColorHex ?? "#e07a5f";
+    }
+
+    private void CancelEdit()
+    {
+        formFeedback.Clear();
+        editingCategoryId = null;
+        formName = string.Empty;
+        formColor = "#e07a5f";
+    }
+
+    private async Task SaveCategory()
+    {
+        if (string.IsNullOrWhiteSpace(formName))
+        {
+            formFeedback.ShowError("Kategorinamn får inte vara tomt.");
+            return;
+        }
+
+        var trimmedName = formName.Trim();
+
+        try
+        {
+            if (listFeedback.IsSuccess)
+            {
+                listFeedback.Clear();
+            }
+
+            if (editingCategoryId.HasValue)
+            {
+                await CategoryService.UpdateCategoryAsync(new Category
+                {
+                    Id = editingCategoryId.Value,
+                    Name = trimmedName,
+                    ColorHex = formColor
+                });
+                editingCategoryId = null;
+                formName = string.Empty;
+                formColor = "#e07a5f";
+                formFeedback.ShowSuccess($"Kategorin '{trimmedName}' har uppdaterats.");
+            }
+            else
+            {
+                await CategoryService.CreateCategoryAsync(new Category
+                {
+                    Name = trimmedName,
+                    ColorHex = formColor
+                });
+                formName = string.Empty;
+                formColor = "#e07a5f";
+                formFeedback.ShowSuccess($"Kategorin '{trimmedName}' har skapats.");
+            }
+
+            await LoadCategories();
+        }
+        catch (InvalidOperationException ex)
+        {
+            formFeedback.ShowError(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid sparning av kategori.");
+            formFeedback.ShowError("Kunde inte spara kategorin. Försök igen.");
+        }
+    }
+
+    private void PromptDeleteCategory(CategoryWithCountDto cat)
+    {
+        categoryToDelete = cat;
+    }
+
+    private async Task ConfirmDeleteCategory()
+    {
+        if (categoryToDelete == null) return;
+        var cat = categoryToDelete;
+        categoryToDelete = null;
+
+        try
+        {
+            await CategoryService.DeleteCategoryAsync(cat.Id);
+            if (formFeedback.IsSuccess)
+            {
+                formFeedback.Clear();
+            }
+            listFeedback.ShowSuccess($"Kategorin '{cat.Name}' har raderats.");
+            await LoadCategories();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Fel vid radering av kategori.");
+            listFeedback.ShowError("Kategorin kunde inte raderas. Försök igen.");
+        }
+    }
+}

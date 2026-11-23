@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Deploys Receptbanken from Windows to Ubuntu Server 24.04 LTS.
+    Deploys PHEW! from Windows to Ubuntu Server 24.04 LTS.
     Windows runs .NET build, tests, and source packaging; Ubuntu builds the Docker image
     and updates the container via Docker Compose. No Docker installation is required on Windows.
 
@@ -9,13 +9,14 @@
     1. Reads and validates configuration from .deploy.env or parameters.
     2. Runs 'dotnet build -c Release' and 'dotnet test -c Release' locally on Windows.
     3. Creates and verifies a clean distribution archive (.tar.gz) with only required build files.
-    4. Checks server environment, disk space, container name, and data volume ('receptbanken-data') via SSH.
-       Strictly separates first installation (-FirstInstall) from updates.
-    5. Transfers the distribution archive to /opt/receptbanken/builds/<version>/ via SCP.
+    4. Checks server environment, disk space, port availability (on -FirstInstall), container name,
+       and data volume ('phew-data') via SSH. Strictly separates first installation (-FirstInstall) from updates.
+    5. Transfers the distribution archive and candidate docker-compose.yml to /opt/phew/builds/<version>/ via SCP.
     6. Builds the Docker image on Ubuntu (while any existing container continues running).
     7. On update: stops the old container cleanly, creates a raw volume backup,
-       generates and verifies SHA-256, and verifies that receptbanken.db is inside the archive.
-    8. Starts the new version with 'docker compose up -d --no-build', verifies /health, and cleans up build files.
+       generates and verifies SHA-256, and verifies that phew.db is inside the archive.
+    8. Promotes candidate docker-compose.yml, starts the new version with 'docker compose up -d --no-build',
+       verifies /health (restoring previous compose file on failure), and cleans up build files.
 #>
 [CmdletBinding()]
 param(
@@ -106,13 +107,13 @@ if ($ServerPort -le 0) {
     $ServerPort = if ($config["SERVER_PORT"]) { [int]$config["SERVER_PORT"] } else { 22 }
 }
 if (-not $DeployPath) {
-    $DeployPath = if ($config["DEPLOY_PATH"]) { $config["DEPLOY_PATH"] } else { "/opt/receptbanken" }
+    $DeployPath = if ($config["DEPLOY_PATH"]) { $config["DEPLOY_PATH"] } else { "/opt/phew" }
 }
 if ($AppPort -le 0) {
     $AppPort = if ($config["APP_PORT"]) { [int]$config["APP_PORT"] } else { 8080 }
 }
 if (-not $VolumeName) {
-    $VolumeName = if ($config["VOLUME_NAME"]) { $config["VOLUME_NAME"] } else { "receptbanken-data" }
+    $VolumeName = if ($config["VOLUME_NAME"]) { $config["VOLUME_NAME"] } else { "phew-data" }
 }
 if ($BackupRetentionCount -le 0) {
     $BackupRetentionCount = if ($config["BACKUP_RETENTION_COUNT"]) { [int]$config["BACKUP_RETENTION_COUNT"] } else { 10 }
@@ -148,7 +149,7 @@ if ($VolumeName -notmatch '^[a-zA-Z0-9_.-]+$') {
 }
 $DeployPath = $DeployPath.TrimEnd('/')
 if ($DeployPath -notmatch '^/[a-zA-Z0-9/_.-]+$' -or $DeployPath.Contains("..") -or $DeployPath -eq "/app" -or $DeployPath.StartsWith("/app/data")) {
-    Fail-Deploy "Invalid or unsafe DeployPath '$DeployPath'. Must be an absolute Linux path (e.g. /opt/receptbanken) and must not point to /app/data."
+    Fail-Deploy "Invalid or unsafe DeployPath '$DeployPath'. Must be an absolute Linux path (e.g. /opt/phew) and must not point to /app/data."
 }
 if (-not [string]::IsNullOrWhiteSpace($VapidSubject)) {
     if ($VapidSubject -notmatch '^(mailto:|https://)[a-zA-Z0-9.:/@_+-]+$') {
@@ -156,7 +157,7 @@ if (-not [string]::IsNullOrWhiteSpace($VapidSubject)) {
     }
 }
 else {
-    Write-Warn "VAPID_SUBJECT is not configured in .deploy.env; falling back to default 'mailto:noreply@receptbanken.local'."
+    Write-Warn "VAPID_SUBJECT is not configured in .deploy.env; falling back to default 'mailto:noreply@phew.local'."
 }
 
 $RepoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -174,14 +175,14 @@ if ($VersionTag -notmatch '^[0-9]{8}-[0-9]{6}$') {
     Fail-Deploy "Generated version tag '$VersionTag' has an invalid format."
 }
 
-$ImageRef = "receptbanken:$VersionTag"
-$StageDir = Join-Path ([System.IO.Path]::GetTempPath()) "receptbanken-stage-$VersionTag"
+$ImageRef = "phew:$VersionTag"
+$StageDir = Join-Path ([System.IO.Path]::GetTempPath()) "phew-stage-$VersionTag"
 $KeepCustomArchive = (-not [string]::IsNullOrWhiteSpace($ArchiveOutputPath))
 $ArchivePath = if ($KeepCustomArchive) {
     [System.IO.Path]::GetFullPath($ArchiveOutputPath)
 }
 else {
-    Join-Path ([System.IO.Path]::GetTempPath()) "receptbanken-src-$VersionTag.tar.gz"
+    Join-Path ([System.IO.Path]::GetTempPath()) "phew-src-$VersionTag.tar.gz"
 }
 
 # Ensure ArchivePath is never inside RepoRoot/src or StageDir so it cannot include itself
@@ -192,7 +193,8 @@ if ($normalizedArchive.StartsWith($normalizedStage, [System.StringComparison]::O
 }
 
 $RemoteBuildDir = "$DeployPath/builds/$VersionTag"
-$RemoteArchivePath = "$RemoteBuildDir/receptbanken-src-$VersionTag.tar.gz"
+$RemoteArchivePath = "$RemoteBuildDir/phew-src-$VersionTag.tar.gz"
+$RemoteComposeCandidatePath = "$RemoteBuildDir/docker-compose.yml.candidate"
 $SshTarget = "$ServerUser@$ServerHost"
 $SshArgs = @("-p", "$ServerPort", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10")
 $ScpArgs = @("-P", "$ServerPort", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10")
@@ -232,7 +234,7 @@ function Invoke-RemoteBash {
 }
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host " Receptbanken - Deployment ($VersionTag)" -ForegroundColor Cyan
+Write-Host " PHEW! - Deployment ($VersionTag)" -ForegroundColor Cyan
 Write-Host " Build Mode  : Windows (.NET build/test + archive) -> Ubuntu (docker build)"
 Write-Host " Target Host : $SshTarget (port $ServerPort)"
 Write-Host " Deploy Path : $DeployPath"
@@ -265,21 +267,21 @@ Write-Success "Local tools (dotnet, tar, ssh, scp) and disk space verified. No l
 if (-not $SkipTests) {
     Write-Step "Step 1: Running local Release build and tests on Windows..."
     if ($DryRun) {
-        Write-Host "[DRY-RUN] Would run: dotnet build `"$RepoRoot\Receptbanken.sln`" -c Release --nologo"
-        Write-Host "[DRY-RUN] Would run: dotnet test `"$RepoRoot\tests\Receptbanken.Tests\Receptbanken.Tests.csproj`" -c Release --no-build --nologo"
+        Write-Host "[DRY-RUN] Would run: dotnet build `"$RepoRoot\Phew.sln`" -c Release --nologo"
+        Write-Host "[DRY-RUN] Would run: dotnet test `"$RepoRoot\tests\Phew.Tests\Phew.Tests.csproj`" -c Release --no-build --nologo"
     }
     else {
         Push-Location -LiteralPath $RepoRoot
         $oldEap = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
         try {
-            & dotnet build "Receptbanken.sln" -c Release --nologo
+            & dotnet build "Phew.sln" -c Release --nologo
             if ($LASTEXITCODE -ne 0) {
                 $ErrorActionPreference = $oldEap
                 Fail-Deploy "'dotnet build -c Release' failed. Deployment aborted."
             }
 
-            & dotnet test "tests/Receptbanken.Tests/Receptbanken.Tests.csproj" -c Release --no-build --nologo
+            & dotnet test "tests/Phew.Tests/Phew.Tests.csproj" -c Release --no-build --nologo
             if ($LASTEXITCODE -ne 0) {
                 $ErrorActionPreference = $oldEap
                 Fail-Deploy "'dotnet test -c Release' failed. Deployment aborted."
@@ -309,7 +311,7 @@ try {
         "Dockerfile",
         ".dockerignore",
         "Directory.Build.props",
-        "Receptbanken.sln",
+        "Phew.sln",
         "NuGet.Config",
         "nuget.config",
         "global.json"
@@ -360,8 +362,8 @@ try {
         }
         if ($skipDir) { continue }
 
-        # Exclude runtime user-data folders if present locally under Receptbanken.Web/data or images/recipes
-        if ($NormalizedRel -match '^src/Receptbanken\.Web/data/' -or $NormalizedRel -match '(^|/)images/recipes/') {
+        # Exclude runtime user-data folders if present locally under Phew.Web/data or images/recipes
+        if ($NormalizedRel -match '^src/Phew\.Web/data/' -or $NormalizedRel -match '(^|/)images/recipes/') {
             continue
         }
 
@@ -445,18 +447,18 @@ $requiredEntries = @(
     "Dockerfile",
     ".dockerignore",
     "Directory.Build.props",
-    "Receptbanken.sln",
-    "src/Receptbanken.Core/Receptbanken.Core.csproj",
-    "src/Receptbanken.Infrastructure/Receptbanken.Infrastructure.csproj",
-    "src/Receptbanken.Infrastructure/Data/AppDbContext.cs",
-    "src/Receptbanken.Infrastructure/Data/DbInitializer.cs",
-    "src/Receptbanken.Infrastructure/Data/DesignTimeDbContextFactory.cs",
-    "src/Receptbanken.Infrastructure/Backup/ZipBackupService.cs",
-    "src/Receptbanken.Infrastructure/Storage/LocalImageStorageService.cs",
-    "src/Receptbanken.Infrastructure/Migrations/AppDbContextModelSnapshot.cs",
-    "src/Receptbanken.Web/Receptbanken.Web.csproj",
-    "src/Receptbanken.Web/Program.cs",
-    "src/Receptbanken.Web/Components/App.razor"
+    "Phew.sln",
+    "src/Phew.Core/Phew.Core.csproj",
+    "src/Phew.Infrastructure/Phew.Infrastructure.csproj",
+    "src/Phew.Infrastructure/Data/AppDbContext.cs",
+    "src/Phew.Infrastructure/Data/DbInitializer.cs",
+    "src/Phew.Infrastructure/Data/DesignTimeDbContextFactory.cs",
+    "src/Phew.Infrastructure/Backup/ZipBackupService.cs",
+    "src/Phew.Infrastructure/Storage/LocalImageStorageService.cs",
+    "src/Phew.Infrastructure/Migrations/AppDbContextModelSnapshot.cs",
+    "src/Phew.Web/Phew.Web.csproj",
+    "src/Phew.Web/Program.cs",
+    "src/Phew.Web/Components/App.razor"
 )
 
 foreach ($req in $requiredEntries) {
@@ -504,15 +506,15 @@ Write-Success "Distribution archive created and verified ($archiveKb KB, $($tarE
 if ($DryRun) {
     Write-Step "[DRY-RUN] Summary of planned remote steps on Ubuntu ($SshTarget):"
     Write-Host " 1. Verify Docker, Docker Compose, and free disk space (at least 2048 MB in $DeployPath and /var/lib)"
-    Write-Host " 2. Verify installation mode ($(if ($FirstInstall) { 'First installation (-FirstInstall)' } else { 'Update existing installation' })) and data volume '$VolumeName'"
+    Write-Host " 2. Verify installation mode ($(if ($FirstInstall) { 'First installation (-FirstInstall, including host port availability)' } else { 'Update existing installation' })) and data volume '$VolumeName'"
     Write-Host " 3. Create temporary build directory '$RemoteBuildDir' (never inside /app/data or '$VolumeName')"
-    Write-Host " 4. Transfer distribution archive ($archiveKb KB) and docker-compose.yml via SCP to $SshTarget"
+    Write-Host " 4. Transfer distribution archive ($archiveKb KB) and candidate docker-compose.yml to '$RemoteBuildDir' via SCP"
     Write-Host " 5. Extract archive in '$RemoteBuildDir' and run 'docker build --platform linux/amd64 -t $ImageRef .' while existing container keeps running"
     if (-not $FirstInstall) {
-        Write-Host " 6. Stop existing container cleanly, create raw volume backup '$DeployPath/backups/volume-$VersionTag.tar.gz', verify SHA-256 and confirm receptbanken.db is in archive"
+        Write-Host " 6. Stop existing container cleanly, create raw volume backup '$DeployPath/backups/volume-$VersionTag.tar.gz', verify SHA-256 and confirm phew.db is in archive"
     }
-    Write-Host " 7. Update $DeployPath/.env with IMAGE_TAG=$VersionTag and run 'docker compose -p receptbanken -f $DeployPath/docker-compose.yml up -d --no-build'"
-    Write-Host " 8. Verify Docker healthcheck and GET /health"
+    Write-Host " 7. Promote candidate docker-compose.yml, update $DeployPath/.env with IMAGE_TAG=$VersionTag, and run 'docker compose -p phew -f $DeployPath/docker-compose.yml up -d --no-build'"
+    Write-Host " 8. Verify Docker healthcheck and GET /health (restoring previous docker-compose.yml on failure)"
     Write-Host " 9. Remove '$RemoteBuildDir', retain latest $BackupRetentionCount backups and latest $ImageRetentionCount Docker images"
     Remove-TempArtifacts -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
     Write-Success "Dry-run completed without errors."
@@ -552,11 +554,11 @@ CONTAINER_EXISTS="false"
 CONTAINER_RUNNING="false"
 MOUNTED_VOL=""
 CURRENT_IMAGE=""
-if docker container inspect receptbanken >/dev/null 2>&1; then
+if docker container inspect phew >/dev/null 2>&1; then
     CONTAINER_EXISTS="true"
-    CONTAINER_RUNNING=`$(docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null || echo "false")
-    MOUNTED_VOL=`$(docker container inspect -f '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' receptbanken 2>/dev/null || echo "")
-    CURRENT_IMAGE=`$(docker container inspect -f '{{.Config.Image}}' receptbanken 2>/dev/null || echo "")
+    CONTAINER_RUNNING=`$(docker container inspect -f '{{.State.Running}}' phew 2>/dev/null || echo "false")
+    MOUNTED_VOL=`$(docker container inspect -f '{{range .Mounts}}{{if eq .Destination "/app/data"}}{{.Name}}{{end}}{{end}}' phew 2>/dev/null || echo "")
+    CURRENT_IMAGE=`$(docker container inspect -f '{{.Config.Image}}' phew 2>/dev/null || echo "")
 fi
 
 # Ensure this version tag does not already exist on the server
@@ -565,7 +567,17 @@ if docker image inspect "$ImageRef" >/dev/null 2>&1; then
     exit 14
 fi
 
-echo "STATE|VOL_EXISTS=`$VOL_EXISTS|CONTAINER_EXISTS=`$CONTAINER_EXISTS|CONTAINER_RUNNING=`$CONTAINER_RUNNING|MOUNTED_VOL=`$MOUNTED_VOL|CURRENT_IMAGE=`$CURRENT_IMAGE"
+PORT_IN_USE="false"
+if command -v ss >/dev/null 2>&1; then
+    if ss -tulnH "sport = :$AppPort" 2>/dev/null | grep -q .; then
+        PORT_IN_USE="true"
+    fi
+fi
+if [ "`$PORT_IN_USE" = "false" ] && docker ps --format '{{.Ports}}' 2>/dev/null | grep -qE "(^|[^0-9]):$AppPort->"; then
+    PORT_IN_USE="true"
+fi
+
+echo "STATE|VOL_EXISTS=`$VOL_EXISTS|CONTAINER_EXISTS=`$CONTAINER_EXISTS|CONTAINER_RUNNING=`$CONTAINER_RUNNING|MOUNTED_VOL=`$MOUNTED_VOL|CURRENT_IMAGE=`$CURRENT_IMAGE|PORT_IN_USE=`$PORT_IN_USE"
 "@
 
 $preResult = Invoke-RemoteBash -Script $preflightScript -AllowFailure
@@ -603,35 +615,39 @@ $containerExists = ($stateMap["CONTAINER_EXISTS"] -eq "true")
 $containerRunning = ($stateMap["CONTAINER_RUNNING"] -eq "true")
 $mountedVol = $stateMap["MOUNTED_VOL"]
 $currentImage = $stateMap["CURRENT_IMAGE"]
+$portInUse = ($stateMap["PORT_IN_USE"] -eq "true")
 
 # Enforce strict separation between FirstInstall and Update BEFORE uploading/building
 if ($FirstInstall) {
     if ($volExists -or $containerExists) {
-        Fail-Deploy "Flag -FirstInstall was specified, but volume '$VolumeName' ($volExists) or container 'receptbanken' ($containerExists) already exists on the server! Aborting to protect existing data. Run without -FirstInstall to update." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
+        Fail-Deploy "Flag -FirstInstall was specified, but volume '$VolumeName' ($volExists) or container 'phew' ($containerExists) already exists on the server! Aborting to protect existing data. Run without -FirstInstall to update." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
     }
-    Write-Success "Verified that no existing installation or volume is present. Proceeding with first installation."
+    if ($portInUse) {
+        Fail-Deploy "Host port $AppPort is already occupied on $ServerHost (for example by an existing container). Stop the conflicting service separately or pass -AppPort <free_port> before running -FirstInstall." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
+    }
+    Write-Success "Verified that no existing PHEW! installation or volume is present and port $AppPort is available. Proceeding with first installation."
 }
 else {
     if (-not $volExists -and -not $containerExists) {
-        Fail-Deploy "Neither container 'receptbanken' nor data volume '$VolumeName' was found on the server. If this is a brand new installation, run with -FirstInstall. Aborting so a new empty volume is never created by mistake." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
+        Fail-Deploy "Neither container 'phew' nor data volume '$VolumeName' was found on the server. If this is a brand new installation, run with -FirstInstall. Aborting so a new empty volume is never created by mistake." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
     }
     if (-not $volExists) {
         Fail-Deploy "Container exists, but expected data volume '$VolumeName' is missing on the server! Aborting immediately." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
     }
     if ($containerExists -and $mountedVol -ne $VolumeName) {
-        Fail-Deploy "Existing container 'receptbanken' uses volume '$mountedVol' instead of expected '$VolumeName'! Aborting to prevent volume switch." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
+        Fail-Deploy "Existing container 'phew' uses volume '$mountedVol' instead of expected '$VolumeName'! Aborting to prevent volume switch." -ArchiveFile $ArchivePath -KeepArchive $KeepCustomArchive
     }
     Write-Success "Verified existing installation and confirmed data volume '$VolumeName' is in use."
 }
 
-# Step 3B - Create isolated build directory and transfer distribution archive via SCP
-Write-Step "Transferring distribution archive ($archiveKb KB) and docker-compose.yml via SCP to $SshTarget..."
+# Step 3B - Create isolated build directory and transfer distribution archive + candidate Compose file via SCP
+Write-Step "Transferring distribution archive ($archiveKb KB) and candidate docker-compose.yml via SCP to $SshTarget..."
 $null = Invoke-RemoteBash -Script "set -e`nrm -rf `"$RemoteBuildDir`"`nmkdir -p `"$RemoteBuildDir`""
 
 $oldEap = $ErrorActionPreference
 $ErrorActionPreference = "Continue"
 try {
-    & scp @ScpArgs "$ComposeFileLocal" "${SshTarget}:${DeployPath}/docker-compose.yml"
+    & scp @ScpArgs "$ComposeFileLocal" "${SshTarget}:${RemoteComposeCandidatePath}"
     $scpComposeCode = $LASTEXITCODE
     if ($scpComposeCode -ne 0) {
         $ErrorActionPreference = $oldEap
@@ -700,13 +716,13 @@ if [ -z "`$DEPLOY_FREE_KB" ] || [ "`$DEPLOY_FREE_KB" -lt 2097152 ]; then
 fi
 
 # Verify existing SQLite database in volume is present and non-empty before stopping container
-docker run --rm --entrypoint /bin/sh -u 0 -v "${VolumeName}:/source:ro" "$ImageRef" -c 'test -s /source/receptbanken.db' || {
+docker run --rm --entrypoint /bin/sh -u 0 -v "${VolumeName}:/source:ro" "$ImageRef" -c 'test -s /source/phew.db' || {
     echo "ERR_DB_MISSING_OR_EMPTY_IN_VOLUME"
     exit 22
 }
 
 # Optional portable ZIP export while old container is still running
-if docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null | grep -q "true"; then
+if docker container inspect -f '{{.State.Running}}' phew 2>/dev/null | grep -q "true"; then
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL --max-time 15 "http://127.0.0.1:$AppPort/api/backup/export" -o "`$BACKUP_DIR/app-$VersionTag.zip" 2>/dev/null || rm -f "`$BACKUP_DIR/app-$VersionTag.zip"
     elif command -v wget >/dev/null 2>&1; then
@@ -714,11 +730,11 @@ if docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null | g
     fi
 fi
 
-# 2. Stop old container cleanly so SQLite WAL checkpoints completely to receptbanken.db
+# 2. Stop old container cleanly so SQLite WAL checkpoints completely to phew.db
 WAS_RUNNING="false"
-if docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null | grep -q "true"; then
+if docker container inspect -f '{{.State.Running}}' phew 2>/dev/null | grep -q "true"; then
     WAS_RUNNING="true"
-    docker stop -t 15 receptbanken >/dev/null
+    docker stop -t 15 phew >/dev/null
 fi
 
 restart_old_and_fail() {
@@ -726,12 +742,12 @@ restart_old_and_fail() {
     CODE="`$2"
     echo "`$ERR_MSG"
     if [ "`$WAS_RUNNING" = "true" ]; then
-        docker start receptbanken >/dev/null 2>&1 || true
+        docker start phew >/dev/null 2>&1 || true
     fi
     exit "`$CODE"
 }
 
-# 3. Create consistent raw backup of receptbanken-data
+# 3. Create consistent raw backup of phew-data
 RAW_ARCHIVE="`$BACKUP_DIR/volume-$VersionTag.tar.gz"
 docker run --rm --entrypoint /bin/sh -u 0 \
     -v "${VolumeName}:/source:ro" \
@@ -747,9 +763,9 @@ fi
 (cd "`$BACKUP_DIR" && sha256sum "volume-$VersionTag.tar.gz" > "volume-$VersionTag.tar.gz.sha256") || restart_old_and_fail "ERR_SHA256_CREATE_FAILED" 25
 (cd "`$BACKUP_DIR" && sha256sum -c "volume-$VersionTag.tar.gz.sha256" >/dev/null 2>&1) || restart_old_and_fail "ERR_SHA256_VERIFY_FAILED" 26
 
-# 5. Verify archive can be read and contains receptbanken.db
+# 5. Verify archive can be read and contains phew.db
 tar -tzf "`$RAW_ARCHIVE" >/dev/null 2>&1 || restart_old_and_fail "ERR_ARCHIVE_UNREADABLE" 27
-tar -tzf "`$RAW_ARCHIVE" | grep -E '(^\./|^)receptbanken\.db$' >/dev/null 2>&1 || restart_old_and_fail "ERR_BACKUP_MISSING_DB" 28
+tar -tzf "`$RAW_ARCHIVE" | grep -E '(^\./|^)phew\.db$' >/dev/null 2>&1 || restart_old_and_fail "ERR_BACKUP_MISSING_DB" 28
 
 ARCHIVE_BYTES=`$(wc -c < "`$RAW_ARCHIVE" | tr -d ' ')
 echo "BACKUP_OK|BYTES=`$ARCHIVE_BYTES"
@@ -763,11 +779,28 @@ echo "BACKUP_OK|BYTES=`$ARCHIVE_BYTES"
     Write-Success "Raw volume backup (volume-$VersionTag.tar.gz) and SHA-256 checksum created and verified ($($backupResult.Output))."
 }
 
-# Step 7 - Start with Docker Compose and verify healthcheck
-Write-Step "Step 7: Updating IMAGE_TAG and starting container with Docker Compose..."
+# Step 7 - Promote candidate Compose file, start with Docker Compose, and verify healthcheck
+Write-Step "Step 7: Promoting candidate docker-compose.yml, updating IMAGE_TAG, and starting container with Docker Compose..."
 $startRemoteScript = @"
 set -e
 cd "$DeployPath"
+
+if [ ! -f "$RemoteComposeCandidatePath" ]; then
+    echo "ERR_CANDIDATE_COMPOSE_MISSING"
+    exit 29
+fi
+
+if [ -f "$DeployPath/docker-compose.yml" ]; then
+    cp "$DeployPath/docker-compose.yml" "$DeployPath/docker-compose.yml.prev"
+fi
+cp "$RemoteComposeCandidatePath" "$DeployPath/docker-compose.yml"
+
+restore_compose_and_fail() {
+    if [ -f "$DeployPath/docker-compose.yml.prev" ]; then
+        mv -f "$DeployPath/docker-compose.yml.prev" "$DeployPath/docker-compose.yml"
+    fi
+    exit 1
+}
 
 # Save previous image reference only now when backup is approved and we are switching active version
 if [ -n "$currentImage" ]; then
@@ -781,7 +814,7 @@ if ! docker volume inspect "$VolumeName" >/dev/null 2>&1; then
     docker volume create "$VolumeName" >/dev/null
 fi
 
-docker tag "$ImageRef" "receptbanken:latest"
+docker tag "$ImageRef" "phew:latest"
 
 cat > "$DeployPath/.env" <<EOF
 IMAGE_TAG=$VersionTag
@@ -791,8 +824,8 @@ EOF
 
 echo "$VersionTag" > "$DeployPath/.current_version"
 
-# Scope strictly to project 'receptbanken' without touching any other containers on the host
-docker compose -p receptbanken -f "$DeployPath/docker-compose.yml" --env-file "$DeployPath/.env" up -d --no-build
+# Scope strictly to project 'phew' without touching any other containers on the host
+docker compose -p phew -f "$DeployPath/docker-compose.yml" --env-file "$DeployPath/.env" up -d --no-build || restore_compose_and_fail
 "@
 
 $null = Invoke-RemoteBash -Script $startRemoteScript
@@ -804,8 +837,8 @@ set -e
 MAX_ATTEMPTS=25
 ATTEMPT=1
 while [ `$ATTEMPT -le `$MAX_ATTEMPTS ]; do
-    RUNNING=`$(docker container inspect -f '{{.State.Running}}' receptbanken 2>/dev/null || echo "false")
-    STATUS=`$(docker container inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' receptbanken 2>/dev/null || echo "missing")
+    RUNNING=`$(docker container inspect -f '{{.State.Running}}' phew 2>/dev/null || echo "false")
+    STATUS=`$(docker container inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' phew 2>/dev/null || echo "missing")
 
     if [ "`$RUNNING" = "true" ] && [ "`$STATUS" = "healthy" ]; then
         echo "HEALTHY_OK"
@@ -814,12 +847,12 @@ while [ `$ATTEMPT -le `$MAX_ATTEMPTS ]; do
 
     if [ "`$STATUS" = "unhealthy" ] || [ "`$STATUS" = "missing" ]; then
         echo "HEALTH_FAILED:`$STATUS"
-        docker logs --tail 50 receptbanken 2>&1 || true
+        docker logs --tail 50 phew 2>&1 || true
         exit 30
     fi
 
     # Also verify via built-in CLI probe (/health) once container is running
-    if [ "`$RUNNING" = "true" ] && docker exec receptbanken dotnet Receptbanken.Web.dll --healthcheck >/dev/null 2>&1; then
+    if [ "`$RUNNING" = "true" ] && docker exec phew dotnet Phew.Web.dll --healthcheck >/dev/null 2>&1; then
         echo "HEALTHY_OK"
         exit 0
     fi
@@ -829,20 +862,21 @@ while [ `$ATTEMPT -le `$MAX_ATTEMPTS ]; do
 done
 
 echo "HEALTH_TIMEOUT"
-docker logs --tail 50 receptbanken 2>&1 || true
+docker logs --tail 50 phew 2>&1 || true
 exit 31
 "@
 
 $healthResult = Invoke-RemoteBash -Script $healthScript -AllowFailure
 if ($healthResult.ExitCode -ne 0 -or $healthResult.Output -notmatch "HEALTHY_OK") {
-    $null = Invoke-RemoteBash -Script "rm -rf `"$RemoteBuildDir`"" -AllowFailure
+    $null = Invoke-RemoteBash -Script "if [ -f `"$DeployPath/docker-compose.yml.prev`" ]; then mv -f `"$DeployPath/docker-compose.yml.prev`" `"$DeployPath/docker-compose.yml`"; fi; rm -rf `"$RemoteBuildDir`"" -AllowFailure
     Write-Host "`n[ERROR] The new version ($ImageRef) failed the health check!" -ForegroundColor Red
     Write-Host $healthResult.Output -ForegroundColor Yellow
-    Write-Host "`nNOTE: No automatic database restore has been performed." -ForegroundColor Yellow
+    Write-Host "`nNOTE: No automatic database restore has been performed. Previous docker-compose.yml (if any) was restored." -ForegroundColor Yellow
     Write-Host "To roll back to the previous Docker image, run:" -ForegroundColor Cyan
     Write-Host "  .\scripts\rollback.ps1" -ForegroundColor White
     exit 1
 }
+$null = Invoke-RemoteBash -Script "rm -f `"$DeployPath/docker-compose.yml.prev`"" -AllowFailure
 Write-Success "Health check (/health and SQLite connection) passed!"
 
 # Step 8 - Clean up temporary build files and apply retention policy
@@ -865,9 +899,9 @@ for FILE in `$VOL_BACKUPS; do
     fi
 done
 
-# Retain latest $ImageRetentionCount receptbanken:<timestamp> images, never deleting active or previous
+# Retain latest $ImageRetentionCount phew:<timestamp> images, never deleting active or previous
 PREV_VER=`$(cat "$DeployPath/.previous_version" 2>/dev/null || echo "")
-IMG_TAGS=`$(docker images receptbanken --format '{{.Tag}}' | grep -E '^[0-9]{8}-[0-9]{6}$' | sort -r || true)
+IMG_TAGS=`$(docker images phew --format '{{.Tag}}' | grep -E '^[0-9]{8}-[0-9]{6}$' | sort -r || true)
 IMG_COUNT=0
 for TAG in `$IMG_TAGS; do
     if [ "`$TAG" = "$VersionTag" ] || [ "`$TAG" = "`$PREV_VER" ]; then
@@ -875,7 +909,7 @@ for TAG in `$IMG_TAGS; do
     fi
     IMG_COUNT=`$((IMG_COUNT + 1))
     if [ `$IMG_COUNT -ge $ImageRetentionCount ]; then
-        docker rmi "receptbanken:`$TAG" >/dev/null 2>&1 || true
+        docker rmi "phew:`$TAG" >/dev/null 2>&1 || true
     fi
 done
 "@
