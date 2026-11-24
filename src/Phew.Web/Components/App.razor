@@ -4,16 +4,47 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#18181b" />
+    <meta name="theme-color" content="#174638" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="PHEW!" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <base href="/" />
+    <script>
+        (function () {
+            var key = 'phew.theme';
+            var pref = 'system';
+            try {
+                var stored = window.localStorage ? window.localStorage.getItem(key) : null;
+                if (stored) {
+                    var norm = String(stored).trim().toLowerCase();
+                    if (norm === 'light' || norm === 'dark' || norm === 'system') {
+                        pref = norm;
+                    }
+                }
+            } catch (e) {}
+            var sysDark = true;
+            try {
+                if (window.matchMedia) {
+                    sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                }
+            } catch (e) {}
+            var resolved = pref === 'light' ? 'light' : (pref === 'dark' ? 'dark' : (sysDark ? 'dark' : 'light'));
+            var root = document.documentElement;
+            root.setAttribute('data-theme', resolved);
+            root.setAttribute('data-theme-preference', pref);
+            root.style.colorScheme = resolved;
+            var meta = document.querySelector('meta[name="theme-color"]');
+            if (meta) {
+                meta.setAttribute('content', resolved === 'light' ? '#397B4D' : '#174638');
+            }
+        })();
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="Phew.Web.styles.css" />
     <ImportMap />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>

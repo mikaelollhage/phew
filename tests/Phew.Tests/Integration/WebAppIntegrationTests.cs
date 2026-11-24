@@ -244,8 +244,8 @@ public class WebAppIntegrationTests : IDisposable
             root.GetProperty("start_url").GetString().Should().Be("/");
             root.GetProperty("scope").GetString().Should().Be("/");
             root.GetProperty("display").GetString().Should().Be("standalone");
-            root.GetProperty("background_color").GetString().Should().Be("#121214");
-            root.GetProperty("theme_color").GetString().Should().Be("#18181b");
+            root.GetProperty("background_color").GetString().Should().Be("#141416");
+            root.GetProperty("theme_color").GetString().Should().Be("#174638");
 
             var icons = root.GetProperty("icons").EnumerateArray().ToList();
             icons.Should().HaveCount(3);
@@ -264,6 +264,27 @@ public class WebAppIntegrationTests : IDisposable
                 var bytes = await iconResponse.Content.ReadAsByteArrayAsync();
                 bytes.Length.Should().BeGreaterThan(0);
             }
+
+            // Verify SVG and ICO favicons and WebP brand logo are served in Production
+            using var faviconSvgResponse = await client.GetAsync("/favicon.svg");
+            faviconSvgResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            faviconSvgResponse.Content.Headers.ContentType?.MediaType.Should().Be("image/svg+xml");
+            var faviconSvgContent = await faviconSvgResponse.Content.ReadAsStringAsync();
+            faviconSvgContent.Should().Contain("#174638");
+            faviconSvgContent.Should().Contain("#8BCB91");
+
+            using var faviconIcoResponse = await client.GetAsync("/favicon.ico");
+            faviconIcoResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await faviconIcoResponse.Content.ReadAsByteArrayAsync()).Length.Should().BeGreaterThan(0);
+
+            using var logoWebpResponse = await client.GetAsync("/phew-logo.webp");
+            logoWebpResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            logoWebpResponse.Content.Headers.ContentType?.MediaType.Should().Be("image/webp");
+            (await logoWebpResponse.Content.ReadAsByteArrayAsync()).Length.Should().BeGreaterThan(0);
+
+            // Verify obsolete Blazor default favicon.png is no longer served
+            using var obsoleteFaviconResponse = await client.GetAsync("/favicon.png");
+            obsoleteFaviconResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
         finally
         {
@@ -308,12 +329,18 @@ public class WebAppIntegrationTests : IDisposable
             var pwaJsContent = await pwaJsResponse.Content.ReadAsStringAsync();
             pwaJsContent.Should().Contain("serviceWorker.register('/sw.js'");
 
-            // Verify HTML head includes manifest, Apple metadata, and PWA registration script
+            // Verify HTML head includes manifest, favicons, Apple metadata, and PWA registration script
             using var homeResponse = await client.GetAsync("/");
             homeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
             var homeHtml = await homeResponse.Content.ReadAsStringAsync();
             homeHtml.Should().Contain("href=\"/manifest.webmanifest\"");
-            homeHtml.Should().Contain("name=\"theme-color\" content=\"#18181b\"");
+            homeHtml.Should().Contain("name=\"theme-color\" content=\"#174638\"");
+            homeHtml.Should().Contain("phew.theme");
+            homeHtml.Should().Contain("prefers-color-scheme: dark");
+            homeHtml.Should().Contain("data-theme");
+            homeHtml.Should().Contain("href=\"/favicon.svg\"");
+            homeHtml.Should().Contain("href=\"/favicon.ico\"");
+            homeHtml.Should().NotContain("favicon.png");
             homeHtml.Should().Contain("href=\"/apple-touch-icon.png\"");
             homeHtml.Should().Contain("apple-mobile-web-app-capable");
             homeHtml.Should().Contain("js/pwa.js");
@@ -386,11 +413,20 @@ public class WebAppIntegrationTests : IDisposable
             }
         }
 
-        // 3. Explicitly verify src/Phew.Infrastructure/Data/* files are present (case-sensitive Linux paths)
+        // 3. Explicitly verify src/Phew.Infrastructure/Data/* files and runtime branding assets are present (case-sensitive Linux paths)
         entryNames.Should().Contain("src/Phew.Infrastructure/Data/AppDbContext.cs");
         entryNames.Should().Contain("src/Phew.Infrastructure/Data/DbInitializer.cs");
         entryNames.Should().Contain("src/Phew.Infrastructure/Data/DesignTimeDbContextFactory.cs");
         entryNames.Should().Contain("src/Phew.Infrastructure/Backup/ZipBackupService.cs");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/favicon.svg");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/favicon.ico");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/phew-logo.webp");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/apple-touch-icon.png");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/icons/apple-touch-icon.png");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/icons/icon-192.png");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/icons/icon-512.png");
+        entryNames.Should().Contain("src/Phew.Web/wwwroot/icons/icon-maskable-512.png");
+        entryNames.Should().NotContain("src/Phew.Web/wwwroot/favicon.png");
 
         // 4. Verify every single .cs, .razor, and .csproj file under src/ (outside bin/obj) is included
         var srcDir = Path.Combine(repoRoot, "src");

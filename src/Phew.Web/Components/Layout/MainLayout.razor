@@ -1,9 +1,11 @@
 @inherits LayoutComponentBase
-@implements IDisposable
+@implements IAsyncDisposable
 @inject AppNotificationService NotificationService
 @inject NavigationManager Navigation
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime JSRuntime
 
-<FluentDesignTheme Mode="DesignThemeModes.Dark" />
+<FluentDesignTheme Mode="@CurrentFluentThemeMode" />
 <FluentDialogProvider />
 
 <div class="app-container">
@@ -58,15 +60,60 @@
 </div>
 
 @code {
+    private AppThemeService? _themeService;
+    private DotNetObjectReference<MainLayout>? _dotNetRef;
+    private bool _isDisposed;
+
+    private DesignThemeModes CurrentFluentThemeMode =>
+        _themeService?.FluentMode ?? DesignThemeModes.Dark;
+
     protected override void OnInitialized()
     {
+        _themeService = ServiceProvider.GetService<AppThemeService>();
+        if (_themeService != null)
+        {
+            _themeService.OnChange += OnThemeChanged;
+        }
+
         NotificationService.OnChange += OnNotificationChanged;
         Navigation.LocationChanged += OnLocationChanged;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isDisposed && _themeService != null)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await _themeService.InitializeAsync(JSRuntime, _dotNetRef);
+        }
+    }
+
+    [JSInvokable]
+    public Task OnClientThemeChangedAsync(string? preference, string? resolved)
+    {
+        if (_isDisposed || _themeService == null)
+        {
+            return Task.CompletedTask;
+        }
+
+        _themeService.UpdateFromClient(preference, resolved);
+        return Task.CompletedTask;
+    }
+
+    private void OnThemeChanged()
+    {
+        if (!_isDisposed)
+        {
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
     private void OnNotificationChanged()
     {
-        InvokeAsync(StateHasChanged);
+        if (!_isDisposed)
+        {
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -75,12 +122,39 @@
         {
             NotificationService.Clear();
         }
-        InvokeAsync(StateHasChanged);
+        if (!_isDisposed)
+        {
+            InvokeAsync(StateHasChanged);
+        }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        _isDisposed = true;
+        if (_themeService != null)
+        {
+            _themeService.OnChange -= OnThemeChanged;
+        }
         NotificationService.OnChange -= OnNotificationChanged;
         Navigation.LocationChanged -= OnLocationChanged;
+
+        if (_dotNetRef != null)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.unregisterThemeListener", _dotNetRef);
+            }
+            catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+            {
+                // Ignore disconnected circuits or test hosts
+            }
+            _dotNetRef.Dispose();
+            _dotNetRef = null;
+        }
     }
 }

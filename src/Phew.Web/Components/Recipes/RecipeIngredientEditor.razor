@@ -432,6 +432,8 @@
 
     private async Task ToggleRowMenu(int itemKey)
     {
+        draggedItemKey = null;
+        dragOverItemKey = null;
         openMenuKey = openMenuKey == itemKey ? null : itemKey;
         if (openMenuKey.HasValue && _dotNetRef != null)
         {

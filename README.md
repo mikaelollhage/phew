@@ -1,4 +1,4 @@
-# PHEW! 🍳
+# PHEW!
 
 **PHEW! — Family life, sorted.** är en modern, komplett och självhostad webbapplikation för hushållets recept, veckomeny, inköpslista, att göra-listor och familjekalender.
 
@@ -40,7 +40,7 @@ Den är utformad för att köras på en personlig Ubuntu Linux-hemserver (eller 
 | **Webbramverk** | ASP.NET Core Blazor Web App (Interactive Server) |
 | **Databasarkitektur** | `IDbContextFactory<AppDbContext>` & pragmatiska applikationstjänster |
 | **UI-komponenter** | Microsoft Fluent UI Blazor (`v4.x`) |
-| **Visuellt tema** | Mörkt kulinariskt tema ("Dark Culinary Theme") med varma accenter |
+| **Visuellt tema** | Mörkt familje- och organisationstema med gröna PHEW!-accenter (`#397B4D` / `#8BCB91` / `#174638`) |
 | **Databas** | SQLite med Write-Ahead Logging (WAL) |
 | **ORM & Migreringar** | Entity Framework Core SQLite |
 | **HTML-parsning** | AngleSharp |

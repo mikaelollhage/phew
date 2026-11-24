@@ -860,4 +860,54 @@ public class IngredientSectionReorderingTests : TestContext
                 ("grädde", (string?)null, 1),
                 ("ost", (string?)null, 2));
     }
+
+    [Fact]
+    public void RecipeIngredientEditor_OpeningActionMenu_ShouldOnlyActivateMenuButton_WithoutHighlightingRowOrKeepingDragClasses()
+    {
+        var ingredients = new List<Ingredient>
+        {
+            new() { OrderIndex = 1, Quantity = 2m, Unit = "dl", Name = "mjöl", GroupHeader = "Deg" },
+            new() { OrderIndex = 2, Quantity = 50m, Unit = "g", Name = "smör", GroupHeader = "Deg" }
+        };
+
+        var cut = RenderComponent<RecipeIngredientEditor>(parameters => parameters
+            .Add(p => p.Ingredients, ingredients)
+            .Add(p => p.Title, "Ingredienser"));
+
+        // Start a drag on ingredient row 1 and drag over section row 0, then click the three-dot menu on ingredient row 1
+        cut.FindAll(".ingredient-editor-item").ElementAt(1).QuerySelector(".ingredient-drag-handle")!.DragStart();
+        cut.FindAll(".ingredient-editor-item").ElementAt(0).DragOver();
+
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(1).Click();
+
+        var items = cut.FindAll(".ingredient-editor-item");
+        foreach (var item in items)
+        {
+            item.ClassList.Should().NotContain("is-dragging", "opening the row menu must clear any lingering drag highlight");
+            item.ClassList.Should().NotContain("drag-over");
+            item.ClassList.Should().NotContain("drag-over-above");
+            item.ClassList.Should().NotContain("drag-over-below");
+            item.ClassList.Should().NotContain("is-active");
+            item.ClassList.Should().NotContain("is-selected");
+        }
+
+        var ingredientRow = items.ElementAt(1).QuerySelector(".ingredient-editor-row")!;
+        ingredientRow.ClassList.Should().NotContain("is-active");
+        ingredientRow.ClassList.Should().NotContain("is-selected");
+        ingredientRow.ClassList.Should().NotContain("is-open");
+
+        var activeBtn = items.ElementAt(1).QuerySelector(".ingredient-row-menu-btn")!;
+        activeBtn.ClassList.Should().Contain("is-active");
+        items.ElementAt(0).QuerySelector(".ingredient-row-menu-btn")!.ClassList.Should().NotContain("is-active");
+
+        // Opening the section row menu likewise only activates the section's menu button
+        cut.FindAll(".ingredient-row-menu-btn").ElementAt(0).Click();
+        items = cut.FindAll(".ingredient-editor-item");
+        var sectionHeaderRow = items.ElementAt(0).QuerySelector(".ingredient-section-header-row")!;
+        sectionHeaderRow.ClassList.Should().NotContain("is-active");
+        sectionHeaderRow.ClassList.Should().NotContain("is-selected");
+        sectionHeaderRow.ClassList.Should().NotContain("is-open");
+        items.ElementAt(0).QuerySelector(".ingredient-row-menu-btn")!.ClassList.Should().Contain("is-active");
+        items.ElementAt(1).QuerySelector(".ingredient-row-menu-btn")!.ClassList.Should().NotContain("is-active");
+    }
 }

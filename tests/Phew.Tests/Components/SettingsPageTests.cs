@@ -1,5 +1,6 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -14,6 +15,7 @@ using Phew.Tests.Infrastructure;
 using Phew.Web.Components.Calendar;
 using Phew.Web.Components.Layout;
 using Phew.Web.Components.Pages;
+using Phew.Web.Services;
 
 namespace Phew.Tests.Components;
 
@@ -48,6 +50,7 @@ public class SettingsPageTests : TestContext
         var service = new FamilyMemberService(dbFactory, notifier);
 
         Services.AddFluentUIComponents();
+        Services.AddScoped<AppThemeService>();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(dbFactory);
         Services.AddSingleton(notifier);
         Services.AddSingleton(service);
@@ -289,6 +292,7 @@ public class SettingsPageTests : TestContext
         var weeklyMenuService = new WeeklyMenuService(dbFactory, generator, pantryMatcher, NullLogger<WeeklyMenuService>.Instance);
 
         Services.AddFluentUIComponents();
+        Services.AddScoped<AppThemeService>();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(dbFactory);
         Services.AddSingleton<ILocalDateProvider>(new StubLocalDateProvider(new DateOnly(2026, 11, 18)));
         Services.AddSingleton(calendarNotifier);
@@ -302,5 +306,193 @@ public class SettingsPageTests : TestContext
         cut.WaitForAssertion(() => cut.Find(".calendar-new-event-btn").Should().NotBeNull());
         cut.FindAll(".calendar-notifications-btn").Should().BeEmpty();
         cut.FindAll(".calendar-push-dialog").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void SettingsPage_AppearanceSection_ShouldDefaultToSystem_AndSupportImmediateLightDarkAndSystemSelection()
+    {
+        var (dbFactory, _, _) = SetupServices();
+        using var _ = dbFactory;
+
+        JSInterop.Setup<AppThemeService.ThemeStateJsDto>("phew.getThemeState")
+            .SetResult(new AppThemeService.ThemeStateJsDto { Preference = "system", Resolved = "dark" });
+        JSInterop.Setup<AppThemeService.ThemeStateJsDto>("phew.setThemePreference", "light")
+            .SetResult(new AppThemeService.ThemeStateJsDto { Preference = "light", Resolved = "light" });
+        JSInterop.Setup<AppThemeService.ThemeStateJsDto>("phew.setThemePreference", "dark")
+            .SetResult(new AppThemeService.ThemeStateJsDto { Preference = "dark", Resolved = "dark" });
+        JSInterop.Setup<AppThemeService.ThemeStateJsDto>("phew.setThemePreference", "system")
+            .SetResult(new AppThemeService.ThemeStateJsDto { Preference = "system", Resolved = "light" });
+
+        var themeService = Services.GetRequiredService<AppThemeService>();
+        var cut = RenderComponent<SettingsPage>();
+
+        cut.WaitForAssertion(() =>
+        {
+            var appearanceCard = cut.Find(".settings-appearance-card");
+            appearanceCard.TextContent.Should().Contain("Utseende");
+            appearanceCard.TextContent.Should().Contain("Välj hur PHEW! ska se ut på den här enheten.");
+
+            var radioGroup = appearanceCard.QuerySelector("[role='radiogroup']");
+            radioGroup.Should().NotBeNull();
+
+            var lightBtn = cut.Find("#settings-theme-light-btn");
+            var darkBtn = cut.Find("#settings-theme-dark-btn");
+            var systemBtn = cut.Find("#settings-theme-system-btn");
+
+            lightBtn.TextContent.Should().Contain("Ljust");
+            darkBtn.TextContent.Should().Contain("Mörkt");
+            systemBtn.TextContent.Should().Contain("System");
+
+            // Default is System
+            systemBtn.GetAttribute("aria-checked").Should().Be("true");
+            systemBtn.ClassList.Should().Contain("is-selected");
+            lightBtn.GetAttribute("aria-checked").Should().Be("false");
+            darkBtn.GetAttribute("aria-checked").Should().Be("false");
+
+            // B11: Each theme option renders a miniature application window preview (header, card, text lines, primary green action)
+            foreach (var btn in new[] { lightBtn, darkBtn, systemBtn })
+            {
+                btn.QuerySelector(".settings-theme-preview-header").Should().NotBeNull();
+                btn.QuerySelector(".settings-theme-preview-card").Should().NotBeNull();
+                btn.QuerySelectorAll(".settings-theme-preview-line").Should().HaveCount(2);
+                btn.QuerySelector(".settings-theme-preview-action").Should().NotBeNull();
+            }
+
+            // B12: Understated "Om PHEW!" section at the bottom of Settings
+            var aboutCard = cut.Find(".settings-about-card");
+            aboutCard.TextContent.Should().Contain("Om PHEW!");
+            aboutCard.TextContent.Should().Contain("Family life, sorted.");
+            var aboutLogo = aboutCard.QuerySelector("img.settings-about-logo");
+            aboutLogo.Should().NotBeNull();
+            aboutLogo!.GetAttribute("src").Should().Be("/phew-logo.webp");
+        });
+
+        // 1. Select Light ("Ljust")
+        cut.Find("#settings-theme-light-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Light);
+            themeService.ResolvedTheme.Should().Be("light");
+            themeService.FluentMode.Should().Be(DesignThemeModes.Light);
+
+            cut.Find("#settings-theme-light-btn").GetAttribute("aria-checked").Should().Be("true");
+            cut.Find("#settings-theme-light-btn").ClassList.Should().Contain("is-selected");
+            cut.Find("#settings-theme-system-btn").GetAttribute("aria-checked").Should().Be("false");
+        });
+
+        // 2. Select Dark ("Mörkt")
+        cut.Find("#settings-theme-dark-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Dark);
+            themeService.ResolvedTheme.Should().Be("dark");
+            themeService.FluentMode.Should().Be(DesignThemeModes.Dark);
+
+            cut.Find("#settings-theme-dark-btn").GetAttribute("aria-checked").Should().Be("true");
+            cut.Find("#settings-theme-dark-btn").ClassList.Should().Contain("is-selected");
+            cut.Find("#settings-theme-light-btn").GetAttribute("aria-checked").Should().Be("false");
+        });
+
+        // 3. Select System ("System")
+        cut.Find("#settings-theme-system-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.System);
+            themeService.ResolvedTheme.Should().Be("light");
+            themeService.FluentMode.Should().Be(DesignThemeModes.Light);
+
+            cut.Find("#settings-theme-system-btn").GetAttribute("aria-checked").Should().Be("true");
+            cut.Find("#settings-theme-system-btn").ClassList.Should().Contain("is-selected");
+            cut.Find("#settings-theme-dark-btn").GetAttribute("aria-checked").Should().Be("false");
+        });
+    }
+
+    [Fact]
+    public void SettingsPage_AppearanceSection_ShouldSupportKeyboardArrowAndHomeEndNavigation()
+    {
+        var (dbFactory, _, _) = SetupServices();
+        using var _ = dbFactory;
+
+        var themeService = Services.GetRequiredService<AppThemeService>();
+        var cut = RenderComponent<SettingsPage>();
+
+        // Start on System (default) -> ArrowRight wraps to Light
+        cut.Find("#settings-theme-system-btn").KeyDown(new KeyboardEventArgs { Key = "ArrowRight" });
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Light);
+            cut.Find("#settings-theme-light-btn").GetAttribute("aria-checked").Should().Be("true");
+            cut.Find("#settings-theme-light-btn").GetAttribute("tabindex").Should().Be("0");
+            cut.Find("#settings-theme-system-btn").GetAttribute("tabindex").Should().Be("-1");
+        });
+
+        // ArrowRight from Light -> Dark
+        cut.Find("#settings-theme-light-btn").KeyDown(new KeyboardEventArgs { Key = "ArrowRight" });
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Dark);
+            cut.Find("#settings-theme-dark-btn").GetAttribute("aria-checked").Should().Be("true");
+        });
+
+        // ArrowLeft from Dark -> Light
+        cut.Find("#settings-theme-dark-btn").KeyDown(new KeyboardEventArgs { Key = "ArrowLeft" });
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Light);
+            cut.Find("#settings-theme-light-btn").GetAttribute("aria-checked").Should().Be("true");
+        });
+
+        // End -> System
+        cut.Find("#settings-theme-light-btn").KeyDown(new KeyboardEventArgs { Key = "End" });
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.System);
+            cut.Find("#settings-theme-system-btn").GetAttribute("aria-checked").Should().Be("true");
+        });
+
+        // Home -> Light
+        cut.Find("#settings-theme-system-btn").KeyDown(new KeyboardEventArgs { Key = "Home" });
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.Light);
+            cut.Find("#settings-theme-light-btn").GetAttribute("aria-checked").Should().Be("true");
+        });
+    }
+
+    [Theory]
+    [InlineData(null, "dark", ThemePreference.System, "dark", DesignThemeModes.Dark)]
+    [InlineData("", "light", ThemePreference.System, "light", DesignThemeModes.Light)]
+    [InlineData("invalid-value", "light", ThemePreference.System, "light", DesignThemeModes.Light)]
+    [InlineData("LIGHT", "dark", ThemePreference.Light, "light", DesignThemeModes.Light)]
+    [InlineData("dark", "light", ThemePreference.Dark, "dark", DesignThemeModes.Dark)]
+    [InlineData("system", "light", ThemePreference.System, "light", DesignThemeModes.Light)]
+    [InlineData("system", "dark", ThemePreference.System, "dark", DesignThemeModes.Dark)]
+    public void AppThemeService_ShouldNormalizeMissingInvalidAndExplicitPreferences_AndRespectLiveOsChanges(
+        string? rawPreference,
+        string? rawResolved,
+        ThemePreference expectedPreference,
+        string expectedResolved,
+        DesignThemeModes expectedFluentMode)
+    {
+        var service = new AppThemeService();
+        service.UpdateFromClient(rawPreference, rawResolved);
+
+        service.Preference.Should().Be(expectedPreference);
+        service.ResolvedTheme.Should().Be(expectedResolved);
+        service.FluentMode.Should().Be(expectedFluentMode);
+
+        // When explicit Light or Dark is selected, an OS preference mismatch never overrides the explicit choice
+        if (expectedPreference == ThemePreference.Light)
+        {
+            service.UpdateFromClient("light", "dark");
+            service.ResolvedTheme.Should().Be("light");
+            service.FluentMode.Should().Be(DesignThemeModes.Light);
+        }
+        else if (expectedPreference == ThemePreference.Dark)
+        {
+            service.UpdateFromClient("dark", "light");
+            service.ResolvedTheme.Should().Be("dark");
+            service.FluentMode.Should().Be(DesignThemeModes.Dark);
+        }
     }
 }

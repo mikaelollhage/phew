@@ -141,6 +141,155 @@ window.phew = {
         }
     },
 
+    _themeStorageKey: 'phew.theme',
+    _themeListenerRefs: new Set(),
+    _themeMediaQuery: null,
+    _themeMediaHandler: null,
+    _themeStorageHandler: null,
+
+    _normalizeThemePreference: function (raw) {
+        if (typeof raw !== 'string') {
+            return 'system';
+        }
+        const trimmed = raw.trim().toLowerCase();
+        return (trimmed === 'light' || trimmed === 'dark' || trimmed === 'system')
+            ? trimmed
+            : 'system';
+    },
+
+    _getStoredThemePreference: function () {
+        try {
+            if (window.localStorage) {
+                const raw = window.localStorage.getItem(this._themeStorageKey);
+                if (raw !== null) {
+                    return this._normalizeThemePreference(raw);
+                }
+            }
+        } catch (err) {
+            console.debug('Kunde inte läsa temaval från localStorage:', err);
+        }
+        const attr = document.documentElement.getAttribute('data-theme-preference');
+        return attr ? this._normalizeThemePreference(attr) : 'system';
+    },
+
+    _resolveTheme: function (preference) {
+        const pref = this._normalizeThemePreference(preference);
+        if (pref === 'light') {
+            return 'light';
+        }
+        if (pref === 'dark') {
+            return 'dark';
+        }
+        try {
+            if (window.matchMedia) {
+                return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            }
+        } catch (_) {}
+        return 'dark';
+    },
+
+    _applyThemeToDom: function (preference) {
+        const pref = this._normalizeThemePreference(preference);
+        const resolved = this._resolveTheme(pref);
+        const root = document.documentElement;
+        root.setAttribute('data-theme', resolved);
+        root.setAttribute('data-theme-preference', pref);
+        root.style.colorScheme = resolved;
+
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+            meta.setAttribute('content', resolved === 'light' ? '#397B4D' : '#174638');
+        }
+
+        return {
+            preference: pref,
+            resolved: resolved
+        };
+    },
+
+    _notifyThemeListeners: function (state) {
+        if (!this._themeListenerRefs || this._themeListenerRefs.size === 0) {
+            return;
+        }
+        const deadRefs = [];
+        this._themeListenerRefs.forEach(ref => {
+            try {
+                ref.invokeMethodAsync('OnClientThemeChangedAsync', state.preference, state.resolved);
+            } catch (_) {
+                deadRefs.push(ref);
+            }
+        });
+        deadRefs.forEach(ref => this._themeListenerRefs.delete(ref));
+    },
+
+    _ensureThemeSystemListeners: function () {
+        if (!this._themeMediaHandler && window.matchMedia) {
+            try {
+                const mql = window.matchMedia('(prefers-color-scheme: dark)');
+                this._themeMediaQuery = mql;
+                this._themeMediaHandler = () => {
+                    const currentPref = this._getStoredThemePreference();
+                    if (currentPref === 'system') {
+                        const state = this._applyThemeToDom('system');
+                        this._notifyThemeListeners(state);
+                    }
+                };
+                if (typeof mql.addEventListener === 'function') {
+                    mql.addEventListener('change', this._themeMediaHandler);
+                } else if (typeof mql.addListener === 'function') {
+                    mql.addListener(this._themeMediaHandler);
+                }
+            } catch (err) {
+                console.debug('Kunde inte registrera matchMedia-lyssnare för tema:', err);
+            }
+        }
+
+        if (!this._themeStorageHandler) {
+            this._themeStorageHandler = (event) => {
+                if (!event || (event.key !== null && event.key !== this._themeStorageKey)) {
+                    return;
+                }
+                const pref = this._getStoredThemePreference();
+                const state = this._applyThemeToDom(pref);
+                this._notifyThemeListeners(state);
+            };
+            window.addEventListener('storage', this._themeStorageHandler);
+        }
+    },
+
+    getThemeState: function () {
+        const pref = this._getStoredThemePreference();
+        return this._applyThemeToDom(pref);
+    },
+
+    setThemePreference: function (preference) {
+        const pref = this._normalizeThemePreference(preference);
+        try {
+            if (window.localStorage) {
+                window.localStorage.setItem(this._themeStorageKey, pref);
+            }
+        } catch (err) {
+            console.debug('Kunde inte spara temaval i localStorage:', err);
+        }
+        const state = this._applyThemeToDom(pref);
+        this._notifyThemeListeners(state);
+        return state;
+    },
+
+    registerThemeListener: function (dotNetRef) {
+        this._ensureThemeSystemListeners();
+        if (dotNetRef) {
+            this._themeListenerRefs.add(dotNetRef);
+        }
+        return this.getThemeState();
+    },
+
+    unregisterThemeListener: function (dotNetRef) {
+        if (dotNetRef && this._themeListenerRefs) {
+            this._themeListenerRefs.delete(dotNetRef);
+        }
+    },
+
     registerShoppingSyncListeners: function (dotNetRef) {
         try {
             this.unregisterShoppingSyncListeners();

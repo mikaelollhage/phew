@@ -50,6 +50,7 @@ public class MainLayoutAndNavigationTests : TestContext
 
         Services.AddFluentUIComponents();
         Services.AddScoped<AppNotificationService>();
+        Services.AddScoped<AppThemeService>();
         Services.AddSingleton<IDbContextFactory<AppDbContext>>(dbFactory);
         Services.AddSingleton<IImageStorageService>(imageStorage);
         Services.AddSingleton<ILocalDateProvider>(localDateProvider);
@@ -163,6 +164,74 @@ public class MainLayoutAndNavigationTests : TestContext
             cut.Find("#home-shortcut-weekly-menu").GetAttribute("href").Should().Be("/veckomeny");
             cut.Find("#home-shortcut-shopping-list").GetAttribute("href").Should().Be("/inkopslista");
             cut.Find("#home-shortcut-recipes").GetAttribute("href").Should().Be("/recept");
+        });
+    }
+
+    [Fact]
+    public void NavMenu_ShouldRenderPhewBrandIdentity_WithFullDesktopLogoAndCompactMobileBranding_WithoutFryingPanEmoji()
+    {
+        SetupTestContext(seedRecipes: false);
+
+        var cut = RenderComponent<NavMenu>();
+
+        var brandSection = cut.Find(".brand-section");
+        brandSection.TextContent.Should().NotContain("🍳", "the old frying pan and egg branding must be replaced");
+
+        var brandLink = brandSection.QuerySelector("a.brand-link");
+        brandLink.Should().NotBeNull();
+        brandLink!.GetAttribute("href").Should().Be("");
+        brandLink.GetAttribute("aria-label").Should().Be("PHEW! – Family life, sorted.");
+
+        var fullLogoImg = brandSection.QuerySelector("img.brand-logo-full");
+        fullLogoImg.Should().NotBeNull("B08: desktop sidebar header renders the full illustrated PHEW! logo");
+        fullLogoImg!.GetAttribute("src").Should().Be("/phew-logo.webp");
+        fullLogoImg.GetAttribute("width").Should().Be("212");
+        fullLogoImg.GetAttribute("height").Should().Be("212");
+        fullLogoImg.GetAttribute("alt").Should().Be("");
+        fullLogoImg.GetAttribute("aria-hidden").Should().Be("true");
+
+        var compactContainer = brandSection.QuerySelector(".brand-compact");
+        compactContainer.Should().NotBeNull("B08: mobile header retains the compact branding arrangement");
+        compactContainer!.GetAttribute("aria-hidden").Should().Be("true");
+
+        var logoImg = brandSection.QuerySelector("img.brand-logo-mark");
+        logoImg.Should().NotBeNull();
+        logoImg!.GetAttribute("src").Should().Be("/favicon.svg");
+        logoImg.GetAttribute("width").Should().Be("36");
+        logoImg.GetAttribute("height").Should().Be("36");
+        logoImg.GetAttribute("alt").Should().Be("");
+        logoImg.GetAttribute("aria-hidden").Should().Be("true");
+
+        brandSection.QuerySelector(".brand-title")!.TextContent.Trim().Should().Be("PHEW!");
+        brandSection.QuerySelector(".brand-subtitle")!.TextContent.Trim().Should().Be("Family life, sorted.");
+    }
+
+    [Fact]
+    public async Task MainLayout_ShouldSyncFluentDesignThemeWithAppThemeService_OnLiveClientThemeChanges()
+    {
+        SetupTestContext(seedRecipes: false);
+        var themeService = Services.GetRequiredService<AppThemeService>();
+
+        var cut = RenderComponent<MainLayout>();
+        var fluentTheme = cut.FindComponent<FluentDesignTheme>();
+        fluentTheme.Instance.Mode.Should().Be(DesignThemeModes.Dark);
+
+        // Simulate client resolving System mode with light OS preference
+        await cut.Instance.OnClientThemeChangedAsync("system", "light");
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.System);
+            themeService.ResolvedTheme.Should().Be("light");
+            cut.FindComponent<FluentDesignTheme>().Instance.Mode.Should().Be(DesignThemeModes.Light);
+        });
+
+        // Simulate live OS preference switching to dark while System mode is active
+        await cut.Instance.OnClientThemeChangedAsync("system", "dark");
+        cut.WaitForAssertion(() =>
+        {
+            themeService.Preference.Should().Be(ThemePreference.System);
+            themeService.ResolvedTheme.Should().Be("dark");
+            cut.FindComponent<FluentDesignTheme>().Instance.Mode.Should().Be(DesignThemeModes.Dark);
         });
     }
 }

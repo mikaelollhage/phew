@@ -105,7 +105,7 @@ else
                                        checked="@isChecked"
                                        @onchange="@(() => ToggleIngredient(idx))" />
                                 <label for="@checkboxId" class="ingredient-label">
-                                    <span style="font-weight: 700; color: var(--rb-accent-gold);">
+                                    <span style="font-weight: 700; color: var(--rb-accent);">
                                         @ServingCalculator.FormatScaledIngredientPrefix(ing, recipe.Servings, currentServings)
                                     </span>
                                     <span>@ing.Name</span>
@@ -140,7 +140,7 @@ else
                             </div>
                             @if (!string.IsNullOrWhiteSpace(activeStep.GroupHeader))
                             {
-                                <span style="font-size: 16px; font-weight: 600; color: var(--rb-accent-gold);">
+                                <span class="instruction-group-header" style="font-size: 16px; font-weight: 600; color: var(--rb-accent);">
                                     @activeStep.GroupHeader
                                 </span>
                             }

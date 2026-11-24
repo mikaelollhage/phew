@@ -96,6 +96,7 @@ builder.Services.AddScoped<FamilyMemberService>();
 builder.Services.AddScoped<RecipeRatingService>();
 builder.Services.AddScoped<IBackupService, ZipBackupService>();
 builder.Services.AddScoped<AppNotificationService>();
+builder.Services.AddScoped<AppThemeService>();
 
 // Recipe Import Services with Strengthened SSRF Protection
 builder.Services.AddSingleton<SwedishIngredientParser>();

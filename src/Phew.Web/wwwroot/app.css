@@ -1,26 +1,69 @@
 :root,
 body,
 .app-container {
-  --rb-bg-base: #121214;
+  /* Approved PHEW! brand reference palette */
+  --phew-green-primary: #397b4d;
+  --phew-green-light: #8bcb91;
+  --phew-green-forest: #174638;
+  --phew-warm-cream: #fff8ec;
+
+  /* Dark neutral surfaces & card layout */
+  --rb-bg-base: #141416;
   --rb-bg-surface: #18181b;
-  --rb-bg-card: #1c1c21;
-  --rb-bg-elevated: #27272a;
+  --rb-bg-card: #202024;
+  --rb-bg-elevated: #27272c;
   --rb-border: #2e2e36;
-  --rb-border-subtle: #222228;
+  --rb-border-subtle: #24242b;
   --rb-text-primary: #fafafa;
   --rb-text-secondary: #a1a1aa;
   --rb-text-muted: #91919d;
-  --rb-accent: #e07a5f;
-  --rb-accent-hover: #e76f51;
-  --rb-accent-subtle: rgba(224, 122, 95, 0.15);
+
+  /* Green brand accent tokens (WCAG AA contrast >= 8.5:1 on dark surfaces) */
+  --rb-accent: #8bcb91;
+  --rb-accent-hover: #a3d9a8;
+  --rb-accent-subtle: rgba(139, 203, 145, 0.14);
+  --rb-accent-border: rgba(139, 203, 145, 0.38);
+  --rb-focus-ring: #8bcb91;
+  --rb-checkbox-accent: #8bcb91;
+  --rb-select-row-bg: rgba(139, 203, 145, 0.07);
+  --rb-select-row-border: rgba(139, 203, 145, 0.42);
+  --rb-drag-over-bg: rgba(139, 203, 145, 0.1);
+  --rb-drag-source-bg: #232825;
+
+  /* Shared semantic tokens for Today highlighting (Home, Weekly Menu, Family Calendar) */
+  --rb-today-border: rgba(139, 203, 145, 0.45);
+  --rb-today-accent-bar: #8bcb91;
+  --rb-today-bg: linear-gradient(90deg, rgba(139, 203, 145, 0.12) 0%, var(--rb-bg-card) 42%);
+  --rb-today-shadow: 0 4px 18px rgba(46, 106, 64, 0.18);
+  --rb-today-heading: #8bcb91;
+  --rb-today-badge-bg: #8bcb91;
+  --rb-today-badge-fg: #122118;
+  --rb-today-badge-shadow: 0 1px 6px rgba(139, 203, 145, 0.28);
+
+  /* Secondary button tokens */
+  --rb-btn-secondary-bg: var(--rb-bg-elevated);
+  --rb-btn-secondary-hover-bg: var(--rb-border);
+  --rb-btn-secondary-active-bg: #35353f;
+  --rb-btn-secondary-border: var(--rb-border);
+  --rb-btn-secondary-hover-border: #3f3f4a;
+  --rb-btn-secondary-fg: var(--rb-text-primary);
+  --rb-btn-secondary-hover-fg: #ffffff;
+
+  /* Semantic warm gold & terracotta accents (ratings, favorites, warnings, drafts) */
   --rb-accent-gold: #f2a65a;
   --rb-accent-gold-subtle: rgba(242, 166, 90, 0.15);
+  --rb-accent-coral: #e07a5f;
+
+  /* Semantic status & action tokens */
   --rb-success: #10b981;
   --rb-danger: #ef4444;
   --rb-danger-hover: #dc2626;
-  --rb-btn-primary-bg: #b84d33;
-  --rb-btn-primary-hover: #a23d24;
-  --rb-btn-primary-active: #8f321b;
+
+  /* Primary button tokens (WCAG AA contrast >= 6.4:1 with white text) */
+  --rb-btn-primary-bg: #2e6a40;
+  --rb-btn-primary-hover: #255b35;
+  --rb-btn-primary-active: #174638;
+
   --rb-radius-sm: 6px;
   --rb-radius-md: 10px;
   --rb-radius-lg: 16px;
@@ -30,31 +73,116 @@ body,
   /* Fluent UI theme token overrides for cohesive dark styling */
   color-scheme: dark;
   --fill-color: #18181b;
-  --neutral-layer-1: #121214;
+  --neutral-layer-1: #141416;
   --neutral-layer-2: #18181b;
-  --neutral-layer-3: #1c1c21;
-  --neutral-layer-4: #27272a;
-  --neutral-layer-card-container: #1c1c21;
-  --neutral-layer-floating: #1c1c21;
+  --neutral-layer-3: #202024;
+  --neutral-layer-4: #27272c;
+  --neutral-layer-card-container: #202024;
+  --neutral-layer-floating: #202024;
   --neutral-fill-input-rest: #18181b;
-  --neutral-fill-input-hover: #27272a;
+  --neutral-fill-input-hover: #27272c;
   --neutral-fill-input-active: #18181b;
   --neutral-fill-input-focus: #18181b;
   --neutral-fill-stealth-rest: #18181b;
-  --neutral-fill-stealth-hover: #27272a;
+  --neutral-fill-stealth-hover: #27272c;
   --neutral-stroke-rest: #2e2e36;
   --neutral-stroke-hover: #3f3f4a;
-  --neutral-stroke-focus: #e07a5f;
+  --neutral-stroke-focus: #8bcb91;
   --neutral-stroke-input-rest: #2e2e36;
   --neutral-stroke-input-hover: #3f3f4a;
-  --neutral-stroke-input-active: #e07a5f;
+  --neutral-stroke-input-active: #8bcb91;
   --neutral-foreground-rest: #fafafa;
   --neutral-foreground-hint: #91919d;
-  --accent-fill-rest: #b84d33;
-  --accent-fill-hover: #a23d24;
-  --accent-fill-active: #8f321b;
+  --accent-fill-rest: #2e6a40;
+  --accent-fill-hover: #255b35;
+  --accent-fill-active: #174638;
   --accent-foreground-rest: #ffffff;
   --control-corner-radius: 6;
+}
+
+/* Light theme semantic token profile (warm, friendly light appearance inspired by PHEW! branding) */
+:root[data-theme="light"],
+[data-theme="light"],
+[data-theme="light"] body,
+[data-theme="light"] .app-container,
+.theme-light {
+  --rb-bg-base: #faf9f5;
+  --rb-bg-surface: #f3f1ea;
+  --rb-bg-card: #ffffff;
+  --rb-bg-elevated: #eae6dc;
+  --rb-border: #d5cfc1;
+  --rb-border-subtle: #e5e0d4;
+  --rb-text-primary: #243d35;
+  --rb-text-secondary: #3e544c;
+  --rb-text-muted: #546a61;
+  --rb-accent: #174638;
+  --rb-accent-hover: #255b35;
+  --rb-accent-subtle: #ddf3e5;
+  --rb-accent-border: rgba(57, 123, 77, 0.38);
+  --rb-focus-ring: #397b4d;
+  --rb-checkbox-accent: #2e6a40;
+  --rb-select-row-bg: #eef7f1;
+  --rb-select-row-border: rgba(57, 123, 77, 0.45);
+  --rb-drag-over-bg: #ddf3e5;
+  --rb-drag-source-bg: #eef5f0;
+
+  /* Shared semantic tokens for Today highlighting in Light mode */
+  --rb-today-border: rgba(57, 123, 77, 0.42);
+  --rb-today-accent-bar: #2e6a40;
+  --rb-today-bg: linear-gradient(90deg, #e3f3e8 0%, var(--rb-bg-card) 42%);
+  --rb-today-shadow: 0 4px 16px rgba(23, 70, 56, 0.09);
+  --rb-today-heading: #174638;
+  --rb-today-badge-bg: #2e6a40;
+  --rb-today-badge-fg: #ffffff;
+  --rb-today-badge-shadow: 0 1px 5px rgba(23, 70, 56, 0.22);
+
+  /* Lighter, cleaner secondary buttons in Light mode (B10) */
+  --rb-btn-secondary-bg: #ffffff;
+  --rb-btn-secondary-hover-bg: #f4f1e8;
+  --rb-btn-secondary-active-bg: #eae6dc;
+  --rb-btn-secondary-border: #d0c9ba;
+  --rb-btn-secondary-hover-border: #b8b09f;
+  --rb-btn-secondary-fg: #243d35;
+  --rb-btn-secondary-hover-fg: #174638;
+
+  --rb-accent-gold: #9a4406;
+  --rb-accent-gold-subtle: rgba(154, 68, 6, 0.12);
+  --rb-accent-coral: #b44a2f;
+  --rb-success: #15803d;
+  --rb-danger: #c81e1e;
+  --rb-danger-hover: #991b1b;
+  --rb-btn-primary-bg: #2e6a40;
+  --rb-btn-primary-hover: #255b35;
+  --rb-btn-primary-active: #174638;
+  --rb-shadow: 0 4px 18px rgba(23, 70, 56, 0.08);
+  --rb-shadow-sm: 0 2px 6px rgba(23, 70, 56, 0.05);
+
+  color-scheme: light;
+  --fill-color: #ffffff;
+  --neutral-layer-1: #faf9f5;
+  --neutral-layer-2: #f3f1ea;
+  --neutral-layer-3: #ffffff;
+  --neutral-layer-4: #eae6dc;
+  --neutral-layer-card-container: #ffffff;
+  --neutral-layer-floating: #ffffff;
+  --neutral-fill-input-rest: #ffffff;
+  --neutral-fill-input-hover: #f3f1ea;
+  --neutral-fill-input-active: #ffffff;
+  --neutral-fill-input-focus: #ffffff;
+  --neutral-fill-stealth-rest: #f3f1ea;
+  --neutral-fill-stealth-hover: #eae6dc;
+  --neutral-stroke-rest: #d5cfc1;
+  --neutral-stroke-hover: #b7b0a0;
+  --neutral-stroke-focus: #2e6a40;
+  --neutral-stroke-input-rest: #d5cfc1;
+  --neutral-stroke-input-hover: #b7b0a0;
+  --neutral-stroke-input-active: #2e6a40;
+  --neutral-foreground-rest: #243d35;
+  --neutral-foreground-hint: #546a61;
+  --accent-fill-rest: #2e6a40;
+  --accent-fill-hover: #255b35;
+  --accent-fill-active: #174638;
+  --accent-foreground-rest: #ffffff;
 }
 
 * {
@@ -79,13 +207,13 @@ h1:focus-visible,
 }
 
 a {
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
   text-decoration: none;
   transition: color 0.2s;
 }
 
 a:hover {
-  color: var(--rb-accent);
+  color: var(--rb-accent-hover);
 }
 
 /* App Shell */
@@ -107,27 +235,89 @@ a:hover {
 }
 
 .brand-section {
-  padding: 24px;
+  padding: 14px 20px 10px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
   border-bottom: 1px solid var(--rb-border-subtle);
 }
 
-.brand-icon {
-  font-size: 28px;
-  line-height: 1;
+.brand-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--rb-radius-md);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.brand-link:hover {
+  color: inherit;
+}
+
+.brand-link:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+.brand-link:focus-visible {
+  outline: 2px solid var(--rb-focus-ring);
+  outline-offset: 3px;
+}
+
+.brand-logo-full {
+  display: block;
+  width: 212px;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.brand-compact {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brand-logo-mark {
+  width: 36px;
+  height: 36px;
+  aspect-ratio: 1 / 1;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: block;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.32);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
 }
 
 .brand-title {
   font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+  line-height: 1.15;
   color: var(--rb-text-primary);
 }
 
 .brand-title span {
   color: var(--rb-accent);
+}
+
+.brand-subtitle {
+  font-size: 0.72rem;
+  color: var(--rb-text-muted);
+  line-height: 1.25;
+  margin-top: 1px;
 }
 
 .sidebar-nav {
@@ -148,7 +338,13 @@ a:hover {
   color: var(--rb-text-secondary);
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.nav-link-custom:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
 .nav-link-custom:hover {
@@ -780,9 +976,9 @@ button.category-badge {
 }
 
 .category-badge.active {
-  background-color: var(--rb-accent);
+  background-color: var(--rb-btn-primary-bg);
   border-color: var(--rb-accent);
-  color: #fff;
+  color: #ffffff;
 }
 
 .category-dot {
@@ -803,14 +999,14 @@ button.category-badge {
 }
 
 .recipe-category-selector .category-badge.active {
-  background-color: var(--rb-bg-elevated);
-  border-color: var(--rb-accent-gold);
+  background-color: var(--rb-accent-subtle);
+  border-color: var(--rb-accent);
   color: var(--rb-text-primary);
 }
 
 .recipe-category-selector .category-badge.active:hover {
-  border-color: var(--rb-accent-gold);
-  box-shadow: 0 0 0 1px rgba(242, 166, 90, 0.45);
+  border-color: var(--rb-accent-hover);
+  box-shadow: 0 0 0 1px var(--rb-accent-border);
 }
 
 .category-color-swatch {
@@ -1267,7 +1463,7 @@ fluent-search,
 fluent-select,
 fluent-listbox,
 fluent-option {
-  color-scheme: dark;
+  color-scheme: inherit;
   --fill-color: var(--rb-bg-surface);
   --neutral-layer-floating: var(--rb-bg-card);
   --neutral-fill-input-rest: var(--rb-bg-surface);
@@ -1281,10 +1477,10 @@ fluent-option {
   --neutral-fill-hover: var(--rb-bg-elevated);
   --neutral-fill-active: var(--rb-bg-surface);
   --neutral-stroke-rest: var(--rb-border);
-  --neutral-stroke-hover: #3f3f4c;
+  --neutral-stroke-hover: var(--neutral-stroke-input-hover, #3f3f4c);
   --neutral-stroke-focus: var(--rb-accent);
   --neutral-stroke-input-rest: var(--rb-border);
-  --neutral-stroke-input-hover: #3f3f4c;
+  --neutral-stroke-input-hover: var(--neutral-stroke-hover, #3f3f4c);
   --neutral-stroke-input-active: var(--rb-accent);
   --neutral-foreground-rest: var(--rb-text-primary);
   --neutral-foreground-hover: var(--rb-text-primary);
@@ -1441,16 +1637,17 @@ fluent-number-field::part(control) {
 
 .ingredient-editor-item.is-dragging > .ingredient-editor-row,
 .ingredient-editor-item.is-dragging > .ingredient-section-header-row {
-  opacity: 0.72;
-  border-color: var(--rb-accent-gold);
-  background-color: #242228;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  opacity: 0.65;
+  border-color: var(--rb-accent-border);
+  border-style: dashed;
+  background-color: var(--rb-drag-source-bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .ingredient-editor-item.drag-over > .ingredient-editor-row,
 .ingredient-editor-item.drag-over > .ingredient-section-header-row {
   border-color: var(--rb-accent);
-  background-color: #22222a;
+  background-color: var(--rb-drag-over-bg);
 }
 
 .ingredient-editor-item.drag-over-above {
@@ -1459,7 +1656,7 @@ fluent-number-field::part(control) {
 
 .ingredient-editor-item.drag-over-above > .ingredient-editor-row,
 .ingredient-editor-item.drag-over-above > .ingredient-section-header-row {
-  box-shadow: inset 0 3px 0 0 var(--rb-accent-gold);
+  box-shadow: inset 0 3px 0 0 var(--rb-accent);
 }
 
 .ingredient-editor-item.drag-over-below {
@@ -1468,7 +1665,7 @@ fluent-number-field::part(control) {
 
 .ingredient-editor-item.drag-over-below > .ingredient-editor-row,
 .ingredient-editor-item.drag-over-below > .ingredient-section-header-row {
-  box-shadow: inset 0 -3px 0 0 var(--rb-accent-gold);
+  box-shadow: inset 0 -3px 0 0 var(--rb-accent);
 }
 
 .ingredient-section-header-row {
@@ -1479,8 +1676,9 @@ fluent-number-field::part(control) {
   border-radius: var(--rb-radius-sm);
   background-color: var(--rb-bg-elevated);
   border: 1px solid var(--rb-border);
-  border-left: 3px solid var(--rb-accent-gold);
+  border-left: 3px solid var(--rb-accent);
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ingredient-section-header-row.is-empty-section {
@@ -1500,12 +1698,13 @@ fluent-number-field::part(control) {
   flex: 1;
   min-width: 140px;
   background-color: var(--rb-bg-surface);
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
   font-weight: 700;
   font-size: 14px;
   padding: 7px 10px;
   border-radius: var(--rb-radius-sm);
   border: 1px solid var(--rb-border-subtle);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ingredient-section-title-input::placeholder {
@@ -1513,9 +1712,15 @@ fluent-number-field::part(control) {
   font-weight: 500;
 }
 
-.ingredient-section-title-input:focus {
+.ingredient-section-title-input:hover:not(:disabled) {
+  border-color: var(--rb-border);
+}
+
+.ingredient-section-title-input:focus,
+.ingredient-section-title-input:focus-visible {
   outline: none;
-  border-color: var(--rb-accent-gold);
+  border-color: var(--rb-accent);
+  box-shadow: 0 0 0 2px var(--rb-accent-subtle);
 }
 
 .ingredient-section-badge {
@@ -1575,6 +1780,12 @@ fluent-number-field::part(control) {
   padding: 0;
   border-radius: var(--rb-radius-sm);
   flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-secondary-custom.ingredient-row-menu-btn:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
 }
 
 .btn-secondary-custom.ingredient-row-menu-btn.is-active {
@@ -1714,7 +1925,7 @@ fluent-number-field::part(control) {
 
 .ingredient-drag-handle:active {
   cursor: grabbing;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 body.ingredient-touch-reordering {
@@ -1730,7 +1941,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .ingredient-group-header {
   font-weight: 700;
   font-size: 14px;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
   margin-top: 12px;
   margin-bottom: 4px;
   list-style: none;
@@ -1752,6 +1963,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   border-radius: var(--rb-radius-sm);
   border: 1px solid var(--rb-border-subtle);
   min-width: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .ingredient-row-drag {
@@ -1813,7 +2025,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .ingredient-optional-toggle.has-values {
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .ingredient-optional-chevron {
@@ -1843,7 +2055,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .ingredient-optional-indicator {
   font-size: 14px;
   line-height: 1;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .ingredient-optional-fields {
@@ -2323,9 +2535,9 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .btn-secondary-custom {
-  background-color: var(--rb-bg-elevated);
-  color: var(--rb-text-primary);
-  border: 1px solid var(--rb-border);
+  background-color: var(--rb-btn-secondary-bg);
+  color: var(--rb-btn-secondary-fg);
+  border: 1px solid var(--rb-btn-secondary-border);
   padding: 10px 18px;
   border-radius: var(--rb-radius-md);
   font-weight: 500;
@@ -2337,12 +2549,13 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   align-items: center;
   gap: 8px;
   text-decoration: none;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
 }
 
 .btn-secondary-custom:hover:not(:disabled) {
-  background-color: var(--rb-border);
-  color: #fff;
+  background-color: var(--rb-btn-secondary-hover-bg);
+  border-color: var(--rb-btn-secondary-hover-border);
+  color: var(--rb-btn-secondary-hover-fg);
   text-decoration: none;
 }
 
@@ -2353,6 +2566,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .btn-secondary-custom:active:not(:disabled) {
+  background-color: var(--rb-btn-secondary-active-bg);
   transform: translateY(1px);
 }
 
@@ -2410,15 +2624,20 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .btn-primary-custom:focus-visible,
 .btn-secondary-custom:focus-visible,
 .btn-danger-custom:focus-visible,
-.nav-link-custom:focus-visible,
 .recipe-card-fav-btn:focus-visible,
 .recipe-card-link:focus-visible,
 .servings-btn:focus-visible,
 .category-badge:focus-visible,
 .day-category-option:focus-visible,
 .weekly-more-actions-toggle:focus-visible {
-  outline: 2px solid var(--rb-accent);
+  outline: 2px solid var(--rb-focus-ring);
   outline-offset: 2px;
+}
+
+.nav-link-custom:focus-visible {
+  outline: 2px solid var(--rb-focus-ring);
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 /* Empty State */
@@ -2486,7 +2705,26 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   }
 
   .brand-section {
-    padding: 14px 16px;
+    padding: 12px 16px;
+    justify-content: flex-start;
+  }
+
+  .brand-link {
+    justify-content: flex-start;
+  }
+
+  .brand-logo-full {
+    display: none;
+  }
+
+  .brand-compact {
+    display: inline-flex;
+  }
+
+  .brand-logo-mark {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
   }
 
   .sidebar-nav {
@@ -2793,8 +3031,8 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
    Todays Dinner Card (Start Page)
    ============================================================ */
 .todays-dinner-card {
-  background: linear-gradient(135deg, var(--rb-bg-card) 0%, #242228 100%);
-  border: 1px solid rgba(224, 122, 95, 0.35);
+  background: linear-gradient(135deg, var(--rb-bg-card) 0%, #1d2621 100%);
+  border: 1px solid var(--rb-accent-border);
   border-left: 5px solid var(--rb-accent);
   border-radius: var(--rb-radius-lg);
   padding: 24px 28px;
@@ -2823,8 +3061,8 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.8px;
-  color: var(--rb-accent-gold);
-  background-color: var(--rb-accent-gold-subtle);
+  color: var(--rb-accent);
+  background-color: var(--rb-accent-subtle);
   padding: 4px 10px;
   border-radius: 999px;
 }
@@ -2886,7 +3124,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .todays-dinner-week-link {
   font-size: 13px;
   font-weight: 600;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .todays-dinner-image-wrap {
@@ -3132,8 +3370,8 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 
 .weekly-status-badge.status-unsaved {
   background-color: rgba(224, 122, 95, 0.18);
-  color: var(--rb-accent);
-  border: 1px solid rgba(224, 122, 95, 0.4);
+  color: #f4a28c;
+  border: 1px solid rgba(224, 122, 95, 0.45);
 }
 
 .weekly-nav-controls {
@@ -3347,16 +3585,16 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .weekly-day-card.is-today {
-  border-color: rgba(242, 166, 90, 0.55);
-  border-left: 7px solid var(--rb-accent-gold);
-  background: linear-gradient(90deg, rgba(242, 166, 90, 0.11) 0%, var(--rb-bg-card) 38%);
-  box-shadow: 0 4px 18px rgba(242, 166, 90, 0.12);
+  border-color: var(--rb-today-border);
+  border-left: 7px solid var(--rb-today-accent-bar);
+  background: var(--rb-today-bg);
+  box-shadow: var(--rb-today-shadow);
 }
 
 .weekly-day-card.drag-over {
   border-color: var(--rb-accent);
   box-shadow: 0 0 0 2px var(--rb-accent-subtle);
-  background-color: #22222a;
+  background: var(--rb-drag-over-bg);
 }
 
 .weekly-day-header {
@@ -3398,9 +3636,13 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.6px;
-  color: var(--rb-accent-gold);
+  color: var(--rb-text-primary);
   min-width: 0;
   line-height: 1.25;
+}
+
+.weekly-day-card.is-today .weekly-day-name {
+  color: var(--rb-today-heading);
 }
 
 .weekly-day-today-badge {
@@ -3412,9 +3654,9 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   text-transform: uppercase;
   padding: 3px 10px;
   border-radius: 999px;
-  background-color: var(--rb-accent-gold);
-  color: #121214;
-  box-shadow: 0 1px 6px rgba(242, 166, 90, 0.35);
+  background-color: var(--rb-today-badge-bg);
+  color: var(--rb-today-badge-fg);
+  box-shadow: var(--rb-today-badge-shadow);
 }
 
 .weekly-drag-handle,
@@ -3479,7 +3721,7 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .weekly-drag-handle:active,
 .shopping-drag-handle:active {
   cursor: grabbing;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 body.weekly-touch-reordering {
@@ -3493,8 +3735,10 @@ body.weekly-touch-reordering .weekly-drag-handle {
 }
 
 .weekly-day-card.is-dragging {
-  opacity: 0.55;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0.58;
+  border-color: var(--rb-accent-border);
+  border-style: dashed;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
   transform: scale(0.99);
 }
 
@@ -3798,7 +4042,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
 .move-option-day {
   font-size: 13px;
   font-weight: 600;
-  color: var(--rb-accent-gold);
+  color: var(--rb-text-primary);
 }
 
 .move-option-desc {
@@ -4003,7 +4247,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
   .weekly-pantry-count-badge {
     font-size: 13px;
     font-weight: 700;
-    color: var(--rb-accent-gold);
+    color: var(--rb-accent);
   }
 
   .weekly-pantry-chevron {
@@ -4322,7 +4566,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
 }
 
 .shopping-header-counts strong {
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
   font-weight: 700;
 }
 
@@ -4509,8 +4753,10 @@ body.weekly-touch-reordering .weekly-drag-handle {
   border-radius: var(--rb-radius-md);
   transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease, box-shadow 0.12s ease;
   position: relative;
+  cursor: default;
   touch-action: pan-y;
   -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
   scroll-margin-top: 80px;
   scroll-margin-bottom: 24px;
 }
@@ -4542,29 +4788,35 @@ body.weekly-touch-reordering .weekly-drag-handle {
 }
 
 .shopping-item-row:hover {
+  background-color: var(--rb-bg-surface);
+  border-color: var(--rb-border-subtle);
+}
+
+.shopping-item-row:hover:not(:has(.ingredient-row-menu-anchor.is-open)):not(:has(.shopping-row-actions:hover)):not(:has(.shopping-row-drag:hover)) {
   background-color: var(--rb-bg-elevated);
   border-color: var(--rb-border);
 }
 
 .shopping-item-row.is-dragging {
-  opacity: 0.72;
-  border-color: var(--rb-accent-gold);
-  background-color: #242228;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  opacity: 0.65;
+  border-color: var(--rb-accent-border);
+  border-style: dashed;
+  background-color: var(--rb-drag-source-bg);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 
 .shopping-item-row.drag-over {
   border-color: var(--rb-accent);
-  background-color: #22222a;
+  background-color: var(--rb-drag-over-bg);
 }
 
 .shopping-item-row.drag-over-above {
-  box-shadow: inset 0 3px 0 0 var(--rb-accent-gold);
+  box-shadow: inset 0 3px 0 0 var(--rb-accent);
   transform: translateY(3px);
 }
 
 .shopping-item-row.drag-over-below {
-  box-shadow: inset 0 -3px 0 0 var(--rb-accent-gold);
+  box-shadow: inset 0 -3px 0 0 var(--rb-accent);
   transform: translateY(-3px);
 }
 
@@ -4619,7 +4871,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
 
 .shopping-item-qty {
   font-weight: 700;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .shopping-item-unit {
@@ -4720,7 +4972,7 @@ body.shopping-touch-reordering * {
 }
 
 .shopping-mode-count strong {
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .shopping-mode-exit-btn {
@@ -5018,7 +5270,7 @@ body.shopping-touch-reordering * {
 
 .weekly-preview-close-btn:hover {
   color: var(--rb-text-primary);
-  border-color: var(--rb-accent-gold);
+  border-color: var(--rb-accent);
 }
 
 .weekly-preview-week-nav {
@@ -5098,13 +5350,13 @@ body.shopping-touch-reordering * {
 .weekly-preview-collapse-toggle:hover,
 .weekly-preview-collapse-toggle:focus-visible {
   color: var(--rb-text-primary);
-  border-color: var(--rb-accent-gold);
+  border-color: var(--rb-accent);
   background-color: rgba(255, 255, 255, 0.04);
 }
 
 .weekly-preview-chevron {
   font-size: 12px;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
   width: 12px;
   display: inline-block;
   text-align: center;
@@ -5137,7 +5389,7 @@ body.shopping-touch-reordering * {
 }
 
 .weekly-preview-meal-day {
-  color: var(--rb-accent-gold);
+  color: var(--rb-text-primary);
   font-weight: 600;
 }
 
@@ -5212,7 +5464,8 @@ body.shopping-touch-reordering * {
 
 .weekly-preview-link-btn:hover:not(:disabled) {
   color: var(--rb-text-primary);
-  border-color: var(--rb-accent-gold);
+  border-color: var(--rb-accent);
+  background-color: var(--rb-accent-subtle);
 }
 
 /* Batch actions are triggers, not toggle states: no active/selected styling on click, but distinct keyboard focus indicator */
@@ -5221,7 +5474,7 @@ body.shopping-touch-reordering * {
 }
 
 .weekly-preview-link-btn:focus-visible {
-  outline: 2px solid var(--rb-accent-gold);
+  outline: 2px solid var(--rb-focus-ring);
   outline-offset: 2px;
   color: var(--rb-text-primary);
 }
@@ -5278,8 +5531,12 @@ body.shopping-touch-reordering * {
 }
 
 .weekly-preview-item-row.is-selected {
-  border-color: rgba(245, 196, 81, 0.4);
-  background-color: rgba(245, 196, 81, 0.04);
+  border-color: var(--rb-select-row-border);
+  background-color: var(--rb-select-row-bg);
+}
+
+.weekly-preview-item-row.is-selected:hover {
+  border-color: var(--rb-accent);
 }
 
 .weekly-preview-item-row.is-unselected {
@@ -5312,9 +5569,14 @@ body.shopping-touch-reordering * {
   width: 20px;
   height: 20px;
   margin-top: 2px;
-  accent-color: var(--rb-accent-gold);
+  accent-color: var(--rb-checkbox-accent);
   flex-shrink: 0;
   cursor: pointer;
+}
+
+.weekly-preview-checkbox:focus-visible {
+  outline: 2px solid var(--rb-focus-ring);
+  outline-offset: 2px;
 }
 
 .weekly-preview-item-content {
@@ -5341,7 +5603,7 @@ body.shopping-touch-reordering * {
 .weekly-preview-item-qty,
 .weekly-preview-item-unit {
   font-weight: 700;
-  color: var(--rb-accent-gold);
+  color: var(--rb-accent);
 }
 
 .weekly-preview-item-name {
@@ -5411,8 +5673,9 @@ body.shopping-touch-reordering * {
 }
 
 .weekly-preview-info-btn.is-open {
-  border-color: rgba(242, 166, 90, 0.45);
-  background-color: rgba(242, 166, 90, 0.1);
+  border-color: var(--rb-accent-border);
+  background-color: var(--rb-accent-subtle);
+  color: var(--rb-accent);
 }
 
 .weekly-preview-info-btn.has-warning {
@@ -5531,17 +5794,19 @@ body.shopping-touch-reordering * {
 
 .weekly-preview-qty-mode-btn:hover:not(:disabled) {
   color: var(--rb-text-primary);
-  border-color: rgba(245, 196, 81, 0.55);
+  border-color: var(--rb-accent-border);
+  background-color: rgba(139, 203, 145, 0.06);
 }
 
 .weekly-preview-qty-mode-btn.is-active {
-  background-color: rgba(245, 196, 81, 0.14);
-  border-color: var(--rb-accent-gold);
+  background-color: var(--rb-accent-subtle);
+  border-color: var(--rb-accent);
   color: var(--rb-text-primary);
+  box-shadow: inset 0 0 0 1px var(--rb-accent-border);
 }
 
 .weekly-preview-qty-mode-btn:focus-visible {
-  outline: 2px solid var(--rb-accent-gold);
+  outline: 2px solid var(--rb-focus-ring);
   outline-offset: 2px;
 }
 
@@ -5578,19 +5843,25 @@ body.shopping-touch-reordering * {
 }
 
 .weekly-preview-qty-icon-btn.is-with-qty {
-  background-color: rgba(245, 196, 81, 0.14);
-  border-color: rgba(245, 196, 81, 0.65);
-  color: var(--rb-accent-gold);
+  background-color: var(--rb-accent-subtle);
+  border-color: var(--rb-accent);
+  color: var(--rb-accent);
 }
 
 .weekly-preview-qty-icon-btn:hover:not(:disabled) {
   color: var(--rb-text-primary);
-  border-color: var(--rb-accent-gold);
+  border-color: var(--rb-accent);
+  background-color: var(--rb-accent-subtle);
+}
+
+.weekly-preview-qty-icon-btn:active:not(:disabled),
+.weekly-preview-qty-mode-btn:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .weekly-preview-qty-icon-btn:focus-visible,
 .weekly-preview-warning-btn:focus-visible {
-  outline: 2px solid var(--rb-accent-gold);
+  outline: 2px solid var(--rb-focus-ring);
   outline-offset: 2px;
 }
 
@@ -5638,8 +5909,8 @@ body.shopping-touch-reordering * {
 .weekly-preview-group-badge:hover:not(:disabled),
 .weekly-preview-group-badge.is-open {
   color: var(--rb-text-primary);
-  border-color: rgba(245, 196, 81, 0.5);
-  background-color: rgba(245, 196, 81, 0.08);
+  border-color: var(--rb-accent-border);
+  background-color: var(--rb-accent-subtle);
 }
 
 .weekly-preview-group-sources {
@@ -6495,19 +6766,22 @@ fluent-dialog.recipe-picker-dialog::part(control) {
 }
 
 .calendar-push-status-badge.is-active {
-  background-color: rgba(42, 157, 143, 0.14);
-  color: #1f7a6f;
+  background-color: rgba(16, 185, 129, 0.16);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .calendar-push-status-badge.is-off {
-  background-color: var(--rb-bg-muted, #f3f4f6);
+  background-color: var(--rb-bg-elevated);
   color: var(--rb-text-secondary);
+  border: 1px solid var(--rb-border);
 }
 
 .calendar-push-status-badge.is-denied,
 .calendar-push-status-badge.is-unsupported {
-  background-color: rgba(224, 122, 95, 0.14);
-  color: #b44a2f;
+  background-color: rgba(224, 122, 95, 0.16);
+  color: #f4a28c;
+  border: 1px solid rgba(224, 122, 95, 0.38);
 }
 
 .calendar-push-ios-hint {
@@ -6604,7 +6878,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   padding: 10px 12px;
   border-radius: var(--rb-radius-sm);
   background-color: var(--rb-accent-subtle);
-  border: 1px solid rgba(224, 122, 95, 0.35);
+  border: 1px solid var(--rb-accent-border);
   color: var(--rb-text-primary);
   font-size: 13px;
   margin-bottom: 14px;
@@ -7137,7 +7411,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
-.todo-list-pill:hover {
+.todo-list-pill:hover:not(:has(.ingredient-row-menu-anchor:hover)):not(:has(.ingredient-row-menu-anchor.is-open)) {
   border-color: var(--rb-accent);
   background-color: var(--rb-bg-elevated);
 }
@@ -7387,7 +7661,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   border-bottom-color: transparent;
 }
 
-.todo-task-row:hover {
+.todo-task-row:hover:not(:has(.ingredient-row-menu-anchor:hover)):not(:has(.ingredient-row-menu-anchor.is-open)) {
   border-color: var(--rb-border-subtle);
   background-color: var(--rb-bg-surface);
 }
@@ -7765,6 +8039,313 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   margin-top: 4px;
 }
 
+/* Theme Preference Selector (BRAND-1F: Utseende) */
+.settings-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.settings-theme-option-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 92px;
+  padding: 10px 8px;
+  border-radius: var(--rb-radius-md);
+  border: 1px solid var(--rb-border);
+  background-color: var(--rb-bg-surface);
+  color: var(--rb-text-secondary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  min-width: 0;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-theme-option-btn:hover {
+  border-color: var(--rb-accent);
+  background-color: var(--rb-bg-elevated);
+  color: var(--rb-text-primary);
+}
+
+.settings-theme-option-btn.is-selected {
+  border-color: var(--rb-accent);
+  background-color: var(--rb-accent-subtle);
+  color: var(--rb-text-primary);
+  box-shadow: 0 0 0 1px var(--rb-accent);
+}
+
+.settings-theme-option-btn:focus-visible {
+  outline: 2px solid var(--rb-accent);
+  outline-offset: 2px;
+}
+
+.settings-theme-preview {
+  width: 100%;
+  max-width: 82px;
+  height: 44px;
+  border-radius: 6px;
+  border: 1px solid var(--rb-border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 3px;
+  padding: 4px 5px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.settings-theme-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding-bottom: 2px;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.18);
+}
+
+.settings-theme-preview-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.settings-theme-preview-bar {
+  width: 48%;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.settings-theme-preview-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  min-height: 0;
+}
+
+.settings-theme-preview-lines {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.settings-theme-preview-line {
+  width: 92%;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.settings-theme-preview-line.is-short {
+  width: 62%;
+}
+
+.settings-theme-preview-action {
+  width: 14px;
+  height: 8px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.settings-theme-preview-light {
+  background-color: #faf9f5;
+  border-color: #d5cfc1;
+}
+
+.settings-theme-preview-light .settings-theme-preview-dot,
+.settings-theme-preview-light .settings-theme-preview-action {
+  background-color: #2e6a40;
+}
+
+.settings-theme-preview-light .settings-theme-preview-bar {
+  background-color: #243d35;
+  opacity: 0.75;
+}
+
+.settings-theme-preview-light .settings-theme-preview-card {
+  background-color: #ffffff;
+  border-color: #e5e0d4;
+}
+
+.settings-theme-preview-light .settings-theme-preview-line {
+  background-color: #243d35;
+  opacity: 0.48;
+}
+
+.settings-theme-preview-dark {
+  background-color: #141416;
+  border-color: #2e2e36;
+}
+
+.settings-theme-preview-dark .settings-theme-preview-dot {
+  background-color: #8bcb91;
+}
+
+.settings-theme-preview-dark .settings-theme-preview-action {
+  background-color: #2e6a40;
+  border: 1px solid rgba(139, 203, 145, 0.55);
+}
+
+.settings-theme-preview-dark .settings-theme-preview-bar {
+  background-color: #fafafa;
+  opacity: 0.78;
+}
+
+.settings-theme-preview-dark .settings-theme-preview-card {
+  background-color: #202024;
+  border-color: #2e2e36;
+}
+
+.settings-theme-preview-dark .settings-theme-preview-line {
+  background-color: #fafafa;
+  opacity: 0.48;
+}
+
+.settings-theme-preview-system {
+  background: linear-gradient(135deg, #faf9f5 0%, #faf9f5 50%, #141416 50%, #141416 100%);
+  border-color: var(--rb-border);
+}
+
+.settings-theme-preview-system .settings-theme-preview-dot {
+  background-color: #2e6a40;
+}
+
+.settings-theme-preview-system .settings-theme-preview-bar {
+  background: linear-gradient(90deg, #243d35 0%, #243d35 55%, #fafafa 55%, #fafafa 100%);
+  opacity: 0.78;
+}
+
+.settings-theme-preview-system .settings-theme-preview-card {
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 48%, #202024 48%, #202024 100%);
+  border-color: rgba(128, 128, 128, 0.28);
+}
+
+.settings-theme-preview-system .settings-theme-preview-line {
+  background: linear-gradient(90deg, #243d35 0%, #243d35 50%, #fafafa 50%, #fafafa 100%);
+  opacity: 0.52;
+}
+
+.settings-theme-preview-system .settings-theme-preview-action {
+  background-color: #2e6a40;
+  border: 1px solid rgba(139, 203, 145, 0.5);
+}
+
+.settings-theme-option-label-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings-theme-option-icon {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.settings-theme-option-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Understated Om PHEW! section on Settings page (B12) */
+.settings-about-card {
+  background-color: var(--rb-bg-surface);
+  border-color: var(--rb-border-subtle);
+}
+
+.settings-about-layout {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.settings-about-logo {
+  width: 96px;
+  height: 96px;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.settings-about-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-about-title {
+  font-size: 16px;
+  margin-bottom: 0;
+}
+
+.settings-about-tagline {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rb-accent);
+  margin: 0;
+}
+
+.settings-about-desc {
+  margin-top: 4px;
+}
+
+@media (max-width: 480px) {
+  .settings-about-layout {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 10px;
+  }
+
+  .settings-about-logo {
+    width: 112px;
+    height: 112px;
+  }
+}
+
+@media (max-width: 380px) {
+  .settings-theme-options {
+    gap: 6px;
+  }
+
+  .settings-theme-option-btn {
+    padding: 8px 4px;
+    font-size: 12px;
+    min-height: 86px;
+  }
+
+  .settings-theme-preview {
+    max-width: 64px;
+    height: 36px;
+    padding: 3px 4px;
+    gap: 2px;
+  }
+
+  .settings-theme-preview-action {
+    width: 11px;
+    height: 6px;
+  }
+}
+
 @media (max-width: 768px) {
   .settings-card {
     padding: 14px;
@@ -7773,6 +8354,243 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   .settings-page-header {
     margin-bottom: 12px;
   }
+}
+
+/* ==========================================================================
+   First-Class Light Theme Component Refinements (BRAND-1F & BRAND-1.1)
+   ========================================================================== */
+[data-theme="light"] .recipe-card:hover,
+[data-theme="light"] .recipe-card:focus-within,
+[data-theme="light"] .step-item:hover,
+[data-theme="light"] .form-input-custom:hover:not(:disabled) {
+  border-color: #b7b0a0;
+}
+
+[data-theme="light"] .recipe-card-placeholder,
+[data-theme="light"] .weekly-day-image-placeholder,
+[data-theme="light"] .recipe-picker-card-placeholder {
+  background: linear-gradient(135deg, #eae6dc 0%, #dcd6c6 100%);
+}
+
+[data-theme="light"] .todays-dinner-card {
+  background: linear-gradient(135deg, #ffffff 0%, #e5f5eb 100%);
+  border-color: var(--rb-today-border);
+  border-left: 5px solid var(--rb-today-accent-bar);
+}
+
+[data-theme="light"] .todays-dinner-rating-badge {
+  background: var(--rb-bg-surface);
+  color: var(--rb-text-primary);
+  border-color: var(--rb-border);
+  box-shadow: var(--rb-shadow-sm);
+}
+
+[data-theme="light"] .todays-dinner-rating-badge:hover {
+  background: var(--rb-bg-elevated);
+  border-color: var(--rb-accent-gold);
+}
+
+[data-theme="light"] .todays-dinner-rating-badge .recipe-rating-badge-star.is-empty,
+[data-theme="light"] .todays-dinner-rating-badge .recipe-rating-badge-votes {
+  color: var(--rb-text-secondary);
+}
+
+[data-theme="light"] .weekly-status-badge.status-confirmed {
+  background-color: #ddf3e5;
+  color: #174638;
+  border-color: rgba(57, 123, 77, 0.42);
+}
+
+[data-theme="light"] .weekly-status-badge.status-draft {
+  background-color: rgba(180, 83, 9, 0.12);
+  color: #9a4406;
+  border-color: rgba(180, 83, 9, 0.38);
+}
+
+[data-theme="light"] .weekly-status-badge.status-unsaved {
+  background-color: rgba(180, 74, 47, 0.14);
+  color: #96361e;
+  border-color: rgba(180, 74, 47, 0.42);
+}
+
+[data-theme="light"] .calendar-event-time-badge {
+  background-color: #c4e5cd;
+  color: #174638;
+  border: 1px solid rgba(23, 70, 56, 0.22);
+  font-weight: 700;
+}
+
+[data-theme="light"] .calendar-event-time-badge.is-all-day {
+  background-color: rgba(154, 68, 6, 0.15);
+  color: #7c3504;
+  border: 1px solid rgba(154, 68, 6, 0.28);
+  font-weight: 700;
+}
+
+[data-theme="light"] .weekly-preview-qty-mode-btn.is-active {
+  color: #174638;
+  font-weight: 700;
+}
+
+[data-theme="light"] .weekly-day-status-message,
+[data-theme="light"] .weekly-preview-prior-meals-notice,
+[data-theme="light"] .ingredient-section-badge.is-empty {
+  color: #7c3504;
+  background-color: rgba(245, 158, 11, 0.14);
+  border-color: rgba(180, 83, 9, 0.38);
+}
+
+[data-theme="light"] .rb-feedback-success {
+  background-color: #ddf3e5;
+  border-color: rgba(46, 106, 64, 0.45);
+  border-left-color: #2e6a40;
+  color: #174638;
+}
+
+[data-theme="light"] .rb-feedback-warning {
+  background-color: #fef3c7;
+  border-color: rgba(180, 83, 9, 0.42);
+  border-left-color: var(--rb-accent-gold);
+  color: #78350f;
+}
+
+[data-theme="light"] .rb-feedback-error,
+[data-theme="light"] .field-validation-error,
+[data-theme="light"] .calendar-form-error,
+[data-theme="light"] .rating-modal-error,
+[data-theme="light"] .import-error-box,
+[data-theme="light"] .jsonld-error,
+[data-theme="light"] .recipe-text-error {
+  background-color: #fee2e2;
+  border-color: rgba(200, 30, 30, 0.38);
+  color: #991b1b;
+}
+
+[data-theme="light"] .rb-feedback-floating.rb-feedback-success,
+[data-theme="light"] .rb-feedback.rb-feedback-floating.rb-feedback-success {
+  border-color: rgba(46, 106, 64, 0.45);
+}
+
+[data-theme="light"] .rb-feedback-floating.rb-feedback-warning,
+[data-theme="light"] .rb-feedback.rb-feedback-floating.rb-feedback-warning {
+  border-color: rgba(180, 83, 9, 0.45);
+}
+
+[data-theme="light"] .rb-feedback-floating.rb-feedback-error,
+[data-theme="light"] .rb-feedback.rb-feedback-floating.rb-feedback-error {
+  border-color: rgba(200, 30, 30, 0.45);
+}
+
+[data-theme="light"] .rb-feedback-action-btn {
+  background-color: rgba(23, 70, 56, 0.08);
+}
+
+[data-theme="light"] .rb-feedback-action-btn:hover {
+  background-color: rgba(23, 70, 56, 0.16);
+}
+
+[data-theme="light"] .rb-feedback-close:hover {
+  background-color: rgba(23, 70, 56, 0.08);
+}
+
+[data-theme="light"] .app-top-banner-warning {
+  background-color: #fef3c7;
+  border-bottom-color: rgba(180, 83, 9, 0.38);
+}
+
+[data-theme="light"] .app-top-banner-warning .app-top-banner-title,
+[data-theme="light"] .app-top-banner-warning .app-top-banner-desc,
+[data-theme="light"] .app-top-banner-warning .app-top-banner-close {
+  color: #78350f;
+}
+
+[data-theme="light"] .app-top-banner-error {
+  background-color: #fee2e2;
+  border-bottom-color: rgba(200, 30, 30, 0.4);
+}
+
+[data-theme="light"] .app-top-banner-error .app-top-banner-title,
+[data-theme="light"] .app-top-banner-error .app-top-banner-desc,
+[data-theme="light"] .app-top-banner-error .app-top-banner-close {
+  color: #991b1b;
+}
+
+[data-theme="light"] .app-top-banner-success {
+  background-color: #ddf3e5;
+  border-bottom-color: rgba(46, 106, 64, 0.4);
+}
+
+[data-theme="light"] .app-top-banner-success .app-top-banner-title,
+[data-theme="light"] .app-top-banner-success .app-top-banner-desc,
+[data-theme="light"] .app-top-banner-success .app-top-banner-close {
+  color: #174638;
+}
+
+[data-theme="light"] .rb-reconnect-modal {
+  background-color: #fef3c7;
+  color: #78350f;
+}
+
+[data-theme="light"] .calendar-push-status-badge.is-active {
+  background-color: #ddf3e5;
+  color: #174638;
+  border-color: rgba(57, 123, 77, 0.42);
+}
+
+[data-theme="light"] .calendar-push-status-badge.is-denied,
+[data-theme="light"] .calendar-push-status-badge.is-unsupported {
+  background-color: rgba(180, 74, 47, 0.14);
+  color: #96361e;
+  border-color: rgba(180, 74, 47, 0.38);
+}
+
+[data-theme="light"] .calendar-recurring-indicator,
+[data-theme="light"] .weekly-preview-meal-status {
+  color: #15803d;
+}
+
+[data-theme="light"] .weekly-preview-all-handled {
+  background-color: #ddf3e5;
+  border-color: rgba(57, 123, 77, 0.4);
+  color: #174638;
+}
+
+[data-theme="light"] .weekly-preview-item-short-status {
+  color: #1d4ed8;
+}
+
+[data-theme="light"] .weekly-preview-item-short-status.status-removed {
+  color: #9a4406;
+}
+
+[data-theme="light"] .weekly-preview-inline-warning,
+[data-theme="light"] .weekly-preview-info-btn.has-warning,
+[data-theme="light"] .weekly-preview-detail-line.detail-warning,
+[data-theme="light"] .weekly-preview-warning-btn {
+  color: #b91c1c;
+}
+
+[data-theme="light"] .weekly-preview-collapse-toggle,
+[data-theme="light"] .weekly-preview-meals-list,
+[data-theme="light"] .weekly-preview-summary-bar,
+[data-theme="light"] .weekly-preview-item-details,
+[data-theme="light"] .weekly-preview-qty-mode-bar,
+[data-theme="light"] .weekly-preview-group-badge,
+[data-theme="light"] .weekly-preview-group-sources,
+[data-theme="light"] .rating-modal-summary,
+[data-theme="light"] .rating-modal-empty,
+[data-theme="light"] .rating-member-row {
+  background-color: var(--rb-bg-surface);
+}
+
+[data-theme="light"] .weekly-preview-collapse-toggle:hover,
+[data-theme="light"] .weekly-preview-collapse-toggle:focus-visible,
+[data-theme="light"] .weekly-preview-info-btn:hover,
+[data-theme="light"] .weekly-preview-info-btn:focus-visible,
+[data-theme="light"] .calendar-event-summary-btn:hover,
+[data-theme="light"] .rating-modal-close:hover,
+[data-theme="light"] .rating-star-btn:hover:not(:disabled) {
+  background-color: var(--rb-bg-elevated);
 }
 
 

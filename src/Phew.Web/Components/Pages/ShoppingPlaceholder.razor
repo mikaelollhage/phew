@@ -938,6 +938,9 @@
 
     private async Task ToggleRowMenu(int itemId)
     {
+        _isDragging = false;
+        draggedItemId = null;
+        dragOverItemId = null;
         reorderMenuOpenItemId = null;
         openMenuItemId = openMenuItemId == itemId ? null : itemId;
         if (openMenuItemId.HasValue && _dotNetRef != null)

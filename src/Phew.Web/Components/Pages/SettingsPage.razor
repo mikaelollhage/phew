@@ -2,6 +2,8 @@
 @using System.Globalization
 @implements IDisposable
 @inject FamilyMemberService FamilyMemberService
+@inject IServiceProvider ServiceProvider
+@inject IJSRuntime JSRuntime
 @inject ILogger<SettingsPage> Logger
 
 <PageTitle>Inställningar — PHEW!</PageTitle>
@@ -12,6 +14,7 @@
         .OrderBy(m => m.Name, SwedishNameComparer)
         .ThenBy(m => m.Id)
         .ToList();
+    var currentPreference = _themeService?.Preference ?? ThemePreference.System;
 }
 
 <ContextualFeedback State="familySuccessFeedback"
@@ -24,6 +27,104 @@
     </div>
 
     <div class="settings-sections-grid">
+        <section class="detail-card settings-card settings-appearance-card" aria-label="Utseende">
+            <div class="settings-card-header">
+                <h2 class="detail-card-title">🎨 Utseende</h2>
+                <p class="settings-section-desc">
+                    Välj hur PHEW! ska se ut på den här enheten.
+                </p>
+            </div>
+
+            <div class="settings-theme-options" role="radiogroup" aria-label="Välj tema för utseende">
+                <button type="button"
+                        id="settings-theme-light-btn"
+                        @ref="_themeLightBtnRef"
+                        role="radio"
+                        aria-checked="@(currentPreference == ThemePreference.Light ? "true" : "false")"
+                        tabindex="@(currentPreference == ThemePreference.Light ? "0" : "-1")"
+                        data-theme-option="light"
+                        class="settings-theme-option-btn @(currentPreference == ThemePreference.Light ? "is-selected" : "")"
+                        @onclick="@(() => SelectThemePreferenceAsync(ThemePreference.Light))"
+                        @onkeydown="@(e => HandleThemeOptionKeyDownAsync(e, ThemePreference.Light))">
+                    <span class="settings-theme-preview settings-theme-preview-light" aria-hidden="true">
+                        <span class="settings-theme-preview-header">
+                            <span class="settings-theme-preview-dot"></span>
+                            <span class="settings-theme-preview-bar"></span>
+                        </span>
+                        <span class="settings-theme-preview-card">
+                            <span class="settings-theme-preview-lines">
+                                <span class="settings-theme-preview-line"></span>
+                                <span class="settings-theme-preview-line is-short"></span>
+                            </span>
+                            <span class="settings-theme-preview-action"></span>
+                        </span>
+                    </span>
+                    <span class="settings-theme-option-label-row">
+                        <span class="settings-theme-option-icon" aria-hidden="true">☀️</span>
+                        <span class="settings-theme-option-text">Ljust</span>
+                    </span>
+                </button>
+
+                <button type="button"
+                        id="settings-theme-dark-btn"
+                        @ref="_themeDarkBtnRef"
+                        role="radio"
+                        aria-checked="@(currentPreference == ThemePreference.Dark ? "true" : "false")"
+                        tabindex="@(currentPreference == ThemePreference.Dark ? "0" : "-1")"
+                        data-theme-option="dark"
+                        class="settings-theme-option-btn @(currentPreference == ThemePreference.Dark ? "is-selected" : "")"
+                        @onclick="@(() => SelectThemePreferenceAsync(ThemePreference.Dark))"
+                        @onkeydown="@(e => HandleThemeOptionKeyDownAsync(e, ThemePreference.Dark))">
+                    <span class="settings-theme-preview settings-theme-preview-dark" aria-hidden="true">
+                        <span class="settings-theme-preview-header">
+                            <span class="settings-theme-preview-dot"></span>
+                            <span class="settings-theme-preview-bar"></span>
+                        </span>
+                        <span class="settings-theme-preview-card">
+                            <span class="settings-theme-preview-lines">
+                                <span class="settings-theme-preview-line"></span>
+                                <span class="settings-theme-preview-line is-short"></span>
+                            </span>
+                            <span class="settings-theme-preview-action"></span>
+                        </span>
+                    </span>
+                    <span class="settings-theme-option-label-row">
+                        <span class="settings-theme-option-icon" aria-hidden="true">🌙</span>
+                        <span class="settings-theme-option-text">Mörkt</span>
+                    </span>
+                </button>
+
+                <button type="button"
+                        id="settings-theme-system-btn"
+                        @ref="_themeSystemBtnRef"
+                        role="radio"
+                        aria-checked="@(currentPreference == ThemePreference.System ? "true" : "false")"
+                        tabindex="@(currentPreference == ThemePreference.System ? "0" : "-1")"
+                        data-theme-option="system"
+                        class="settings-theme-option-btn @(currentPreference == ThemePreference.System ? "is-selected" : "")"
+                        @onclick="@(() => SelectThemePreferenceAsync(ThemePreference.System))"
+                        @onkeydown="@(e => HandleThemeOptionKeyDownAsync(e, ThemePreference.System))">
+                    <span class="settings-theme-preview settings-theme-preview-system" aria-hidden="true">
+                        <span class="settings-theme-preview-header">
+                            <span class="settings-theme-preview-dot"></span>
+                            <span class="settings-theme-preview-bar"></span>
+                        </span>
+                        <span class="settings-theme-preview-card">
+                            <span class="settings-theme-preview-lines">
+                                <span class="settings-theme-preview-line"></span>
+                                <span class="settings-theme-preview-line is-short"></span>
+                            </span>
+                            <span class="settings-theme-preview-action"></span>
+                        </span>
+                    </span>
+                    <span class="settings-theme-option-label-row">
+                        <span class="settings-theme-option-icon" aria-hidden="true">🖥️</span>
+                        <span class="settings-theme-option-text">System</span>
+                    </span>
+                </button>
+            </div>
+        </section>
+
         <section class="detail-card settings-card settings-family-card" aria-label="Familjemedlemmar">
             <div class="settings-card-header">
                 <h2 class="detail-card-title">👥 Familjemedlemmar (@activeMembers.Count)</h2>
@@ -144,6 +245,25 @@
             <CalendarPushSettingsCard @ref="_pushSettingsCard"
                                       OnSuccessFeedbackShown="HandlePushSuccessFeedbackShown" />
         </section>
+
+        <section class="detail-card settings-card settings-about-card" aria-label="Om PHEW!">
+            <div class="settings-about-layout">
+                <img src="/phew-logo.webp"
+                     alt="PHEW! – Family life, sorted."
+                     width="136"
+                     height="136"
+                     class="settings-about-logo"
+                     loading="lazy"
+                     decoding="async" />
+                <div class="settings-about-body">
+                    <h2 class="detail-card-title settings-about-title">Om PHEW!</h2>
+                    <p class="settings-about-tagline">Family life, sorted.</p>
+                    <p class="settings-section-desc settings-about-desc">
+                        Vardagsorganisation för familjen — recept, veckomeny, inköpslista, kalender och att göra-listor på ett ställe.
+                    </p>
+                </div>
+            </div>
+        </section>
     </div>
 </div>
 
@@ -196,6 +316,11 @@
 
     private FamilyMember? memberToDelete;
     private CalendarPushSettingsCard? _pushSettingsCard;
+    private AppThemeService? _themeService;
+    private ElementReference _themeLightBtnRef;
+    private ElementReference _themeDarkBtnRef;
+    private ElementReference _themeSystemBtnRef;
+    private string? _pendingFocusElementId;
     private readonly FeedbackState familyErrorFeedback = new();
     private readonly FeedbackState renameErrorFeedback = new();
     private readonly FeedbackState familySuccessFeedback = new();
@@ -207,8 +332,87 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _themeService = ServiceProvider.GetService<AppThemeService>() ?? new AppThemeService();
+        _themeService.OnChange += HandleThemeChanged;
+
         FamilyMemberService.OnChanged += HandleFamilyMembersChanged;
         await LoadMembersAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_isDisposed && _themeService != null)
+        {
+            await _themeService.InitializeAsync<SettingsPage>(JSRuntime);
+        }
+
+        if (!string.IsNullOrEmpty(_pendingFocusElementId) && !_isDisposed)
+        {
+            var focusId = _pendingFocusElementId;
+            _pendingFocusElementId = null;
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("phew.focusElement", focusId);
+            }
+            catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+            {
+                // Ignore in unit tests or disconnected circuits
+            }
+        }
+    }
+
+    private async Task SelectThemePreferenceAsync(ThemePreference preference, bool focusButton = false)
+    {
+        if (_themeService == null)
+        {
+            return;
+        }
+
+        await _themeService.SetPreferenceAsync(JSRuntime, preference);
+        if (focusButton)
+        {
+            _pendingFocusElementId = preference switch
+            {
+                ThemePreference.Light => "settings-theme-light-btn",
+                ThemePreference.Dark => "settings-theme-dark-btn",
+                _ => "settings-theme-system-btn"
+            };
+        }
+    }
+
+    private async Task HandleThemeOptionKeyDownAsync(KeyboardEventArgs e, ThemePreference current)
+    {
+        ThemePreference? next = e.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => current switch
+            {
+                ThemePreference.Light => ThemePreference.Dark,
+                ThemePreference.Dark => ThemePreference.System,
+                _ => ThemePreference.Light
+            },
+            "ArrowLeft" or "ArrowUp" => current switch
+            {
+                ThemePreference.Light => ThemePreference.System,
+                ThemePreference.Dark => ThemePreference.Light,
+                _ => ThemePreference.Dark
+            },
+            "Home" => ThemePreference.Light,
+            "End" => ThemePreference.System,
+            _ => null
+        };
+
+        if (next.HasValue)
+        {
+            await SelectThemePreferenceAsync(next.Value, focusButton: true);
+        }
+    }
+
+    private void HandleThemeChanged()
+    {
+        if (!_isDisposed)
+        {
+            InvokeAsync(StateHasChanged);
+        }
     }
 
     private async Task LoadMembersAsync()
@@ -385,6 +589,10 @@
             return;
 
         _isDisposed = true;
+        if (_themeService != null)
+        {
+            _themeService.OnChange -= HandleThemeChanged;
+        }
         FamilyMemberService.OnChanged -= HandleFamilyMembersChanged;
     }
 }
