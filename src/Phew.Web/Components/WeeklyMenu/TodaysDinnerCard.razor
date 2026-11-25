@@ -7,76 +7,23 @@
     var dayHeader = CalendarWeek.FormatDayHeaderSwedish(ActiveDate);
     var hasImage = !string.IsNullOrWhiteSpace(recipe.ImagePath) && !imageLoadFailed;
 
-    <section class="todays-dinner-card @(hasImage ? "has-image" : "no-image")" aria-label="Dagens middag">
-        <div class="todays-dinner-badge-row">
-            <span class="todays-dinner-label">🍽️ DAGENS MIDDAG</span>
+    <section class="home-card todays-dinner-card @(hasImage ? "has-image" : "no-image")" aria-label="Dagens middag">
+        <div class="home-card-header todays-dinner-header">
+            <div class="home-card-heading-group">
+                <span class="home-card-icon" aria-hidden="true">
+                    <FluentIcon Value="@(new Icons.Regular.Size20.Food())" Color="Color.Custom" CustomColor="currentColor" />
+                </span>
+                <h2 class="home-card-title">Dagens middag</h2>
+                @if (IsDraft)
+                {
+                    <span class="weekly-status-badge status-draft">Planerat i utkast</span>
+                }
+                else if (IsConfirmed)
+                {
+                    <span class="weekly-status-badge status-confirmed">Spikad meny</span>
+                }
+            </div>
             <span class="todays-dinner-date">@dayHeader</span>
-            @if (IsDraft)
-            {
-                <span class="weekly-status-badge status-draft">📝 Planerat i utkast</span>
-            }
-            else if (IsConfirmed)
-            {
-                <span class="weekly-status-badge status-confirmed">📌 Spikad meny</span>
-            }
-        </div>
-
-        <h2 class="todays-dinner-title">
-            <a href="@($"/recept/{recipe.Id}")" class="todays-dinner-title-link">@recipe.Title</a>
-        </h2>
-
-        <div class="todays-dinner-meta">
-            @if (recipe.TotalTimeMinutes.HasValue)
-            {
-                <span>⏱️ @recipe.TotalTimeMinutes minuter</span>
-                <span class="todays-dinner-dot" aria-hidden="true">·</span>
-            }
-            <span>👥 @servings @recipe.ServingsUnit</span>
-            @if (recipe.RecipeCategories.Count > 0)
-            {
-                <span class="todays-dinner-dot todays-dinner-meta-category" aria-hidden="true">·</span>
-                <span class="todays-dinner-meta-category">@string.Join(", ", recipe.RecipeCategories.Select(rc => rc.Category.Name))</span>
-            }
-        </div>
-
-        <div class="todays-dinner-actions">
-            <a href="@($"/recept/{recipe.Id}/laga?portioner={servings}")"
-               class="btn-primary-custom todays-dinner-cook-btn"
-               aria-label="Starta matlagningsläge"
-               title="Starta matlagningsläge">
-                <span class="todays-dinner-label-desktop">👨‍🍳 Starta matlagningsläge</span>
-                <span class="todays-dinner-label-mobile">Laga!</span>
-            </a>
-            <a href="@($"/recept/{recipe.Id}")"
-               class="btn-secondary-custom todays-dinner-view-btn"
-               aria-label="Visa recept"
-               title="Visa recept">
-                <span class="todays-dinner-label-desktop">Visa recept</span>
-                <span class="todays-dinner-label-mobile">Recept</span>
-            </a>
-            @if (OnRateRecipe.HasDelegate)
-            {
-                <RecipeRatingBadge Summary="@RatingSummary"
-                                   RecipeTitle="@recipe.Title"
-                                   CssClass="todays-dinner-rating-badge"
-                                   CompactUnratedText="Rösta"
-                                   OnClick="@(() => OnRateRecipe.InvokeAsync(recipe))" />
-            }
-        </div>
-
-        <div class="todays-dinner-footer">
-            @if (IsDraft)
-            {
-                <a href="/veckomeny" class="todays-dinner-week-link">
-                    Planeringen är ett utkast · Spika menyn i veckomenyn →
-                </a>
-            }
-            else
-            {
-                <a href="@($"/veckomeny?datum={ActiveDate:yyyy-MM-dd}")" class="todays-dinner-week-link">
-                    Vecka @ActiveWeek.IsoWeek · Visa hela veckomenyn →
-                </a>
-            }
         </div>
 
         @if (hasImage)
@@ -85,6 +32,72 @@
                 <img src="@($"/{recipe.ImagePath}")" alt="@recipe.Title" class="todays-dinner-image" @onerror="() => imageLoadFailed = true" />
             </div>
         }
+
+        <div class="todays-dinner-content">
+            <h3 class="todays-dinner-title">
+                <a href="@($"/recept/{recipe.Id}")" class="todays-dinner-title-link">@recipe.Title</a>
+            </h3>
+
+            <div class="todays-dinner-meta">
+                @if (recipe.TotalTimeMinutes.HasValue)
+                {
+                    <span class="home-meta-item">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Custom" CustomColor="currentColor" />
+                        <span>@recipe.TotalTimeMinutes min</span>
+                    </span>
+                    <span class="todays-dinner-dot" aria-hidden="true">·</span>
+                }
+                <span class="home-meta-item">
+                    <FluentIcon Value="@(new Icons.Regular.Size16.People())" Color="Color.Custom" CustomColor="currentColor" />
+                    <span>@servings @recipe.ServingsUnit</span>
+                </span>
+                @if (recipe.RecipeCategories.Count > 0)
+                {
+                    <span class="todays-dinner-dot todays-dinner-meta-category" aria-hidden="true">·</span>
+                    <span class="todays-dinner-meta-category">@string.Join(", ", recipe.RecipeCategories.Select(rc => rc.Category.Name))</span>
+                }
+            </div>
+
+            <div class="todays-dinner-actions">
+                <a href="@($"/recept/{recipe.Id}/laga?portioner={servings}")"
+                   class="btn-primary-custom todays-dinner-cook-btn"
+                   aria-label="Starta matlagningsläge"
+                   title="Starta matlagningsläge">
+                    <span class="todays-dinner-label-desktop">Starta matlagningsläge</span>
+                    <span class="todays-dinner-label-mobile">Laga!</span>
+                </a>
+                <a href="@($"/recept/{recipe.Id}")"
+                   class="btn-secondary-custom todays-dinner-view-btn"
+                   aria-label="Visa recept"
+                   title="Visa recept">
+                    <span class="todays-dinner-label-desktop">Visa recept</span>
+                    <span class="todays-dinner-label-mobile">Recept</span>
+                </a>
+                @if (OnRateRecipe.HasDelegate)
+                {
+                    <RecipeRatingBadge Summary="@RatingSummary"
+                                       RecipeTitle="@recipe.Title"
+                                       CssClass="todays-dinner-rating-badge"
+                                       CompactUnratedText="Rösta"
+                                       OnClick="@(() => OnRateRecipe.InvokeAsync(recipe))" />
+                }
+            </div>
+
+            <div class="todays-dinner-footer">
+                @if (IsDraft)
+                {
+                    <a href="/veckomeny" class="todays-dinner-week-link">
+                        Planeringen är ett utkast · Spika menyn i veckomenyn →
+                    </a>
+                }
+                else
+                {
+                    <a href="@($"/veckomeny?datum={ActiveDate:yyyy-MM-dd}")" class="todays-dinner-week-link">
+                        Vecka @ActiveWeek.IsoWeek · Visa hela veckomenyn →
+                    </a>
+                }
+            </div>
+        </div>
     </section>
 }
 else if (ShowDiscreetLink)

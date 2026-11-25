@@ -1,10 +1,12 @@
-<section class="home-calendar-section" aria-label="Familjens kalender">
-    <div class="home-calendar-header">
-        <div class="home-calendar-title-group">
-            <h2 class="home-calendar-heading">📅 Familjens kalender</h2>
+<section class="home-card home-calendar-section" aria-label="Familjens kalender">
+    <div class="home-card-header home-calendar-header">
+        <div class="home-card-heading-group">
+            <span class="home-card-icon" aria-hidden="true">
+                <FluentIcon Value="@(new Icons.Regular.Size20.CalendarLtr())" Color="Color.Custom" CustomColor="currentColor" />
+            </span>
+            <h2 class="home-card-title">Familjens kalender</h2>
             <span class="home-calendar-week-label">Vecka @CurrentWeek.IsoWeek</span>
         </div>
-        <a href="/kalender" class="home-calendar-open-link">Öppna kalendern →</a>
     </div>
 
     @if (IsLoading)
@@ -115,6 +117,8 @@
             </div>
         </div>
     }
+
+    <a href="/kalender" class="btn-secondary-custom btn-sm home-calendar-open-link">Öppna kalendern →</a>
 </section>
 
 @code {

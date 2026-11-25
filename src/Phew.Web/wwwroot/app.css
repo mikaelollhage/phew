@@ -235,7 +235,7 @@ a:hover {
 }
 
 .brand-section {
-  padding: 14px 20px 10px;
+  padding: 10px 16px 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -270,7 +270,7 @@ a:hover {
 
 .brand-logo-full {
   display: block;
-  width: 212px;
+  width: 148px;
   max-width: 100%;
   height: auto;
   aspect-ratio: 1 / 1;
@@ -3028,59 +3028,126 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 /* ============================================================
-   Todays Dinner Card (Start Page)
+   Home Dashboard & Shared Home Cards
+   ============================================================ */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.home-page-intro {
+  margin-bottom: 16px;
+}
+
+.home-date-intro {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--rb-text-secondary);
+}
+
+.home-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.home-card {
+  background-color: var(--rb-bg-card);
+  border: 1px solid var(--rb-border);
+  border-radius: var(--rb-radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--rb-shadow-sm);
+  min-width: 0;
+}
+
+.home-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.home-card-heading-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.home-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rb-text-secondary);
+  flex-shrink: 0;
+}
+
+.home-card-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--rb-text-primary);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.home-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ============================================================
+   Todays Dinner Card (Home Dashboard)
    ============================================================ */
 .todays-dinner-card {
-  background: linear-gradient(135deg, var(--rb-bg-card) 0%, #1d2621 100%);
-  border: 1px solid var(--rb-accent-border);
-  border-left: 5px solid var(--rb-accent);
-  border-radius: var(--rb-radius-lg);
-  padding: 24px 28px;
-  margin-bottom: 28px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   column-gap: 24px;
-  row-gap: 10px;
-  align-items: center;
-  box-shadow: var(--rb-shadow);
+  row-gap: 14px;
+  align-items: start;
 }
 
 .todays-dinner-card.no-image {
   grid-template-columns: minmax(0, 1fr);
 }
 
-.todays-dinner-badge-row {
-  grid-column: 1;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.todays-dinner-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.8px;
-  color: var(--rb-accent);
-  background-color: var(--rb-accent-subtle);
-  padding: 4px 10px;
-  border-radius: 999px;
+.todays-dinner-header {
+  grid-column: 1 / -1;
+  grid-row: 1;
 }
 
 .todays-dinner-date {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--rb-text-secondary);
-  letter-spacing: 0.4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--rb-text-muted);
+}
+
+.todays-dinner-content {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
 }
 
 .todays-dinner-title {
-  grid-column: 1;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.3;
-  margin: 2px 0;
+  margin: 0;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .todays-dinner-title-link {
@@ -3093,7 +3160,6 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .todays-dinner-meta {
-  grid-column: 1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3103,12 +3169,11 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .todays-dinner-actions {
-  grid-column: 1;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .todays-dinner-label-mobile,
@@ -3117,26 +3182,30 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 }
 
 .todays-dinner-footer {
-  grid-column: 1;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .todays-dinner-week-link {
   font-size: 13px;
   font-weight: 600;
   color: var(--rb-accent);
+  text-decoration: none;
+}
+
+.todays-dinner-week-link:hover {
+  text-decoration: underline;
 }
 
 .todays-dinner-image-wrap {
   grid-column: 2;
-  grid-row: 1 / span 5;
+  grid-row: 2;
   position: relative;
-  width: 200px;
-  height: 140px;
+  width: 210px;
+  height: 148px;
   border-radius: var(--rb-radius-md);
   overflow: hidden;
   flex-shrink: 0;
-  border: 1px solid var(--rb-border);
+  border: 1px solid var(--rb-border-subtle);
 }
 
 .todays-dinner-image {
@@ -3144,10 +3213,6 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-.todays-dinner-image-gradient {
-  display: none;
 }
 
 .todays-dinner-discreet {
@@ -3175,51 +3240,56 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   color: var(--rb-text-primary);
 }
 
-/* Home Page / Startsida */
-.home-page-header {
-  margin-bottom: 24px;
+/* Home Empty State Card */
+.home-empty-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .home-empty-state {
-  margin-top: 12px;
-  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  padding: 4px 0 0;
+  background: transparent;
+  border: none;
+  margin: 0;
+}
+
+.home-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--rb-text-primary);
+  margin: 0 0 6px;
+}
+
+.home-empty-desc {
+  font-size: 14px;
+  color: var(--rb-text-secondary);
+  margin: 0;
+  max-width: 520px;
 }
 
 .home-empty-actions {
   display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
-  margin-top: 20px;
-}
-
-/* Tomorrow's planned meal (Morgondagens rätt) */
-.home-tomorrow-card {
-  background-color: var(--rb-bg-card);
-  border: 1px solid var(--rb-border);
-  border-radius: var(--rb-radius-md);
-  padding: 16px 20px;
-  margin-top: 20px;
-  box-shadow: var(--rb-shadow-sm);
-}
-
-.home-tomorrow-header {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  margin-bottom: 8px;
+  justify-content: flex-start;
   flex-wrap: wrap;
+  margin-top: 16px;
 }
 
-.home-tomorrow-badge {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--rb-accent-gold);
+/* Tomorrow's planned meal (Morgondagens middag) */
+.home-tomorrow-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .home-tomorrow-date {
   font-size: 13px;
+  font-weight: 500;
   color: var(--rb-text-muted);
 }
 
@@ -3234,16 +3304,18 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
 .home-tomorrow-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+  flex: 1;
 }
 
 .home-tomorrow-title-link {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 600;
   color: var(--rb-text-primary);
   text-decoration: none;
   transition: color 0.15s ease;
+  overflow-wrap: anywhere;
 }
 
 .home-tomorrow-title-link:hover {
@@ -3256,18 +3328,19 @@ body.ingredient-touch-reordering .ingredient-drag-handle {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 /* Quick shortcuts section (Genvägar) */
 .home-shortcuts-section {
-  margin-top: 32px;
+  margin-top: 4px;
 }
 
 .home-shortcuts-heading {
   font-size: 15px;
   font-weight: 600;
   color: var(--rb-text-secondary);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   letter-spacing: -0.2px;
 }
 
@@ -4081,16 +4154,33 @@ body.weekly-touch-reordering .weekly-drag-handle {
     justify-content: center;
   }
 
-  .todays-dinner-card {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0;
-    padding: 0;
-    margin-bottom: 18px;
-    overflow: hidden;
+  .home-page-intro {
+    margin-bottom: 12px;
   }
 
-  .todays-dinner-badge-row,
-  .todays-dinner-footer,
+  .home-dashboard {
+    gap: 14px;
+  }
+
+  .home-card {
+    padding: 16px;
+  }
+
+  .home-card-title {
+    font-size: 16px;
+  }
+
+  .todays-dinner-card {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .todays-dinner-header {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .todays-dinner-date,
   .todays-dinner-meta-category,
   .todays-dinner-label-desktop {
     display: none;
@@ -4109,91 +4199,59 @@ body.weekly-touch-reordering .weekly-drag-handle {
     display: inline;
   }
 
-  .todays-dinner-card.has-image {
-    grid-template-rows: auto auto auto auto;
-  }
-
   .todays-dinner-card.has-image .todays-dinner-image-wrap {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 2;
     width: 100%;
-    height: 96px;
-    min-height: 0;
-    max-height: 96px;
-    border: none;
-    border-bottom: 1px solid var(--rb-border-subtle);
-    border-radius: 0;
+    height: 156px;
+    border: 1px solid var(--rb-border-subtle);
+    border-radius: var(--rb-radius-md);
   }
 
-  .todays-dinner-card.has-image .todays-dinner-title {
+  .todays-dinner-card.has-image .todays-dinner-content {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .todays-dinner-card.no-image .todays-dinner-content {
     grid-column: 1;
     grid-row: 2;
-    align-self: auto;
-    z-index: auto;
-    margin: 0;
-    padding: 12px 14px 0;
-    font-size: 18px;
+  }
+
+  .todays-dinner-title {
+    font-size: 19px;
     line-height: 1.3;
   }
 
-  .todays-dinner-card.has-image .todays-dinner-title-link {
-    color: var(--rb-text-primary);
-    text-shadow: none;
-  }
-
-  .todays-dinner-card.has-image .todays-dinner-meta {
-    grid-column: 1;
-    grid-row: 3;
-    padding: 6px 14px 0;
+  .todays-dinner-meta {
     gap: 6px;
-    font-size: 12.5px;
-    background-color: transparent;
-    border-top: none;
+    font-size: 13px;
   }
 
-  .todays-dinner-card.has-image .todays-dinner-actions {
-    grid-column: 1;
-    grid-row: 4;
-    align-self: auto;
-    z-index: auto;
-    margin: 0;
-    padding: 10px 14px 12px;
-    gap: 6px;
-  }
-
-  .todays-dinner-card.no-image {
+  .todays-dinner-actions {
     gap: 8px;
-    padding: 12px 14px;
-  }
-
-  .todays-dinner-card.no-image .todays-dinner-title {
-    grid-row: 1;
-    font-size: 19px;
-    line-height: 1.25;
-    margin: 0;
-  }
-
-  .todays-dinner-card.no-image .todays-dinner-meta {
-    grid-row: 2;
-    gap: 6px;
-    font-size: 12.5px;
-  }
-
-  .todays-dinner-card.no-image .todays-dinner-actions {
-    grid-row: 3;
-    gap: 6px;
     margin-top: 2px;
   }
 
   .todays-dinner-actions .todays-dinner-cook-btn,
   .todays-dinner-actions .todays-dinner-view-btn,
   .todays-dinner-actions .todays-dinner-rating-badge {
+    flex: 1 1 0;
+    justify-content: center;
+    min-height: 44px;
+    padding: 8px 10px;
+    font-size: 13.5px;
+    white-space: nowrap;
+  }
+
+  .home-empty-actions {
+    width: 100%;
+  }
+
+  .home-empty-actions a {
     flex: 1 1 auto;
     justify-content: center;
-    min-height: 40px;
-    padding: 8px 10px;
-    font-size: 13px;
-    white-space: nowrap;
+    min-height: 44px;
   }
 
   .home-shortcuts-grid {
@@ -4210,6 +4268,7 @@ body.weekly-touch-reordering .weekly-drag-handle {
   .home-tomorrow-btn {
     width: 100%;
     justify-content: center;
+    min-height: 44px;
   }
 
   .weekly-pantry-card {
@@ -7054,32 +7113,16 @@ fluent-dialog.recipe-picker-dialog::part(control) {
 
 /* Home Calendar Summary Section */
 .home-calendar-section {
-  margin-top: 24px;
-  padding: 20px;
-  background-color: var(--rb-bg-card);
-  border: 1px solid var(--rb-border);
-  border-radius: var(--rb-radius-lg);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 14px;
+  column-gap: 12px;
+  align-items: center;
 }
 
 .home-calendar-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.home-calendar-title-group {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-}
-
-.home-calendar-heading {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--rb-text-primary);
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .home-calendar-week-label {
@@ -7088,47 +7131,54 @@ fluent-dialog.recipe-picker-dialog::part(control) {
 }
 
 .home-calendar-open-link {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--rb-accent);
-  text-decoration: none;
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
 }
 
-.home-calendar-open-link:hover {
-  text-decoration: underline;
+.home-calendar-loading {
+  grid-column: 1 / -1;
+  grid-row: 2;
 }
 
 .home-calendar-columns {
+  grid-column: 1 / -1;
+  grid-row: 2;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 20px;
 }
 
 .home-calendar-group {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .home-calendar-subheading {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--rb-text-muted);
+  margin: 0;
 }
 
 .home-calendar-empty {
   font-size: 13px;
   color: var(--rb-text-muted);
   font-style: italic;
+  margin: 0;
 }
 
 .home-calendar-list {
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+  margin: 0;
+  padding: 0;
 }
 
 .home-calendar-item {
@@ -7136,10 +7186,13 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 12px;
-  background-color: var(--rb-bg-surface);
-  border: 1px solid var(--rb-border-subtle);
-  border-radius: var(--rb-radius-md);
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rb-border-subtle);
+}
+
+.home-calendar-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .home-calendar-day-badge {
@@ -7168,6 +7221,7 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   font-size: 14px;
   font-weight: 600;
   color: var(--rb-text-primary);
+  overflow-wrap: anywhere;
 }
 
 .home-calendar-item-meta {
@@ -7214,6 +7268,20 @@ fluent-dialog.recipe-picker-dialog::part(control) {
   .calendar-form-row,
   .home-calendar-columns {
     grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .home-calendar-section {
+    grid-template-columns: 1fr;
+  }
+
+  .home-calendar-open-link {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: stretch;
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 
   .calendar-scope-actions {
@@ -8370,12 +8438,6 @@ fluent-dialog.recipe-picker-dialog::part(control) {
 [data-theme="light"] .weekly-day-image-placeholder,
 [data-theme="light"] .recipe-picker-card-placeholder {
   background: linear-gradient(135deg, #eae6dc 0%, #dcd6c6 100%);
-}
-
-[data-theme="light"] .todays-dinner-card {
-  background: linear-gradient(135deg, #ffffff 0%, #e5f5eb 100%);
-  border-color: var(--rb-today-border);
-  border-left: 5px solid var(--rb-today-accent-bar);
 }
 
 [data-theme="light"] .todays-dinner-rating-badge {

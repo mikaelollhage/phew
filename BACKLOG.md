@@ -107,6 +107,7 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 
 -   [x] BRAND-1 --- Ny visuell identitet för PHEW! med grön färgpalett (`#397B4D` / `#8BCB91` / `#174638`), `phew-logo.webp`, ny `favicon.svg` / `favicon.ico`, PWA-ikoner (`192`, `512`, `maskable-512`, `apple-touch-icon`) och uppdaterad `manifest.webmanifest` (implementerat; inväntar slutlig visuell godkännande & produktionsdeploy).
 -   [x] BRAND-1F --- Förstklassigt tema för Ljust, Mörkt och System med lokal lagring (`localStorage['phew.theme']`), synkron flimmerfri uppstart i `App.razor`, `AppThemeService`, `FluentDesignTheme`-synk och utseendeväljare på `/installningar` (implementerat; inväntar slutlig visuell godkännande & produktionsdeploy).
+-   [x] UX-HOME-1 --- Enhetlig kortstruktur på startsidan (`Home.razor`, `TodaysDinnerCard.razor`, `HomeCalendarSummarySection.razor`), neutrala kortytor utan grön vänsterram/gradient, nedskalad desktop-logotyp (`148 px`), neutrala PWA-systemfältsfärger (`#FFFFFF` / `#000000` i `App.razor`, `cooking-helper.js` och `manifest.webmanifest`) samt dokumenterade UI-designprinciper i `ARCHITECTURE.md` (implementerat i kod och tester; fysisk Android PWA- och webbläsarverifiering återstår för ägaren).
 -   [x] BRAND-1.1 --- Visuell puts och färgkonsistens (B01–B12, inklusive `UX-ING-1`): gröna val- och drag-och-släpp-stilar i inköpsimport/recept/veckomeny, gröna sektionsrubriker, neutrala vardagsdatum, enhetlig grön "IDAG"-markering, högkontrast kalendertidsbadge i ljust tema, åtgärdad radmarkering vid trepunktsmeny (`UX-ING-1`), full illustrerad logotyp i desktop-sidopanel med kompakt mobilheader, rent tangentbordsfokus utan dubbelram i navigering, ljusare vita sekundärknappar i ljust tema, fönsterliknande temaförhandsvisningar och diskret "Om PHEW!"-kort i Inställningar (implementerat; inväntar ägarens visuella godkännande & produktionsdeploy).
 -   [x] FAM-1B / FAM-1B.1 --- Familjeinställningar.
 -   [x] RATE-1B / RATE-1C / RATE-1C.1 --- Receptbetyg inklusive Bayesiansk dämpning.
@@ -128,5 +129,6 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 
 ## Ändringslogg
 
+-   2026-11-24: `UX-HOME-1` implementerad i kod och tester (enhetliga startsidekort, `148 px` desktop-logotyp, `#FFFFFF`/`#000000` PWA `theme-color`, delade UI-principer i `ARCHITECTURE.md`). Fysisk Android PWA- och webbläsarverifiering återstår för ägaren.
 -   2026-11-24: Uppdaterad efter BRAND-1, BRAND-1F och BRAND-1.1. Fas 0 (namnbyte och servermigrering) markerad som slutförd. BRAND-1, BRAND-1F, BRAND-1.1, UX-ING-1 och PWA-ICON markerade som implementerade (baslinje: 1 020 godkända tester), med tydlig åtskillnad mot kvarstående visuell granskning och produktionsdeploy.
 -   2026-11-24: Första samlade backloggen. UX-ING-1 tillagd. Namnbytesstatus och kvarvarande serververifiering dokumenterade.

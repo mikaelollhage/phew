@@ -6,13 +6,11 @@
 @inject IJSRuntime JSRuntime
 @inject NavigationManager Navigation
 
-<PageTitle>Dagens middag — PHEW!</PageTitle>
+<PageTitle>Hem — PHEW!</PageTitle>
 
-<div class="page-header home-page-header">
-    <div>
-        <h1 class="page-title">Dagens middag</h1>
-        <p class="page-subtitle">@GetFormattedDateSubtitle()</p>
-    </div>
+<div class="home-page-intro">
+    <h1 class="visually-hidden">Hem</h1>
+    <p class="page-subtitle home-date-intro">@GetFormattedDateSubtitle()</p>
 </div>
 
 @if (isLoading)
@@ -23,6 +21,7 @@
 }
 else if (mealPlan != null)
 {
+    <div class="home-dashboard">
     @if (mealPlan.TodayMeal.HasRecipe)
     {
         <TodaysDinnerCard Meal="mealPlan.TodayMeal"
@@ -32,39 +31,57 @@ else if (mealPlan != null)
     }
     else if (mealPlan.TodayMeal.HasSavedMenu)
     {
-        <div class="empty-state home-empty-state" role="status">
-            <div class="empty-state-icon">🥗</div>
-            <h2 class="empty-state-title">Ingen middag planerad för idag</h2>
-            <p class="empty-state-desc">
-                Välj en rätt i veckomenyn eller hitta inspiration bland dina recept.
-            </p>
-            <div class="home-empty-actions">
-                <a href="/veckomeny" class="btn-primary-custom" id="home-empty-choose-menu-btn">
-                    Välj rätt i veckomenyn
-                </a>
-                <a href="/recept" class="btn-secondary-custom" id="home-empty-browse-recipes-btn">
-                    Bläddra bland recept
-                </a>
+        <section class="home-card home-empty-card" aria-label="Dagens middag" role="status">
+            <div class="home-card-header">
+                <div class="home-card-heading-group">
+                    <span class="home-card-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size20.Food())" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <h2 class="home-card-title">Dagens middag</h2>
+                </div>
             </div>
-        </div>
+            <div class="home-empty-state">
+                <h3 class="home-empty-title">Ingen middag planerad för idag</h3>
+                <p class="home-empty-desc">
+                    Välj en rätt i veckomenyn eller hitta inspiration bland dina recept.
+                </p>
+                <div class="home-empty-actions">
+                    <a href="/veckomeny" class="btn-primary-custom" id="home-empty-choose-menu-btn">
+                        Välj rätt i veckomenyn
+                    </a>
+                    <a href="/recept" class="btn-secondary-custom" id="home-empty-browse-recipes-btn">
+                        Bläddra bland recept
+                    </a>
+                </div>
+            </div>
+        </section>
     }
     else
     {
-        <div class="empty-state home-empty-state" role="status">
-            <div class="empty-state-icon">📅</div>
-            <h2 class="empty-state-title">Dags att planera veckan?</h2>
-            <p class="empty-state-desc">
-                Det finns ingen veckomeny sparad för den här veckan.
-            </p>
-            <div class="home-empty-actions">
-                <a href="/veckomeny" class="btn-primary-custom" id="home-empty-plan-week-btn">
-                    Öppna veckomenyn
-                </a>
-                <a href="/recept" class="btn-secondary-custom" id="home-empty-browse-recipes-btn">
-                    Bläddra bland recept
-                </a>
+        <section class="home-card home-empty-card" aria-label="Dagens middag" role="status">
+            <div class="home-card-header">
+                <div class="home-card-heading-group">
+                    <span class="home-card-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size20.Food())" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <h2 class="home-card-title">Dagens middag</h2>
+                </div>
             </div>
-        </div>
+            <div class="home-empty-state">
+                <h3 class="home-empty-title">Dags att planera veckan?</h3>
+                <p class="home-empty-desc">
+                    Det finns ingen veckomeny sparad för den här veckan.
+                </p>
+                <div class="home-empty-actions">
+                    <a href="/veckomeny" class="btn-primary-custom" id="home-empty-plan-week-btn">
+                        Öppna veckomenyn
+                    </a>
+                    <a href="/recept" class="btn-secondary-custom" id="home-empty-browse-recipes-btn">
+                        Bläddra bland recept
+                    </a>
+                </div>
+            </div>
+        </section>
     }
 
     @if (mealPlan.TomorrowMeal.HasRecipe)
@@ -74,14 +91,19 @@ else if (mealPlan != null)
         var tomorrowDayName = CalendarWeek.GetSwedishDayName(mealPlan.TomorrowMeal.Date);
         var tomorrowDateFormatted = mealPlan.TomorrowMeal.Date.ToString("d MMMM", SwedishCulture);
 
-        <section class="home-tomorrow-card" aria-label="Morgondagens måltid">
-            <div class="home-tomorrow-header">
-                <span class="home-tomorrow-badge">🌅 I MORGON</span>
+        <section class="home-card home-tomorrow-card" aria-label="Morgondagens middag">
+            <div class="home-card-header home-tomorrow-header">
+                <div class="home-card-heading-group">
+                    <span class="home-card-icon" aria-hidden="true">
+                        <FluentIcon Value="@(new Icons.Regular.Size20.CalendarDate())" Color="Color.Custom" CustomColor="currentColor" />
+                    </span>
+                    <h2 class="home-card-title">Morgondagens middag</h2>
+                    @if (mealPlan.TomorrowMeal.IsDraft)
+                    {
+                        <span class="weekly-status-badge status-draft">Utkast</span>
+                    }
+                </div>
                 <span class="home-tomorrow-date">@tomorrowDayName @tomorrowDateFormatted</span>
-                @if (mealPlan.TomorrowMeal.IsDraft)
-                {
-                    <span class="weekly-status-badge status-draft" style="font-size: 11px; padding: 2px 8px;">Utkast</span>
-                }
             </div>
             <div class="home-tomorrow-body">
                 <div class="home-tomorrow-info">
@@ -91,10 +113,16 @@ else if (mealPlan != null)
                     <div class="home-tomorrow-meta">
                         @if (tomorrowRecipe.TotalTimeMinutes.HasValue)
                         {
-                            <span>⏱️ @tomorrowRecipe.TotalTimeMinutes min</span>
-                            <span class="todays-dinner-dot">·</span>
+                            <span class="home-meta-item">
+                                <FluentIcon Value="@(new Icons.Regular.Size16.Clock())" Color="Color.Custom" CustomColor="currentColor" />
+                                <span>@tomorrowRecipe.TotalTimeMinutes min</span>
+                            </span>
+                            <span class="todays-dinner-dot" aria-hidden="true">·</span>
                         }
-                        <span>👥 @tomorrowServings @tomorrowRecipe.ServingsUnit</span>
+                        <span class="home-meta-item">
+                            <FluentIcon Value="@(new Icons.Regular.Size16.People())" Color="Color.Custom" CustomColor="currentColor" />
+                            <span>@tomorrowServings @tomorrowRecipe.ServingsUnit</span>
+                        </span>
                     </div>
                 </div>
                 <a href="@($"/recept/{tomorrowRecipe.Id}")" class="btn-secondary-custom btn-sm home-tomorrow-btn">
@@ -112,7 +140,7 @@ else if (mealPlan != null)
     }
 
     <section class="home-shortcuts-section" aria-label="Snabbval">
-        <h3 class="home-shortcuts-heading">Snabbval i vardagen</h3>
+        <h2 class="home-shortcuts-heading">Snabbval i vardagen</h2>
         <div class="home-shortcuts-grid">
             <a href="/veckomeny" class="home-shortcut-card" id="home-shortcut-weekly-menu">
                 <span class="home-shortcut-icon" aria-hidden="true">📅</span>
@@ -140,6 +168,7 @@ else if (mealPlan != null)
             </a>
         </div>
     </section>
+    </div>
 }
 
 @if (ratingTargetRecipe != null)

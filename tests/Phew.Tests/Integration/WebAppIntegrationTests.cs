@@ -245,7 +245,7 @@ public class WebAppIntegrationTests : IDisposable
             root.GetProperty("scope").GetString().Should().Be("/");
             root.GetProperty("display").GetString().Should().Be("standalone");
             root.GetProperty("background_color").GetString().Should().Be("#141416");
-            root.GetProperty("theme_color").GetString().Should().Be("#174638");
+            root.GetProperty("theme_color").GetString().Should().Be("#000000");
 
             var icons = root.GetProperty("icons").EnumerateArray().ToList();
             icons.Should().HaveCount(3);
@@ -334,7 +334,7 @@ public class WebAppIntegrationTests : IDisposable
             homeResponse.StatusCode.Should().Be(HttpStatusCode.OK);
             var homeHtml = await homeResponse.Content.ReadAsStringAsync();
             homeHtml.Should().Contain("href=\"/manifest.webmanifest\"");
-            homeHtml.Should().Contain("name=\"theme-color\" content=\"#174638\"");
+            homeHtml.Should().Contain("name=\"theme-color\" content=\"#000000\"");
             homeHtml.Should().Contain("phew.theme");
             homeHtml.Should().Contain("prefers-color-scheme: dark");
             homeHtml.Should().Contain("data-theme");

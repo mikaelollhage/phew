@@ -480,6 +480,7 @@ public class SettingsPageTests : TestContext
         service.Preference.Should().Be(expectedPreference);
         service.ResolvedTheme.Should().Be(expectedResolved);
         service.FluentMode.Should().Be(expectedFluentMode);
+        service.SystemBarColor.Should().Be(expectedResolved == "light" ? "#FFFFFF" : "#000000");
 
         // When explicit Light or Dark is selected, an OS preference mismatch never overrides the explicit choice
         if (expectedPreference == ThemePreference.Light)
@@ -487,12 +488,14 @@ public class SettingsPageTests : TestContext
             service.UpdateFromClient("light", "dark");
             service.ResolvedTheme.Should().Be("light");
             service.FluentMode.Should().Be(DesignThemeModes.Light);
+            service.SystemBarColor.Should().Be("#FFFFFF");
         }
         else if (expectedPreference == ThemePreference.Dark)
         {
             service.UpdateFromClient("dark", "light");
             service.ResolvedTheme.Should().Be("dark");
             service.FluentMode.Should().Be(DesignThemeModes.Dark);
+            service.SystemBarColor.Should().Be("#000000");
         }
     }
 }

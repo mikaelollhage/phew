@@ -252,14 +252,16 @@ public class HomePageAndMealPlanTests : TestContext
 
         cut.WaitForAssertion(() =>
         {
-            cut.Find(".page-title").TextContent.Should().Be("Dagens middag");
-            cut.Find(".page-subtitle").TextContent.Should().Contain("Måndag");
-            cut.Find(".page-subtitle").TextContent.Should().Contain("Vecka 45");
+            cut.Find("h1.visually-hidden").TextContent.Should().Be("Hem");
+            cut.Find(".home-date-intro").TextContent.Should().Contain("Måndag");
+            cut.Find(".home-date-intro").TextContent.Should().Contain("Vecka 45");
 
-            // Hero-kort
+            // Dagens middag-kort
             var hero = cut.Find(".todays-dinner-card");
+            hero.ClassList.Should().Contain("home-card");
+            hero.QuerySelector("h2.home-card-title")!.TextContent.Should().Be("Dagens middag");
             hero.TextContent.Should().Contain("Krämig lax med dill");
-            hero.TextContent.Should().Contain("📌 Spikad meny");
+            hero.TextContent.Should().Contain("Spikad meny");
             hero.TextContent.Should().Contain("4 portioner");
 
             // Knappar
@@ -271,9 +273,10 @@ public class HomePageAndMealPlanTests : TestContext
             viewBtn.GetAttribute("href").Should().Be($"/recept/{r1.Id}");
             viewBtn.ClassList.Should().Contain("btn-secondary-custom");
 
-            // I morgon-sektion
+            // Morgondagens middag-kort
             var tomorrow = cut.Find(".home-tomorrow-card");
-            tomorrow.TextContent.Should().Contain("I MORGON");
+            tomorrow.ClassList.Should().Contain("home-card");
+            tomorrow.QuerySelector("h2.home-card-title")!.TextContent.Should().Be("Morgondagens middag");
             tomorrow.TextContent.Should().Contain("Vegansk linsgryta");
             tomorrow.TextContent.Should().Contain("6 portioner");
         });
@@ -295,7 +298,7 @@ public class HomePageAndMealPlanTests : TestContext
         cut.WaitForAssertion(() =>
         {
             var hero = cut.Find(".todays-dinner-card");
-            hero.TextContent.Should().Contain("📝 Planerat i utkast");
+            hero.TextContent.Should().Contain("Planerat i utkast");
             hero.TextContent.Should().Contain("Planeringen är ett utkast");
 
             // Matlagningsknappen ska fortfarande fungera i utkast
@@ -356,7 +359,7 @@ public class HomePageAndMealPlanTests : TestContext
         using var _ = dbFactory;
 
         var cut = RenderComponent<Home>();
-        cut.WaitForAssertion(() => cut.Find(".page-title").TextContent.Should().Be("Dagens middag"));
+        cut.WaitForAssertion(() => cut.Find(".home-date-intro").TextContent.Should().Contain("Vecka 45"));
 
         var act = () => cut.Dispose();
         act.Should().NotThrow();

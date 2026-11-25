@@ -318,8 +318,8 @@ public class RecipeRatingComponentTests : TestContext
         card.QuerySelector(".todays-dinner-image-wrap").Should().NotBeNull();
         card.QuerySelector(".todays-dinner-image-gradient").Should().BeNull();
         card.QuerySelector(".todays-dinner-title")!.TextContent.Trim().Should().Be(longTitle);
-        card.QuerySelector(".todays-dinner-badge-row")!.TextContent.Should().Contain("DAGENS MIDDAG");
-        card.QuerySelector(".todays-dinner-meta")!.TextContent.Should().Contain("90 minuter").And.Contain("4 portioner");
+        card.QuerySelector(".todays-dinner-header .home-card-title")!.TextContent.Should().Be("Dagens middag");
+        card.QuerySelector(".todays-dinner-meta")!.TextContent.Should().Contain("90 min").And.Contain("4 portioner");
         card.QuerySelector(".todays-dinner-cook-btn").Should().NotBeNull();
         card.QuerySelector(".todays-dinner-view-btn").Should().NotBeNull();
         card.QuerySelector(".todays-dinner-week-link").Should().NotBeNull();

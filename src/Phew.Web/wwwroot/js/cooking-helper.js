@@ -198,7 +198,7 @@ window.phew = {
 
         const meta = document.querySelector('meta[name="theme-color"]');
         if (meta) {
-            meta.setAttribute('content', resolved === 'light' ? '#397B4D' : '#174638');
+            meta.setAttribute('content', resolved === 'light' ? '#FFFFFF' : '#000000');
         }
 
         return {

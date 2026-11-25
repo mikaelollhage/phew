@@ -23,6 +23,11 @@ public sealed class AppThemeService
             ? DesignThemeModes.Light
             : DesignThemeModes.Dark;
 
+    public string SystemBarColor =>
+        string.Equals(ResolvedTheme, "light", StringComparison.OrdinalIgnoreCase)
+            ? "#FFFFFF"
+            : "#000000";
+
     public event Action? OnChange;
 
     public static ThemePreference ParsePreference(string? raw)

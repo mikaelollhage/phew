@@ -155,7 +155,7 @@ public class MainLayoutAndNavigationTests : TestContext
 
         cut.WaitForAssertion(() =>
         {
-            cut.Find(".page-title").TextContent.Should().Be("Dagens middag");
+            cut.Find(".home-date-intro").TextContent.Should().Contain("Måndag");
             cut.Find(".home-empty-state").TextContent.Should().Contain("Dags att planera veckan?");
             cut.Find("#home-empty-plan-week-btn").GetAttribute("href").Should().Be("/veckomeny");
             cut.Find("#home-empty-browse-recipes-btn").GetAttribute("href").Should().Be("/recept");
@@ -185,8 +185,8 @@ public class MainLayoutAndNavigationTests : TestContext
         var fullLogoImg = brandSection.QuerySelector("img.brand-logo-full");
         fullLogoImg.Should().NotBeNull("B08: desktop sidebar header renders the full illustrated PHEW! logo");
         fullLogoImg!.GetAttribute("src").Should().Be("/phew-logo.webp");
-        fullLogoImg.GetAttribute("width").Should().Be("212");
-        fullLogoImg.GetAttribute("height").Should().Be("212");
+        fullLogoImg.GetAttribute("width").Should().Be("148");
+        fullLogoImg.GetAttribute("height").Should().Be("148");
         fullLogoImg.GetAttribute("alt").Should().Be("");
         fullLogoImg.GetAttribute("aria-hidden").Should().Be("true");
 

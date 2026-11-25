@@ -542,6 +542,23 @@ Applikationen designas med ett **"Dark Culinary Theme"** inspirerat av moderna m
 - Tydlig typografi med god kontrast (WCAG AA-godkänd) och stora klickytor anpassade för fingrar med mjöl på i köket.
 - Alla texter och gränssnittselement är på **svenska**.
 
+### Delade UI-designprinciper för PHEW!
+
+Följande principer styr utformningen av gränssnittet i både ljust och mörkt tema, med sidorna **Inställningar** (`/installningar`) och **Hem** (`/`) som positiva referenser:
+
+1. En sidrubrik ska beskriva hela sidan, inte en enskild funktionell sektion.
+2. En funktionell sektion ska utgöra en sammanhållen visuell enhet.
+3. Sektionsrubriker ska i regel placeras inuti sina tillhörande kort.
+4. Relaterad information och tillhörande åtgärder ska grupperas visuellt tillsammans.
+5. Jämförbara kort ska dela gemensamma ytor, ramar, hörnradier, mellanrum och typografi.
+6. Grönt är den primära varumärkesaccenten, inte en universell dekorativ färg.
+7. Semantiska färger måste behålla sin betydelse (t.ex. orange/bärnsten för utkast, varningar och betyg; rött för destruktiva åtgärder och fel; användardefinierade kategorifärger).
+8. Undvik onödiga gradienter, nästlade kort, tunga ramar och dekorativt visuellt brus.
+9. Föredra konsekvent ikonografi inom varje funktionellt område (t.ex. Fluent UI-ikoner för sektionsrubriker och metadata).
+10. Prioritera mobilanvändbarhet först och anpassa layouten ändamålsenligt för desktop.
+11. Bevara funktionell tydlighet framför dekorativ likformighet.
+12. Tillämpa dessa principer där det är lämpligt, inte som ett stelt krav på varje sida.
+
 ### Färgpalett
 ```css
 :root {
