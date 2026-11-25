@@ -168,7 +168,7 @@ public class MainLayoutAndNavigationTests : TestContext
     }
 
     [Fact]
-    public void NavMenu_ShouldRenderPhewBrandIdentity_WithFullDesktopLogoAndCompactMobileBranding_WithoutFryingPanEmoji()
+    public void NavMenu_ShouldRenderPhewBrandIdentity_WithFullLogo_AndAllDestinations_WithoutFryingPanEmoji()
     {
         SetupTestContext(seedRecipes: false);
 
@@ -183,27 +183,121 @@ public class MainLayoutAndNavigationTests : TestContext
         brandLink.GetAttribute("aria-label").Should().Be("PHEW! – Family life, sorted.");
 
         var fullLogoImg = brandSection.QuerySelector("img.brand-logo-full");
-        fullLogoImg.Should().NotBeNull("B08: desktop sidebar header renders the full illustrated PHEW! logo");
+        fullLogoImg.Should().NotBeNull("desktop sidebar and mobile drawer both render the full illustrated PHEW! logo");
         fullLogoImg!.GetAttribute("src").Should().Be("/phew-logo.webp");
         fullLogoImg.GetAttribute("width").Should().Be("148");
         fullLogoImg.GetAttribute("height").Should().Be("148");
         fullLogoImg.GetAttribute("alt").Should().Be("");
         fullLogoImg.GetAttribute("aria-hidden").Should().Be("true");
 
-        var compactContainer = brandSection.QuerySelector(".brand-compact");
-        compactContainer.Should().NotBeNull("B08: mobile header retains the compact branding arrangement");
+        var links = cut.FindAll("nav.sidebar-nav a.nav-link-custom");
+        links.Select(l => l.GetAttribute("href")).Should().BeEquivalentTo(new[]
+        {
+            "", "kalender", "veckomeny", "recept", "favoriter", "kategorier",
+            "importera", "inkopslista", "att-gora", "installningar", "backup"
+        }, options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void MainLayout_ShouldRenderMobileHeaderWithAccessibleHamburgerAndCompactBranding()
+    {
+        SetupTestContext(seedRecipes: false);
+
+        var cut = RenderComponent<MainLayout>();
+
+        var mobileHeader = cut.Find("header.app-mobile-header");
+        var toggleBtn = mobileHeader.QuerySelector("#mobile-nav-toggle-btn");
+        toggleBtn.Should().NotBeNull();
+        toggleBtn!.GetAttribute("type").Should().Be("button");
+        toggleBtn.GetAttribute("aria-label").Should().Be("Öppna meny");
+        toggleBtn.GetAttribute("aria-expanded").Should().Be("false");
+        toggleBtn.GetAttribute("aria-controls").Should().Be("app-navigation-drawer");
+
+        var brandLink = mobileHeader.QuerySelector("a.mobile-header-brand-link");
+        brandLink.Should().NotBeNull();
+        brandLink!.GetAttribute("href").Should().Be("");
+        brandLink.GetAttribute("aria-label").Should().Be("PHEW! – Family life, sorted.");
+
+        var compactContainer = mobileHeader.QuerySelector(".brand-compact");
+        compactContainer.Should().NotBeNull();
         compactContainer!.GetAttribute("aria-hidden").Should().Be("true");
 
-        var logoImg = brandSection.QuerySelector("img.brand-logo-mark");
+        var logoImg = mobileHeader.QuerySelector("img.brand-logo-mark");
         logoImg.Should().NotBeNull();
         logoImg!.GetAttribute("src").Should().Be("/favicon.svg");
-        logoImg.GetAttribute("width").Should().Be("36");
-        logoImg.GetAttribute("height").Should().Be("36");
-        logoImg.GetAttribute("alt").Should().Be("");
-        logoImg.GetAttribute("aria-hidden").Should().Be("true");
 
-        brandSection.QuerySelector(".brand-title")!.TextContent.Trim().Should().Be("PHEW!");
-        brandSection.QuerySelector(".brand-subtitle")!.TextContent.Trim().Should().Be("Family life, sorted.");
+        mobileHeader.QuerySelector(".brand-title")!.TextContent.Trim().Should().Be("PHEW!");
+        mobileHeader.QuerySelector(".brand-subtitle")!.TextContent.Trim().Should().Be("Family life, sorted.");
+    }
+
+    [Fact]
+    public async Task MainLayout_Drawer_ShouldOpenCloseAndHandleEscapeBackdropNavigationAndDesktopTransition()
+    {
+        SetupTestContext(seedRecipes: false);
+        JSInterop.Setup<bool>("phew.registerNavDrawerListener", _ => true).SetResult(true);
+
+        var cut = RenderComponent<MainLayout>();
+
+        // Initially closed in mobile mode
+        var drawer = cut.Find("#app-navigation-drawer");
+        drawer.ClassList.Should().NotContain("is-open");
+        drawer.GetAttribute("role").Should().Be("dialog");
+        drawer.GetAttribute("aria-hidden").Should().Be("true");
+        cut.Find("#mobile-nav-toggle-btn").GetAttribute("aria-expanded").Should().Be("false");
+        cut.Find(".app-main").HasAttribute("inert").Should().BeFalse();
+
+        // Open via hamburger button
+        cut.Find("#mobile-nav-toggle-btn").Click();
+        cut.WaitForAssertion(() =>
+        {
+            var openDrawer = cut.Find("#app-navigation-drawer");
+            openDrawer.ClassList.Should().Contain("is-open");
+            openDrawer.GetAttribute("aria-modal").Should().Be("true");
+            openDrawer.HasAttribute("aria-hidden").Should().BeFalse();
+            cut.Find("#mobile-nav-toggle-btn").GetAttribute("aria-expanded").Should().Be("true");
+            cut.Find(".app-main").HasAttribute("inert").Should().BeTrue();
+        });
+
+        // Close via close button
+        var closeBtn = cut.Find("#mobile-drawer-close-btn");
+        closeBtn.GetAttribute("aria-label").Should().Be("Stäng meny");
+        closeBtn.Click();
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find("#app-navigation-drawer").ClassList.Should().NotContain("is-open");
+            cut.Find("#mobile-nav-toggle-btn").GetAttribute("aria-expanded").Should().Be("false");
+        });
+
+        // Re-open and close via backdrop click
+        cut.Find("#mobile-nav-toggle-btn").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().Contain("is-open"));
+        cut.Find(".app-drawer-backdrop").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().NotContain("is-open"));
+
+        // Re-open and close via Escape callback
+        cut.Find("#mobile-nav-toggle-btn").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().Contain("is-open"));
+        await cut.Instance.OnDrawerEscapeAsync();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().NotContain("is-open"));
+
+        // Re-open and close by clicking the currently active destination ("Hem", href="")
+        cut.Find("#mobile-nav-toggle-btn").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().Contain("is-open"));
+        cut.Find("nav.sidebar-nav a.nav-link-custom[href='']").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().NotContain("is-open"));
+
+        // Re-open and transition to desktop permanent sidebar mode
+        cut.Find("#mobile-nav-toggle-btn").Click();
+        cut.WaitForAssertion(() => cut.Find("#app-navigation-drawer").ClassList.Should().Contain("is-open"));
+        await cut.Instance.OnNavigationModeChangedAsync(false);
+        cut.WaitForAssertion(() =>
+        {
+            var desktopSidebar = cut.Find("#app-navigation-drawer");
+            desktopSidebar.ClassList.Should().NotContain("is-open");
+            desktopSidebar.HasAttribute("role").Should().BeFalse();
+            desktopSidebar.HasAttribute("aria-modal").Should().BeFalse();
+            desktopSidebar.HasAttribute("aria-hidden").Should().BeFalse();
+        });
     }
 
     [Fact]

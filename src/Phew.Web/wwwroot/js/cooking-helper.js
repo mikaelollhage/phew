@@ -1656,6 +1656,147 @@ window.phew = {
         } catch (err) {
             console.debug('focusAndScrollIngredientEditorHandle misslyckades:', err);
         }
+    },
+
+    _navDrawerMediaQuery: null,
+    _navDrawerMediaHandler: null,
+    _navDrawerDotNetRef: null,
+    _navDrawerKeyHandler: null,
+    _navDrawerIsOpen: false,
+
+    registerNavDrawerListener: function (dotNetRef) {
+        this.unregisterNavDrawerListener();
+        this._navDrawerDotNetRef = dotNetRef || null;
+
+        try {
+            if (window.matchMedia) {
+                const mql = window.matchMedia('(max-width: 1023.98px), (max-height: 500px) and (pointer: coarse)');
+                this._navDrawerMediaQuery = mql;
+                this._navDrawerMediaHandler = (event) => {
+                    if (this._navDrawerDotNetRef) {
+                        try {
+                            this._navDrawerDotNetRef.invokeMethodAsync('OnNavigationModeChangedAsync', Boolean(event.matches));
+                        } catch (_) {}
+                    }
+                };
+                if (typeof mql.addEventListener === 'function') {
+                    mql.addEventListener('change', this._navDrawerMediaHandler);
+                } else if (typeof mql.addListener === 'function') {
+                    mql.addListener(this._navDrawerMediaHandler);
+                }
+                return Boolean(mql.matches);
+            }
+        } catch (err) {
+            console.debug('registerNavDrawerListener misslyckades:', err);
+        }
+
+        return window.innerWidth < 1024;
+    },
+
+    unregisterNavDrawerListener: function () {
+        if (this._navDrawerMediaQuery && this._navDrawerMediaHandler) {
+            try {
+                if (typeof this._navDrawerMediaQuery.removeEventListener === 'function') {
+                    this._navDrawerMediaQuery.removeEventListener('change', this._navDrawerMediaHandler);
+                } else if (typeof this._navDrawerMediaQuery.removeListener === 'function') {
+                    this._navDrawerMediaQuery.removeListener(this._navDrawerMediaHandler);
+                }
+            } catch (_) {}
+        }
+        this._navDrawerMediaQuery = null;
+        this._navDrawerMediaHandler = null;
+        this._navDrawerDotNetRef = null;
+        this.setNavDrawerState(false, false);
+    },
+
+    _getDrawerFocusableElements: function (drawer) {
+        if (!drawer) return [];
+        const selector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+        return Array.from(drawer.querySelectorAll(selector)).filter((el) => {
+            const style = window.getComputedStyle(el);
+            return style.display !== 'none' && style.visibility !== 'hidden' && el.offsetParent !== null;
+        });
+    },
+
+    setNavDrawerState: function (isOpen, restoreFocus) {
+        const root = document.documentElement;
+        const body = document.body;
+        this._navDrawerIsOpen = Boolean(isOpen);
+
+        if (isOpen) {
+            root.classList.add('phew-drawer-open');
+            body.classList.add('phew-drawer-open');
+
+            if (!this._navDrawerKeyHandler) {
+                this._navDrawerKeyHandler = (event) => {
+                    if (!this._navDrawerIsOpen) return;
+
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        if (this._navDrawerDotNetRef) {
+                            try {
+                                this._navDrawerDotNetRef.invokeMethodAsync('OnDrawerEscapeAsync');
+                            } catch (_) {}
+                        }
+                        return;
+                    }
+
+                    if (event.key === 'Tab') {
+                        const drawer = document.getElementById('app-navigation-drawer');
+                        const focusables = this._getDrawerFocusableElements(drawer);
+                        if (focusables.length === 0) {
+                            event.preventDefault();
+                            if (drawer) drawer.focus();
+                            return;
+                        }
+
+                        const first = focusables[0];
+                        const last = focusables[focusables.length - 1];
+                        const active = document.activeElement;
+
+                        if (event.shiftKey) {
+                            if (active === first || !drawer.contains(active)) {
+                                event.preventDefault();
+                                last.focus();
+                            }
+                        } else {
+                            if (active === last || !drawer.contains(active)) {
+                                event.preventDefault();
+                                first.focus();
+                            }
+                        }
+                    }
+                };
+                document.addEventListener('keydown', this._navDrawerKeyHandler);
+            }
+
+            window.requestAnimationFrame(() => {
+                const closeBtn = document.getElementById('mobile-drawer-close-btn');
+                if (closeBtn) {
+                    closeBtn.focus({ preventScroll: true });
+                } else {
+                    const drawer = document.getElementById('app-navigation-drawer');
+                    if (drawer) drawer.focus({ preventScroll: true });
+                }
+            });
+        } else {
+            root.classList.remove('phew-drawer-open');
+            body.classList.remove('phew-drawer-open');
+
+            if (this._navDrawerKeyHandler) {
+                document.removeEventListener('keydown', this._navDrawerKeyHandler);
+                this._navDrawerKeyHandler = null;
+            }
+
+            if (restoreFocus) {
+                window.requestAnimationFrame(() => {
+                    const toggleBtn = document.getElementById('mobile-nav-toggle-btn');
+                    if (toggleBtn && toggleBtn.offsetParent !== null) {
+                        toggleBtn.focus({ preventScroll: true });
+                    }
+                });
+            }
+        }
     }
 };
 

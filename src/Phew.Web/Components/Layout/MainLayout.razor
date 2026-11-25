@@ -9,11 +9,51 @@
 <FluentDialogProvider />
 
 <div class="app-container">
-    <aside class="app-sidebar">
-        <NavMenu />
+    <div class="app-drawer-backdrop @(isDrawerOpen ? "is-open" : "")"
+         @onclick="DismissDrawerAsync"
+         aria-hidden="true"></div>
+
+    <aside id="app-navigation-drawer"
+           class="app-sidebar @(isDrawerOpen ? "is-open" : "")"
+           role="@(isMobileNavMode ? "dialog" : null)"
+           aria-modal="@(isMobileNavMode && isDrawerOpen ? "true" : null)"
+           aria-hidden="@(isMobileNavMode && !isDrawerOpen ? "true" : null)"
+           aria-label="Huvudmeny"
+           tabindex="@(isMobileNavMode ? "-1" : null)">
+        <div class="app-drawer-top-bar">
+            <button type="button"
+                    id="mobile-drawer-close-btn"
+                    class="app-drawer-close-btn"
+                    aria-label="Stäng meny"
+                    @onclick="DismissDrawerAsync">
+                <FluentIcon Value="@(new Icons.Regular.Size20.Dismiss())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+        </div>
+        <NavMenu OnNavigate="HandleNavMenuNavigateAsync" />
     </aside>
 
-    <div class="app-main">
+    <div class="app-main" inert="@(isMobileNavMode && isDrawerOpen)">
+        <header class="app-mobile-header">
+            <button type="button"
+                    id="mobile-nav-toggle-btn"
+                    class="mobile-nav-toggle-btn"
+                    aria-label="Öppna meny"
+                    aria-expanded="@isDrawerOpen.ToString().ToLowerInvariant()"
+                    aria-controls="app-navigation-drawer"
+                    @onclick="OpenDrawerAsync">
+                <FluentIcon Value="@(new Icons.Regular.Size24.Navigation())" Color="Color.Custom" CustomColor="currentColor" />
+            </button>
+            <a href="" class="mobile-header-brand-link" aria-label="PHEW! – Family life, sorted.">
+                <div class="brand-compact" aria-hidden="true">
+                    <img src="/favicon.svg" alt="" width="32" height="32" class="brand-logo-mark" aria-hidden="true" decoding="async" />
+                    <div class="brand-text">
+                        <div class="brand-title">PHEW<span>!</span></div>
+                        <div class="brand-subtitle">Family life, sorted.</div>
+                    </div>
+                </div>
+            </a>
+        </header>
+
         @if (NotificationService.HasNotification)
         {
             var bannerClass = NotificationService.IsSuccess ? "app-top-banner-success" : (NotificationService.IsError ? "app-top-banner-error" : "app-top-banner-warning");
@@ -63,6 +103,8 @@
     private AppThemeService? _themeService;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
     private bool _isDisposed;
+    private bool isDrawerOpen;
+    private bool isMobileNavMode;
 
     private DesignThemeModes CurrentFluentThemeMode =>
         _themeService?.FluentMode ?? DesignThemeModes.Dark;
@@ -81,10 +123,23 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !_isDisposed && _themeService != null)
+        if (firstRender && !_isDisposed)
         {
             _dotNetRef = DotNetObjectReference.Create(this);
-            await _themeService.InitializeAsync(JSRuntime, _dotNetRef);
+            if (_themeService != null)
+            {
+                await _themeService.InitializeAsync(JSRuntime, _dotNetRef);
+            }
+
+            try
+            {
+                isMobileNavMode = await JSRuntime.InvokeAsync<bool>("phew.registerNavDrawerListener", _dotNetRef);
+                StateHasChanged();
+            }
+            catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+            {
+                // Ignore disconnected circuits or test hosts without JS implementation
+            }
         }
     }
 
@@ -98,6 +153,88 @@
 
         _themeService.UpdateFromClient(preference, resolved);
         return Task.CompletedTask;
+    }
+
+    [JSInvokable]
+    public async Task OnNavigationModeChangedAsync(bool isMobile)
+    {
+        if (_isDisposed)
+        {
+            return;
+        }
+
+        isMobileNavMode = isMobile;
+        if (!isMobile && isDrawerOpen)
+        {
+            await CloseDrawerInternalAsync(restoreFocus: false);
+        }
+        else
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnDrawerEscapeAsync()
+    {
+        if (_isDisposed || !isDrawerOpen)
+        {
+            return;
+        }
+
+        await CloseDrawerInternalAsync(restoreFocus: true);
+    }
+
+    public async Task OpenDrawerAsync()
+    {
+        if (_isDisposed || isDrawerOpen)
+        {
+            return;
+        }
+
+        isMobileNavMode = true;
+        isDrawerOpen = true;
+        await SyncDrawerJsStateAsync(isOpen: true, restoreFocus: false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task DismissDrawerAsync()
+    {
+        if (_isDisposed || !isDrawerOpen)
+        {
+            return;
+        }
+
+        await CloseDrawerInternalAsync(restoreFocus: true);
+    }
+
+    public async Task HandleNavMenuNavigateAsync()
+    {
+        if (_isDisposed || !isDrawerOpen)
+        {
+            return;
+        }
+
+        await CloseDrawerInternalAsync(restoreFocus: false);
+    }
+
+    private async Task CloseDrawerInternalAsync(bool restoreFocus)
+    {
+        isDrawerOpen = false;
+        await SyncDrawerJsStateAsync(isOpen: false, restoreFocus: restoreFocus);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SyncDrawerJsStateAsync(bool isOpen, bool restoreFocus)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("phew.setNavDrawerState", isOpen, restoreFocus);
+        }
+        catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
+        {
+            // Ignore disconnected circuits or test hosts
+        }
     }
 
     private void OnThemeChanged()
@@ -116,7 +253,7 @@
         }
     }
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
     {
         if (NotificationService.HasNotification)
         {
@@ -124,7 +261,14 @@
         }
         if (!_isDisposed)
         {
-            InvokeAsync(StateHasChanged);
+            if (isDrawerOpen)
+            {
+                await CloseDrawerInternalAsync(restoreFocus: false);
+            }
+            else
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
     }
 
@@ -148,6 +292,7 @@
             try
             {
                 await JSRuntime.InvokeVoidAsync("phew.unregisterThemeListener", _dotNetRef);
+                await JSRuntime.InvokeVoidAsync("phew.unregisterNavDrawerListener", _dotNetRef);
             }
             catch (Exception ex) when (ex is JSDisconnectedException or TaskCanceledException or ObjectDisposedException or InvalidOperationException)
             {

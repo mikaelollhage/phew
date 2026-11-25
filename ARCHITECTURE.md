@@ -559,6 +559,15 @@ Följande principer styr utformningen av gränssnittet i både ljust och mörkt 
 11. Bevara funktionell tydlighet framför dekorativ likformighet.
 12. Tillämpa dessa principer där det är lämpligt, inte som ett stelt krav på varje sida.
 
+### Responsivt applikationsskal och navigation (`UX-NAV-1`)
+
+Applikationsskalet i `MainLayout.razor`, `NavMenu.razor`, `app.css` och `cooking-helper.js` använder en gemensam navigeringsdefinition utan duplicerade ruttlistor:
+
+- **Brytpunktsstrategi:** `@media (max-width: 1023.98px), (max-height: 500px) and (pointer: coarse)` aktiverar mobilheader + vänsterställd navigeringslåda (*drawer*). Den permanenta `260 px`-sidopanelen visas först när bredden är minst `1024 px` och enheten inte är en låg liggande pekskärm. Vanliga desktopfönster med tillfälligt låg höjd (`pointer: fine`) behåller den permanenta sidopanelen.
+- **Mobilheader:** Kompakt neutral toppanel (`.app-mobile-header`) med hamburgerknapp (`#mobile-nav-toggle-btn`, minst `44 × 44 px`, `aria-expanded`, `aria-controls="app-navigation-drawer"`) och kompakt PHEW!-logotyp.
+- **Navigeringslåda:** Samma `<NavMenu />` med full illustrerad logotyp (`148 px`, `112 px` på mycket liggande skärmar), bredd `min(280px, calc(100vw - 44px))`, skrollbar på korta liggande mobilskärmar, `180 ms` övergång som respekterar `prefers-reduced-motion`, stängningsknapp, bakgrundsdämpning, `Escape`-stängning, fokusfälla, `inert` på `.app-main` och skrollåsning utan att tappa skrollposition.
+- **PWA-systemfält:** `manifest.webmanifest`, `App.razor` och `cooking-helper.js` synkroniserar `meta[name="theme-color"]` neutralt (`#FFFFFF` i ljust läge, `#000000` i mörkt läge). Android WebAPK kan behålla tidigare `theme_color` i sitt installerade manifest tills WebAPK uppdateras eller PWA:n installeras om.
+
 ### Färgpalett
 ```css
 :root {

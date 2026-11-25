@@ -2,7 +2,7 @@
 
 **Family life, sorted.**
 
-Senast sammanställd: 2026-11-24
+Senast sammanställd: 2026-11-25
 
 Detta är en levande backlogg för PHEW! (tidigare Receptbanken). Den bygger på våra utvecklingsdiskussioner och rapporterade implementationer, inte en ny granskning av repot. Prioriteringarna nedan är förslag där inget annat beslutats.
 
@@ -108,6 +108,8 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 -   [x] BRAND-1 --- Ny visuell identitet för PHEW! med grön färgpalett (`#397B4D` / `#8BCB91` / `#174638`), `phew-logo.webp`, ny `favicon.svg` / `favicon.ico`, PWA-ikoner (`192`, `512`, `maskable-512`, `apple-touch-icon`) och uppdaterad `manifest.webmanifest` (implementerat; inväntar slutlig visuell godkännande & produktionsdeploy).
 -   [x] BRAND-1F --- Förstklassigt tema för Ljust, Mörkt och System med lokal lagring (`localStorage['phew.theme']`), synkron flimmerfri uppstart i `App.razor`, `AppThemeService`, `FluentDesignTheme`-synk och utseendeväljare på `/installningar` (implementerat; inväntar slutlig visuell godkännande & produktionsdeploy).
 -   [x] UX-HOME-1 --- Enhetlig kortstruktur på startsidan (`Home.razor`, `TodaysDinnerCard.razor`, `HomeCalendarSummarySection.razor`), neutrala kortytor utan grön vänsterram/gradient, nedskalad desktop-logotyp (`148 px`), neutrala PWA-systemfältsfärger (`#FFFFFF` / `#000000` i `App.razor`, `cooking-helper.js` och `manifest.webmanifest`) samt dokumenterade UI-designprinciper i `ARCHITECTURE.md` (implementerat i kod och tester; fysisk Android PWA- och webbläsarverifiering återstår för ägaren).
+-   [x] UX-NAV-1 --- Responsiv mobilheader och vänsterställd navigeringslåda (*drawer*) i `MainLayout.razor`, `NavMenu.razor`, `app.css` och `cooking-helper.js` med brytpunkt `@media (max-width: 1023.98px), (max-height: 500px) and (pointer: coarse)`, `44 × 44 px` tryckytor, fokusfälla, `Escape`/backdrop-stängning, automatisk stängning vid orienterings-/desktopövergång, bevarad desktop-sidopanel samt utredning av kvarvarande grön Android-navigationsrad (implementerat och verifierat med bUnit-tester samt headless Edge över 13 vyportar; fysisk Android PWA-verifiering inklusive ev. ominstallation av PWA kvarstår för ägaren).
+-   [x] UX-NAV-1.1 --- Centrerad kompakt varumärkesgrupp i mobilheadern via balanserad trekolumns CSS-grid (`minmax(44px, 1fr) auto minmax(44px, 1fr)`) utan överlappning mot hamburgerknappen från `320 px` och uppåt (implementerat och verifierat i kod, tester och headless Edge).
 -   [x] BRAND-1.1 --- Visuell puts och färgkonsistens (B01–B12, inklusive `UX-ING-1`): gröna val- och drag-och-släpp-stilar i inköpsimport/recept/veckomeny, gröna sektionsrubriker, neutrala vardagsdatum, enhetlig grön "IDAG"-markering, högkontrast kalendertidsbadge i ljust tema, åtgärdad radmarkering vid trepunktsmeny (`UX-ING-1`), full illustrerad logotyp i desktop-sidopanel med kompakt mobilheader, rent tangentbordsfokus utan dubbelram i navigering, ljusare vita sekundärknappar i ljust tema, fönsterliknande temaförhandsvisningar och diskret "Om PHEW!"-kort i Inställningar (implementerat; inväntar ägarens visuella godkännande & produktionsdeploy).
 -   [x] FAM-1B / FAM-1B.1 --- Familjeinställningar.
 -   [x] RATE-1B / RATE-1C / RATE-1C.1 --- Receptbetyg inklusive Bayesiansk dämpning.
@@ -129,6 +131,8 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 
 ## Ändringslogg
 
+-   2026-11-25: `UX-NAV-1.1` implementerad (horisontellt centrerad kompakt varumärkesgrupp i `.app-mobile-header` med balanserad trekolumnsgrid utan överlappning ned till `320 px`).
+-   2026-11-25: `UX-NAV-1` implementerad (kompakt mobilheader + vänsterställd navigeringslåda för stående/liggande mobil och små surfplattor, bevarad desktop-sidopanel, tillgänglighet/fokushantering, utredning av Android PWA-navigationsrad, uppdaterad `ARCHITECTURE.md` och `MainLayoutAndNavigationTests.cs`). Fysisk Android PWA-verifiering återstår för ägaren.
 -   2026-11-24: `UX-HOME-1` implementerad i kod och tester (enhetliga startsidekort, `148 px` desktop-logotyp, `#FFFFFF`/`#000000` PWA `theme-color`, delade UI-principer i `ARCHITECTURE.md`). Fysisk Android PWA- och webbläsarverifiering återstår för ägaren.
 -   2026-11-24: Uppdaterad efter BRAND-1, BRAND-1F och BRAND-1.1. Fas 0 (namnbyte och servermigrering) markerad som slutförd. BRAND-1, BRAND-1F, BRAND-1.1, UX-ING-1 och PWA-ICON markerade som implementerade (baslinje: 1 020 godkända tester), med tydlig åtskillnad mot kvarstående visuell granskning och produktionsdeploy.
 -   2026-11-24: Första samlade backloggen. UX-ING-1 tillagd. Namnbytesstatus och kvarvarande serververifiering dokumenterade.
