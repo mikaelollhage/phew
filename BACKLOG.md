@@ -33,10 +33,11 @@ Detta är en levande backlogg för PHEW! (tidigare Receptbanken). Den bygger på
 
 ## Fas 1 --- Funktionella förbättringar
 
-### SHOP-IMPORT-3 --- Konflikter med befintlig inköpslista
+### SHOP-IMPORT-3 --- Befintlig vara i inköpslistan (reducerad omfattning)
 
--   [ ] Utforma säker hantering när importerade ingredienser redan finns på inköpslistan.
--   Undvik tysta, felaktiga sammanslagningar eller förlust av mängder. Bevara befintligt beteende för mängdfria och mängdangivna rader. Exakta konfliktregler beslutas före implementation.
+-   [x] Visa selektiv befintlig status i `ShoppingImportPreviewRow.razor` utifrån redan beräknad backenddata (`ExistingOverlapSummary` och veckomenyns `ShortStatus` för komplettering/borttagen vara).
+-   Kärnfunktionaliteten i backend (matchning, dubblettskydd, bevarande av befintliga mängder, mängdfri/mängdangiven hantering, enhetskompatibilitet, skydd av `Klart` och veckomenyns bidragsspårning) var redan implementerad i tidigare faser och verifierades i skrivskyddad granskning med 207 godkända tester.
+-   Beslut: upprepad fristående receptimport tillåts medvetet utan separat bidragsspårning eller nya konfliktdialoger. Kompakt `SHOP-IMPORT-2.1`-layout bevaras och faktiska konflikter reserveras för varningsikonen.
 
 ### SHOP-IMPORT-4 --- Familjens standardinställning
 
@@ -113,6 +114,8 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 -   [x] BRAND-1.1 --- Visuell puts och färgkonsistens (B01–B12, inklusive `UX-ING-1`): gröna val- och drag-och-släpp-stilar i inköpsimport/recept/veckomeny, gröna sektionsrubriker, neutrala vardagsdatum, enhetlig grön "IDAG"-markering, högkontrast kalendertidsbadge i ljust tema, åtgärdad radmarkering vid trepunktsmeny (`UX-ING-1`), full illustrerad logotyp i desktop-sidopanel med kompakt mobilheader, rent tangentbordsfokus utan dubbelram i navigering, ljusare vita sekundärknappar i ljust tema, fönsterliknande temaförhandsvisningar och diskret "Om PHEW!"-kort i Inställningar (implementerat; inväntar ägarens visuella godkännande & produktionsdeploy).
 -   [x] FAM-1B / FAM-1B.1 --- Familjeinställningar.
 -   [x] RATE-1B / RATE-1C / RATE-1C.1 --- Receptbetyg inklusive Bayesiansk dämpning.
+-   [x] SHOP-IMPORT-3 --- Befintlig vara i inköpslistan (reducerad omfattning): selektiv statusvisning i `ShoppingImportPreviewRow.razor` (`ExistingOverlapSummary`, `ShortStatus`) med bibehållen backendlogik och tillåten upprepad receptimport.
+-   [x] SHOP-IMPORT-3.1 --- Naturlig mängdformatering vid överlappning (`Finns redan: 4 l · Efter tillägg: 4,1 l`): `ShoppingListAggregator.FormatTotalForDisplay` föredrar den befintliga inköpslistradens enhet när omvandlingen är exakt inom två decimaler och använder svensk decimalformatering utan att ändra underliggande aggregeringsregler.
 -   [x] SHOP-IMPORT-1 / SHOP-IMPORT-2 --- Mängdfri import som standard, globalt val och radöverstyrningar, svensk A--Ö-sortering, konservativ gruppering och gemensamma hjälpfunktioner för recept/veckomenyer.
 -   [x] SHOP-IMPORT-2.1 --- Ikonbaserade mängdval, varning endast vid faktiska enhetskonflikter, mindre visuellt brus.
 -   [x] UX-WEEK-2.5 --- Responsiv header på veckomenyns dagskort; kontroller hålls på samma rad.
@@ -131,6 +134,8 @@ Följande är tidigare rapporterade observationspunkter från Argon. Kontrollera
 
 ## Ändringslogg
 
+-   2026-11-25: `SHOP-IMPORT-3.1` implementerad (`ShoppingListAggregator.FormatTotalForDisplay` och `ShoppingListService.TrySimulateMergedTotal` visar överlappningssummor i befintlig enhet när de kan representeras exakt inom två decimaler med svensk decimalformatering, t.ex. `4,1 l` i stället för `41 dl`).
+-   2026-11-25: `SHOP-IMPORT-3` slutförd med reducerad omfattning (selektiv statusvisning för befintliga varor och veckomenystatus i `ShoppingImportPreviewRow.razor`, temastöd/radbrytning i `app.css` samt bUnit-tester; befintlig backendlogik bevarad och dokumenterad, upprepad receptimport tillåten utan bidragsspårning).
 -   2026-11-25: `UX-NAV-1.1` implementerad (horisontellt centrerad kompakt varumärkesgrupp i `.app-mobile-header` med balanserad trekolumnsgrid utan överlappning ned till `320 px`).
 -   2026-11-25: `UX-NAV-1` implementerad (kompakt mobilheader + vänsterställd navigeringslåda för stående/liggande mobil och små surfplattor, bevarad desktop-sidopanel, tillgänglighet/fokushantering, utredning av Android PWA-navigationsrad, uppdaterad `ARCHITECTURE.md` och `MainLayoutAndNavigationTests.cs`). Fysisk Android PWA-verifiering återstår för ägaren.
 -   2026-11-24: `UX-HOME-1` implementerad i kod och tester (enhetliga startsidekort, `148 px` desktop-logotyp, `#FFFFFF`/`#000000` PWA `theme-color`, delade UI-principer i `ARCHITECTURE.md`). Fysisk Android PWA- och webbläsarverifiering återstår för ägaren.

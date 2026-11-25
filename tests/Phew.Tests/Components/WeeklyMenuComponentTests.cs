@@ -1191,7 +1191,7 @@ public class WeeklyMenuComponentTests : TestContext
             creamRow.QuerySelectorAll("button.weekly-preview-warning-btn").Should().BeEmpty();
 
             var chickenRow = cut2.Find(".weekly-preview-pending-list .weekly-preview-item-row[data-ingredient-name='kycklingfilé']");
-            chickenRow.QuerySelectorAll(".weekly-preview-item-short-status").Should().BeEmpty();
+            chickenRow.QuerySelector(".weekly-preview-item-short-status")!.TextContent.Should().Contain("Komplettering");
             chickenRow.QuerySelectorAll("button.weekly-preview-warning-btn").Should().BeEmpty();
             chickenRow.QuerySelectorAll(".weekly-preview-item-details").Should().BeEmpty();
 

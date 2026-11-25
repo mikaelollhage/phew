@@ -248,6 +248,95 @@ public class ShoppingImportQuantityModeTests : TestContext
         });
     }
 
+    [Fact]
+    public async Task WeeklyMenuPreview_ExistingItemAndShortStatus_RenderSelectivelyWithoutDuplication()
+    {
+        var weekDate = new DateOnly(2026, 11, 2);
+        await _shoppingService.AddManualItemAsync("2 dl mjölk");
+        var checkedPotato = await _shoppingService.AddManualItemAsync("1 kg potatis");
+        await _shoppingService.SetCheckedAsync(checkedPotato.Id, true);
+
+        var recipe = await CreateRecipeAsync("Måndagsgryta", 4,
+            (1m, "dl", "mjölk"),
+            (500m, "g", "potatis"));
+        var recipe2 = await CreateRecipeAsync("Tisdagspasta", 4,
+            (200m, "g", "pasta"));
+
+        var menu = await _weeklyMenuService.GetOrCreateWeekMenuAsync(weekDate);
+        menu.Days[0].RecipeId = recipe.Id;
+        menu.Days[0].Servings = 4;
+        menu.Days[1].RecipeId = recipe2.Id;
+        menu.Days[1].Servings = 4;
+        await _weeklyMenuService.ConfirmMenuAsync(menu);
+
+        var cut = RenderComponent<WeeklyMenuPreviewComponent>(p => p
+            .Add(x => x.IsVisible, true)
+            .Add(x => x.InitialWeekDate, weekDate)
+            .Add(x => x.ReferenceToday, weekDate));
+
+        cut.WaitForAssertion(() =>
+        {
+            var rows = cut.FindAll("li.weekly-preview-item-row");
+            rows.Should().HaveCount(3);
+
+            var milkOverlap = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Mjölk")
+                .QuerySelector(".weekly-preview-item-overlap");
+            milkOverlap.Should().NotBeNull();
+            milkOverlap!.TextContent.Should().Contain("Finns redan: 2 dl");
+            milkOverlap.TextContent.Should().NotContain("Efter tillägg");
+
+            var potatoOverlap = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Potatis")
+                .QuerySelector(".weekly-preview-item-overlap");
+            potatoOverlap.Should().NotBeNull();
+            potatoOverlap!.TextContent.Should().Contain("Finns redan under Klart: 1 kg");
+
+            var pastaRow = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Pasta");
+            pastaRow.QuerySelector(".weekly-preview-item-overlap").Should().BeNull();
+            pastaRow.QuerySelector(".weekly-preview-item-short-status").Should().BeNull();
+        });
+
+        // Confirm additions, then delete Pasta from shopping list and increase Monday servings to 6
+        cut.Find(".weekly-preview-confirm-btn").Click();
+        cut.WaitForAssertion(() => cut.FindAll(".weekly-preview-all-handled").Should().ContainSingle());
+
+        var pastaInList = (await _shoppingService.GetItemsAsync()).Single(i => !i.IsChecked && i.Name == "Pasta");
+        await _shoppingService.DeleteItemAsync(pastaInList.Id);
+
+        var updatedMenu = await _weeklyMenuService.GetOrCreateWeekMenuAsync(weekDate);
+        updatedMenu.Days[0].Servings = 6;
+        await _weeklyMenuService.ConfirmMenuAsync(updatedMenu);
+
+        var cutAfter = RenderComponent<WeeklyMenuPreviewComponent>(p => p
+            .Add(x => x.IsVisible, true)
+            .Add(x => x.InitialWeekDate, weekDate)
+            .Add(x => x.ReferenceToday, weekDate));
+
+        cutAfter.WaitForAssertion(() =>
+        {
+            var pendingRows = cutAfter.FindAll("ul.weekly-preview-pending-list li.weekly-preview-item-row");
+            pendingRows.Should().HaveCount(2);
+            var milkStatus = pendingRows.Single(r => r.GetAttribute("data-ingredient-name") == "Mjölk")
+                .QuerySelector(".weekly-preview-item-short-status");
+            milkStatus.Should().NotBeNull();
+            milkStatus!.TextContent.Should().Contain("Komplettering för måndag");
+            milkStatus.ClassList.Should().NotContain("status-removed");
+
+            cutAfter.FindAll(".weekly-preview-already-added-toggle").Should().ContainSingle();
+        });
+
+        cutAfter.Find(".weekly-preview-already-added-toggle").Click();
+
+        cutAfter.WaitForAssertion(() =>
+        {
+            var addedRows = cutAfter.FindAll("ul.weekly-preview-already-added-list li.weekly-preview-item-row");
+            var pastaAdded = addedRows.Single(r => r.GetAttribute("data-ingredient-name") == "Pasta");
+            var removedStatus = pastaAdded.QuerySelector(".weekly-preview-item-short-status.status-removed");
+            removedStatus.Should().NotBeNull();
+            removedStatus!.TextContent.Should().Contain("Borttagen ur inköpslistan");
+            pastaAdded.QuerySelector(".weekly-preview-item-overlap").Should().BeNull();
+        });
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)

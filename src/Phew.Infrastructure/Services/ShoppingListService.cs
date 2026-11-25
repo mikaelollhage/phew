@@ -1953,7 +1953,11 @@ public class ShoppingListService
             return null;
         }
 
-        return _aggregator.FormatRawText(targetClone.Quantity, targetClone.QuantityMax, targetClone.Unit, string.Empty);
+        return _aggregator.FormatTotalForDisplay(
+            targetClone.Quantity.Value,
+            targetClone.QuantityMax,
+            targetClone.Unit,
+            target.Unit);
     }
 
     private List<ShoppingListItem> PrepareIncomingItemsForConfirm(

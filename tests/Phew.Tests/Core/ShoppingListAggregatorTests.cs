@@ -603,5 +603,33 @@ public class ShoppingListAggregatorTests
 
         merged.Where(x => x.Name == "tomater").Should().HaveCount(2);
     }
+
+    [Theory]
+    [InlineData(41, null, "dl", "l", "4,1 l")]
+    [InlineData(1500, null, "g", "kg", "1,5 kg")]
+    [InlineData(1250, null, "g", "kg", "1,25 kg")]
+    [InlineData(230, null, "ml", "dl", "2,3 dl")]
+    [InlineData(105, null, "ml", "dl", "1,05 dl")]
+    [InlineData(1500, null, "g", "g", "1500 g")]
+    [InlineData(1005, null, "g", "kg", "1005 g")]
+    [InlineData(20, null, "ml", "msk", "20 ml")]
+    public void FormatTotalForDisplay_ShouldPreferExistingUnitOnlyWhenAccurateWithinTwoDecimals(
+        decimal min,
+        double? maxDouble,
+        string currentUnit,
+        string preferredUnit,
+        string expected)
+    {
+        decimal? max = maxDouble.HasValue ? (decimal)maxDouble.Value : null;
+        var result = _aggregator.FormatTotalForDisplay(min, max, currentUnit, preferredUnit);
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public void FormatTotalForDisplay_WithInterval_ShouldConvertBothBoundsToPreferredUnit()
+    {
+        var result = _aggregator.FormatTotalForDisplay(11m, 21m, "dl", "l");
+        result.Should().Be("1,1–2,1 l");
+    }
 }
 

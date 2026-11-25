@@ -48,6 +48,18 @@
                         </button>
                     }
                 </div>
+                @if (IncludeWeeklyMenuDetails && !string.IsNullOrWhiteSpace(Row.ShortStatus))
+                {
+                    <div class="weekly-preview-item-short-status @(Row.WasRemovedFromShoppingList ? "status-removed" : "")">
+                        @Row.ShortStatus
+                    </div>
+                }
+                @if (!string.IsNullOrWhiteSpace(Row.ExistingOverlapSummary))
+                {
+                    <div class="weekly-preview-item-overlap">
+                        @Row.ExistingOverlapSummary
+                    </div>
+                }
             </div>
         </label>
 

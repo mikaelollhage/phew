@@ -5889,6 +5889,7 @@ body.shopping-touch-reordering * {
   font-size: 12px;
   color: #93c5fd;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .weekly-preview-item-short-status.status-removed {
@@ -6014,6 +6015,9 @@ body.shopping-touch-reordering * {
 .weekly-preview-item-overlap {
   font-size: 12px;
   font-style: italic;
+  color: var(--rb-text-secondary);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 /* Quantity mode bar & per-row quantity controls (SHOP-IMPORT-1 + SHOP-IMPORT-2) */

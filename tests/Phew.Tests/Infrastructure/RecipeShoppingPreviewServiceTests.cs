@@ -99,6 +99,24 @@ public class RecipeShoppingPreviewServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task BuildRecipeShoppingPreview_ShouldPreferExistingUnitForAccurateFractionalTotals()
+    {
+        await AddShoppingItemAsync("4 l mjölk");
+        await AddShoppingItemAsync("2 kg kycklingfilé");
+
+        var recipe = await CreateRecipeAsync("Gryta", 4,
+            (1m, "dl", "mjölk"),
+            (500m, "g", "kycklingfilé"));
+        var preview = await _shopping.BuildRecipeShoppingPreviewAsync(recipe.Id, 4);
+
+        preview.Should().NotBeNull();
+        preview!.Items.Single(i => i.Item.Name == "mjölk").ExistingOverlapSummary
+            .Should().Be("Finns redan: 4 l · Efter tillägg: 4,1 l");
+        preview.Items.Single(i => i.Item.Name == "kycklingfilé").ExistingOverlapSummary
+            .Should().Be("Finns redan: 2 kg · Efter tillägg: 2,5 kg");
+    }
+
+    [Fact]
     public async Task BuildRecipeShoppingPreview_ShouldIdentifyCheckedItems()
     {
         await AddShoppingItemAsync("2 kg kycklingfilé", isChecked: true);

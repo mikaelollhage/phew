@@ -257,6 +257,68 @@ public class RecipeShoppingPreviewModalTests : TestContext
         cut.FindAll(".weekly-preview-item-details").Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task ExistingItems_ShouldShowOverlapStatusForUncheckedAndChecked_WhileNewItemsRemainClean()
+    {
+        await _shoppingService.AddManualItemAsync("2 dl mjölk");
+        var checkedItem = await _shoppingService.AddManualItemAsync("500 g kycklingfilé");
+        await _shoppingService.SetCheckedAsync(checkedItem.Id, true);
+
+        var recipe = await CreateRecipeAsync(
+            "Vardagsgryta",
+            2,
+            ("mjölk", "1 dl mjölk"),
+            ("kycklingfilé", "1 kg kycklingfilé"),
+            ("pasta", "200 g pasta"));
+
+        var cut = RenderComponent<RecipeShoppingPreviewModal>(parameters => parameters
+            .Add(p => p.IsVisible, true)
+            .Add(p => p.RecipeId, recipe.Id)
+            .Add(p => p.Servings, 2));
+
+        cut.WaitForAssertion(() =>
+        {
+            var rows = cut.FindAll("li.weekly-preview-item-row");
+            rows.Should().HaveCount(3);
+
+            var milkRow = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Mjölk");
+            var milkOverlap = milkRow.QuerySelector(".weekly-preview-item-overlap");
+            milkOverlap.Should().NotBeNull();
+            milkOverlap!.TextContent.Should().Contain("Finns redan: 2 dl");
+            milkOverlap.TextContent.Should().NotContain("Efter tillägg");
+
+            var chickenRow = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Kycklingfilé");
+            var chickenOverlap = chickenRow.QuerySelector(".weekly-preview-item-overlap");
+            chickenOverlap.Should().NotBeNull();
+            chickenOverlap!.TextContent.Should().Contain("Finns redan under Klart: 500 g");
+
+            var pastaRow = rows.Single(r => r.GetAttribute("data-ingredient-name") == "Pasta");
+            pastaRow.QuerySelector(".weekly-preview-item-overlap").Should().BeNull();
+            pastaRow.QuerySelector(".weekly-preview-item-short-status").Should().BeNull();
+            pastaRow.QuerySelector("button.weekly-preview-warning-btn").Should().BeNull();
+        });
+
+        cut.Find(".weekly-preview-qty-mode-with").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            var rows = cut.FindAll("li.weekly-preview-item-row");
+            var milkOverlap = rows.Single(r => r.GetAttribute("data-ingredient-name") == "mjölk")
+                .QuerySelector(".weekly-preview-item-overlap");
+            milkOverlap.Should().NotBeNull();
+            milkOverlap!.TextContent.Should().Contain("Finns redan: 2 dl · Efter tillägg: 3 dl");
+
+            var chickenOverlap = rows.Single(r => r.GetAttribute("data-ingredient-name") == "kycklingfilé")
+                .QuerySelector(".weekly-preview-item-overlap");
+            chickenOverlap.Should().NotBeNull();
+            chickenOverlap!.TextContent.Should().Contain("Finns redan under Klart: 500 g");
+            chickenOverlap.TextContent.Should().NotContain("Efter tillägg");
+
+            var pastaRow = rows.Single(r => r.GetAttribute("data-ingredient-name") == "pasta");
+            pastaRow.QuerySelector(".weekly-preview-item-overlap").Should().BeNull();
+        });
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)

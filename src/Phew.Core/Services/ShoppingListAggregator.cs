@@ -394,6 +394,61 @@ public class ShoppingListAggregator
     public string FormatRawText(decimal? quantity, string? unit, string name) =>
         FormatRawText(quantity, null, unit, name);
 
+    /// <summary>
+    /// Formats a merged total quantity for preview display, preferring <paramref name="preferredUnit"/>
+    /// when the quantity converts accurately within 2 decimal places.
+    /// </summary>
+    public string FormatTotalForDisplay(decimal min, decimal? max, string? currentUnit, string? preferredUnit)
+    {
+        var normCurrent = NormalizeUnit(currentUnit);
+        var normPreferred = NormalizeUnit(preferredUnit);
+
+        if (!string.IsNullOrWhiteSpace(normPreferred) &&
+            !string.Equals(normCurrent, normPreferred, StringComparison.OrdinalIgnoreCase) &&
+            TryGetUnitConversionFactors(normCurrent, normPreferred, out var currentFactor, out var preferredFactor))
+        {
+            var convertedMin = min * currentFactor / preferredFactor;
+            if (convertedMin > 0m && Math.Round(convertedMin, 2, MidpointRounding.AwayFromZero) == convertedMin)
+            {
+                if (!max.HasValue || max.Value <= min)
+                {
+                    return FormatRawText(convertedMin, null, normPreferred, string.Empty);
+                }
+
+                var convertedMax = max.Value * currentFactor / preferredFactor;
+                if (Math.Round(convertedMax, 2, MidpointRounding.AwayFromZero) == convertedMax)
+                {
+                    return FormatRawText(convertedMin, convertedMax, normPreferred, string.Empty);
+                }
+            }
+        }
+
+        return FormatRawText(min, max, string.IsNullOrWhiteSpace(normCurrent) ? null : normCurrent, string.Empty);
+    }
+
+    private static bool TryGetUnitConversionFactors(
+        string normFrom,
+        string normTo,
+        out decimal fromFactor,
+        out decimal toFactor)
+    {
+        if (WeightFactorsToGrams.TryGetValue(normFrom, out fromFactor) &&
+            WeightFactorsToGrams.TryGetValue(normTo, out toFactor))
+        {
+            return true;
+        }
+
+        if (VolumeFactorsToMilliliters.TryGetValue(normFrom, out fromFactor) &&
+            VolumeFactorsToMilliliters.TryGetValue(normTo, out toFactor))
+        {
+            return true;
+        }
+
+        fromFactor = 0m;
+        toFactor = 0m;
+        return false;
+    }
+
     public string FormatRawText(decimal? quantity, decimal? quantityMax, string? unit, string name)
     {
         var parts = new List<string>();

@@ -77,6 +77,15 @@ public class WeeklyMenuShoppingOverlapTests : IDisposable
     }
 
     [Fact]
+    public async Task UnitConversion_PrefersExistingUnitWhenAccurate_ForVolumeAndWeight()
+    {
+        await AddAsync("4 l mjölk");
+        var preview = await PlanAsync(1m, "dl", "mjölk");
+        var s = preview.Items.Single().ExistingOverlapSummary;
+        s.Should().Be("Finns redan: 4 l · Efter tillägg: 4,1 l");
+    }
+
+    [Fact]
     public async Task ExistingWithoutQuantity_IsIdentified_WithoutTotal()
     {
         await AddAsync("Kycklingfilé");
